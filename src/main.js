@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { AvatarController } from "./avatar.js";
+import { SpeechRecognitionManager } from "./speech.js";
+import { UIController } from "./ui.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -14,7 +16,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 1.6, 2);
+camera.position.set(0, 0.5, 1);
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -24,7 +26,7 @@ document.getElementById("canvas-container").appendChild(renderer.domElement);
 
 // Controls
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.6, 0);
+controls.target.set(0, 0.5, 0);
 controls.update();
 
 // Lights
@@ -44,8 +46,12 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Load avatar
+// Avatar and Speech Recognition managers
 const avatarController = new AvatarController();
+let speechManager = null;
+let uiController = null;
+
+// Load avatar
 const loader = new GLTFLoader();
 
 loader.load(
@@ -55,6 +61,9 @@ loader.load(
     scene.add(avatar);
     avatarController.init(avatar);
     console.log("✅ Avatar loaded successfully!");
+
+    // Initialize speech recognition after avatar loads
+    initializeSpeechRecognition();
   },
   (progress) => {
     console.log(
@@ -66,6 +75,102 @@ loader.load(
     console.error("❌ Error loading avatar:", error);
   }
 );
+
+// Initialize speech recognition system
+function initializeSpeechRecognition() {
+  console.log("🎤 Initializing speech recognition...");
+
+  // Create UI
+  uiController = new UIController();
+
+  // Create speech manager
+  speechManager = new SpeechRecognitionManager();
+
+  if (!speechManager.supported) {
+    alert(
+      "Speech recognition is not supported in this browser. Please use Chrome."
+    );
+    return;
+  }
+
+  // Set up callbacks
+  speechManager.onTranscriptUpdate = (finalText, interimText) => {
+    uiController.updateTranscript(finalText, interimText);
+  };
+
+  speechManager.onFinalTranscript = (text) => {
+    console.log("📝 Final transcript:", text);
+    uiController.addToHistory(text);
+
+    // TODO: Phase 1-4 - Send to LLM for emotion analysis
+    analyzeEmotionPlaceholder(text);
+  };
+
+  speechManager.onError = (error) => {
+    console.error("❌ Speech error:", error);
+    if (error === "not-allowed") {
+      alert("Microphone permission denied. Please allow microphone access.");
+    }
+  };
+
+  speechManager.onStatusChange = (isListening) => {
+    uiController.setListeningStatus(isListening);
+  };
+
+  // Connect UI buttons
+  uiController.micButton.addEventListener("click", () => {
+    speechManager.toggle();
+  });
+
+  uiController.clearButton.addEventListener("click", () => {
+    uiController.clearHistory();
+    speechManager.clearTranscript();
+  });
+
+  uiController.languageSelect.addEventListener("change", (e) => {
+    speechManager.setLanguage(e.target.value);
+  });
+
+  console.log("✅ Speech recognition initialized!");
+}
+
+// Placeholder for emotion analysis
+function analyzeEmotionPlaceholder(text) {
+  console.log("🧠 Analyzing emotion from:", text);
+
+  // Simple keyword-based emotion detection (temporary)
+  const lowerText = text.toLowerCase();
+  let emotion = "neutral";
+
+  if (
+    lowerText.includes("행복") ||
+    lowerText.includes("기쁘") ||
+    lowerText.includes("좋아")
+  ) {
+    emotion = "joy";
+  } else if (
+    lowerText.includes("슬프") ||
+    lowerText.includes("우울") ||
+    lowerText.includes("슬픔")
+  ) {
+    emotion = "sadness";
+  } else if (
+    lowerText.includes("화") ||
+    lowerText.includes("신경질") ||
+    lowerText.includes("짜증")
+  ) {
+    emotion = "anger";
+  } else if (
+    lowerText.includes("무서") ||
+    lowerText.includes("두렵") ||
+    lowerText.includes("공포")
+  ) {
+    emotion = "fear";
+  }
+
+  console.log("🎭 Detected emotion:", emotion);
+  avatarController.setEmotion(emotion);
+}
 
 // UI Controls
 document.getElementById("btn-smile").addEventListener("click", () => {
