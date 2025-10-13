@@ -192,6 +192,27 @@ export class UIController {
                 color: #333;
                 line-height: 1.5;
             }
+            .counselor-message {
+                margin-bottom: 12px;
+                padding: 12px;
+                border-radius: 8px;
+                background: #e3f2fd;
+                border-left: 3px solid #2196f3;
+            }
+
+            .counselor-message .label {
+                font-weight: 600;
+                font-size: 13px;
+                color: #1976d2;
+                display: block;
+                margin-bottom: 6px;
+            }
+
+            .counselor-message .text {
+                color: #333;
+                line-height: 1.6;
+                font-size: 14px;
+            }
             
             .conversation-history::-webkit-scrollbar,
             .current-transcript::-webkit-scrollbar {
@@ -272,13 +293,17 @@ export class UIController {
   }
 
   addCounselorMessage(message) {
+    const timestamp = new Date().toLocaleTimeString();
+
     const messageDiv = document.createElement("div");
-    messageDiv.className = "message counselor-message";
+    messageDiv.className = "counselor-message";
     messageDiv.innerHTML = `
-        <span class="label">🤖 Counselor:</span>
-        <span class="text">${message}</span>
+        <span class="label">🤖 Counselor (${timestamp}):</span>
+        <span class="text">${this.escapeHtml(message)}</span>
     `;
-    this.conversationHistory.appendChild(messageDiv);
-    this.conversationHistory.scrollTop = this.conversationHistory.scrollHeight;
+
+    this.conversationHistoryEl.appendChild(messageDiv);
+    this.conversationHistoryEl.scrollTop =
+      this.conversationHistoryEl.scrollHeight;
   }
 }
