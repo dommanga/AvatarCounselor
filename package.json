@@ -1,0 +1,24 @@
+{
+  "name": "avatarcounselor",
+  "version": "1.0.0",
+  "description": "Research Project2: Effects of Non-verbal Empathy Expressions by AI Avatar Counselors on Client Responses",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "client": "python -m http.server 8000"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "openai": "^6.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

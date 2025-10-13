@@ -4,6 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { AvatarController } from "./avatar.js";
 import { SpeechRecognitionManager } from "./speech.js";
 import { UIController } from "./ui.js";
+import { EmotionAnalyzer } from "./api.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -45,6 +46,9 @@ const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
+
+// Initialize emotion analyzer
+const emotionAnalyzer = new EmotionAnalyzer();
 
 // Avatar and Speech Recognition managers
 const avatarController = new AvatarController();
@@ -102,8 +106,8 @@ function initializeSpeechRecognition() {
     console.log("📝 Final transcript:", text);
     uiController.addToHistory(text);
 
-    // TODO: Phase 1-4 - Send to LLM for emotion analysis
-    analyzeEmotionPlaceholder(text);
+    // Send to LLM(GPT-4o-mini) for emotion analysis
+    analyzeEmotionWithGPT(text);
   };
 
   speechManager.onError = (error) => {
@@ -134,42 +138,26 @@ function initializeSpeechRecognition() {
   console.log("✅ Speech recognition initialized!");
 }
 
-// Placeholder for emotion analysis
-function analyzeEmotionPlaceholder(text) {
-  console.log("🧠 Analyzing emotion from:", text);
+async function analyzeEmotionWithGPT(text) {
+  console.log("🧠 Analyzing emotion with GPT-4o-mini:", text);
 
-  // Simple keyword-based emotion detection (temporary)
-  const lowerText = text.toLowerCase();
-  let emotion = "neutral";
+  // Show loading state
+  uiController.setAnalyzing(true);
 
-  if (
-    lowerText.includes("행복") ||
-    lowerText.includes("기쁘") ||
-    lowerText.includes("좋아")
-  ) {
-    emotion = "joy";
-  } else if (
-    lowerText.includes("슬프") ||
-    lowerText.includes("우울") ||
-    lowerText.includes("슬픔")
-  ) {
-    emotion = "sadness";
-  } else if (
-    lowerText.includes("화") ||
-    lowerText.includes("신경질") ||
-    lowerText.includes("짜증")
-  ) {
-    emotion = "anger";
-  } else if (
-    lowerText.includes("무서") ||
-    lowerText.includes("두렵") ||
-    lowerText.includes("공포")
-  ) {
-    emotion = "fear";
+  const result = await emotionAnalyzer.analyzeEmotion(text);
+
+  if (result) {
+    // Update avatar expression
+    avatarController.setEmotion(result.emotion, result.intensity);
+
+    // Display counselor response
+    uiController.addCounselorMessage(result.response);
+
+    // TODO Phase 1-4: Speak the response with TTS
+    // await speakResponse(result.response);
   }
 
-  console.log("🎭 Detected emotion:", emotion);
-  avatarController.setEmotion(emotion);
+  uiController.setAnalyzing(false);
 }
 
 // UI Controls

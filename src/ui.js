@@ -263,4 +263,22 @@ export class UIController {
     div.textContent = text;
     return div.innerHTML;
   }
+
+  setAnalyzing(isAnalyzing) {
+    const indicator = document.getElementById("analyzing-indicator");
+    if (indicator) {
+      indicator.style.display = isAnalyzing ? "block" : "none";
+    }
+  }
+
+  addCounselorMessage(message) {
+    const messageDiv = document.createElement("div");
+    messageDiv.className = "message counselor-message";
+    messageDiv.innerHTML = `
+        <span class="label">🤖 Counselor:</span>
+        <span class="text">${message}</span>
+    `;
+    this.conversationHistory.appendChild(messageDiv);
+    this.conversationHistory.scrollTop = this.conversationHistory.scrollHeight;
+  }
 }
