@@ -4,13 +4,9 @@
 
 POSTECH CSE Undergraduate Thesis Project
 
----
-
 ## 📋 Project Overview
 
 AI avatar counselor system that combines speech recognition, LLM-based emotion analysis, and real-time 3D facial expressions to create an interactive empathetic counseling experience.
-
----
 
 ## 🚀 Quick Start
 
@@ -41,8 +37,6 @@ python -m http.server 8000
 # http://localhost:8000
 ```
 
----
-
 ## 📁 File Structure
 
 ```
@@ -63,8 +57,6 @@ AvatarCounselor/
 └── .gitignore
 ```
 
----
-
 ## 📊 Technology Stack
 
 ### Frontend
@@ -84,8 +76,6 @@ AvatarCounselor/
 - **Model**: Ready Player Me (GLB)
 - **Morph Targets**: 72 ARKit blendshapes
 
----
-
 ## 🔑 API Configuration
 
 ### Gemini API
@@ -100,8 +90,6 @@ AvatarCounselor/
 GEMINI_API_KEY=your-gemini-api-key
 PORT=3000
 ```
-
----
 
 ## 🎯 Development Roadmap
 
@@ -134,8 +122,6 @@ PORT=3000
 - [ ] Audio playback integration
 - [ ] Speaking state indicator
 
----
-
 ### Phase 2: Enhancement
 
 **Phase 2-1: Refined Emotion Mappings**
@@ -151,8 +137,6 @@ PORT=3000
 - [ ] Real-time mouth movement during TTS
 - [ ] Future: Viseme-based phoneme sync (if using Azure/Google TTS)
 
----
-
 ### Phase 3: Research Features (Not fixed - In the wild vs. In lab)
 
 **Data Collection**
@@ -166,8 +150,6 @@ PORT=3000
 - [ ] Response time measurement (speech → emotion → avatar update)
 - [ ] Emotion classification accuracy validation
 - [ ] User engagement metrics
-
---
 
 ## 🐛 Common Issues
 
