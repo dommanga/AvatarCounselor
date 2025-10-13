@@ -1,11 +1,23 @@
 import express from "express";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import cors from "cors";
-import "dotenv/config";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+  generationConfig: {
+    temperature: 0.7,
+    maxOutputTokens: 200,
+    thinkingConfig: {
+      thinkingBudget: 0, // Disables thinking
+    },
+  },
 });
 
 app.use(cors());
@@ -16,16 +28,21 @@ app.post("/api/analyze-emotion", async (req, res) => {
   try {
     const { transcript } = req.body;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are an empathetic AI counselor analyzing client emotions.
+    if (!transcript || transcript.trim().length < 2) {
+      return res.status(400).json({
+        error: "Transcript is too short or empty",
+      });
+    }
+
+    console.log("📝 Received transcript:", transcript);
+
+    const prompt = `You are an empathetic AI counselor analyzing client emotions.
 
 TASK: Analyze the emotional state from the client's speech and generate an appropriate empathetic response.
 
-OUTPUT FORMAT (JSON only):
+CLIENT SAID: "${transcript}"
+
+OUTPUT FORMAT (JSON only, no markdown):
 {
   "emotion": "joy|sadness|anger|fear|surprise|disgust|neutral",
   "intensity": 0.0-1.0,
@@ -37,30 +54,39 @@ GUIDELINES:
 - Intensity: 0.3=subtle, 0.6=moderate, 0.9=strong
 - Response should validate feelings and show understanding
 - Keep responses natural and conversational (2-3 sentences)
-- Match the language of input (Korean/English)`,
-        },
-        {
-          role: "user",
-          content: transcript,
-        },
-      ],
-      temperature: 0.7,
-      max_tokens: 200,
-      response_format: { type: "json_object" },
-    });
+- Match the language of input (Korean/English)
 
-    const result = JSON.parse(completion.choices[0].message.content);
+Return ONLY the JSON object, no other text.`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+
+    // Remove markdown code blocks if present
+    const cleanText = text
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+
+    const parsed = JSON.parse(cleanText);
+
+    // Validate response structure
+    if (!parsed.emotion || !parsed.response) {
+      throw new Error("Invalid response structure");
+    }
 
     // Log for research data collection
     console.log(
-      `[${new Date().toISOString()}] Emotion: ${result.emotion}, Intensity: ${
-        result.intensity
-      }`
+      `✅ [${new Date().toISOString()}] Emotion: ${
+        parsed.emotion
+      }, Intensity: ${parsed.intensity}`
     );
 
-    res.json(result);
+    res.json(parsed);
   } catch (error) {
-    console.error("GPT API Error:", error);
+    console.error("❌ Gemini API Error:", error.message);
+
+    // Fallback response
     res.status(500).json({
       emotion: "neutral",
       intensity: 0.5,
@@ -70,7 +96,17 @@ GUIDELINES:
   }
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", message: "Server is running" });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Counselor API running on http://localhost:${PORT}`);
+  console.log(
+    `✅ Gemini API Key: ${
+      process.env.GEMINI_API_KEY ? "Configured" : "⚠️  Missing!"
+    }`
+  );
 });
