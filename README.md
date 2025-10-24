@@ -48,7 +48,9 @@ AvatarCounselor/
 │   ├── speech.js          # Web Speech API (ASR)
 │   ├── ui.js              # UI management
 │   ├── api.js             # Backend API communication
-│   └── emotions.js        # Emotion → Blendshape mappings
+│   ├── emotions.js        # Emotion → Blendshape mappings
+│   ├── tts.js             # Text-to-Speech manager
+│   └── lipSync.js         # Lip sync controller
 ├── assets/
 │   └── avatar_torso.glb   # 3D avatar model
 ├── server.js              # Express API server
@@ -117,10 +119,12 @@ PORT=3000
 
 **Phase 1-4: Text-to-Speech (TTS)**
 
-- [ ] Option A: Web Speech API `speechSynthesis` (quick prototype)
-- [ ] Option B: Google Cloud TTS API (better quality + viseme data)
-- [ ] Audio playback integration
-- [ ] Speaking state indicator
+- [x] Option A: Web Speech API `speechSynthesis` (prototype)
+- [x] Audio playback integration
+- [x] Speaking status indicator with stop button
+- [x] Timing-based lip sync (jaw movement simulation)
+- [x] Automatic mic disable during TTS (prevents feedback)
+- [ ] Option B: Google Cloud TTS API (Phase 1-4b - for higher quality + accurate viseme data)
 
 ### Phase 2: Enhancement
 
@@ -133,9 +137,11 @@ PORT=3000
 
 **Phase 2-2: Basic Lip Sync**
 
-- [ ] Audio amplitude → jawOpen blendshape mapping
-- [ ] Real-time mouth movement during TTS
-- [ ] Future: Viseme-based phoneme sync (if using Azure/Google TTS)
+- [x] Basic timing-based jaw movement (Phase 1-4)
+- [ ] Audio amplitude analysis (requires audio stream access)
+- [ ] Viseme-based phoneme sync with Google Cloud TTS
+- [ ] Multiple blendshapes (jawOpen, mouthSmile, mouthFunnel, etc.)
+- [ ] SSML timing marks integration
 
 ### Phase 3: Research Features (Not fixed - In the wild vs. In lab)
 
@@ -167,5 +173,5 @@ PORT=3000
 
 ---
 
-**Last Updated**: October 14, 2025  
-**Current Phase**: Phase 1-3 Complete → Moving to Phase 1-4 (TTS)
+**Last Updated**: October 24, 2025  
+**Current Phase**: Phase 1-4 Complete (TTS + Basic Lip Sync) → Moving to Phase 2-1

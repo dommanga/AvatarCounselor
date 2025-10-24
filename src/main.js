@@ -5,6 +5,8 @@ import { AvatarController } from "./avatar.js";
 import { SpeechRecognitionManager } from "./speech.js";
 import { UIController } from "./ui.js";
 import { EmotionAnalyzer } from "./api.js";
+import { TTSManager } from "./tts.js";
+import { LipSyncController } from "./lipSync.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -55,6 +57,10 @@ const avatarController = new AvatarController();
 let speechManager = null;
 let uiController = null;
 
+// NEW: TTS and Lip Sync managers
+let ttsManager = null;
+let lipSyncController = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -97,6 +103,9 @@ function initializeSpeechRecognition() {
     return;
   }
 
+  // Initialize TTS and Lip Sync
+  initializeTTS();
+
   // Set up callbacks
   speechManager.onTranscriptUpdate = (finalText, interimText) => {
     uiController.updateTranscript(finalText, interimText);
@@ -106,7 +115,7 @@ function initializeSpeechRecognition() {
     console.log("📝 Final transcript:", text);
     uiController.addToHistory(text);
 
-    // Send to LLM(GPT-4o-mini) for emotion analysis
+    // Send to LLM(Gemini) for emotion analysis
     analyzeEmotionWithGPT(text);
   };
 
@@ -123,6 +132,11 @@ function initializeSpeechRecognition() {
 
   // Connect UI buttons
   uiController.micButton.addEventListener("click", () => {
+    // Don't start mic if TTS is speaking
+    if (ttsManager && ttsManager.isSpeaking) {
+      console.log("⚠️ Cannot start recording while avatar is speaking");
+      return;
+    }
     speechManager.toggle();
   });
 
@@ -138,8 +152,52 @@ function initializeSpeechRecognition() {
   console.log("✅ Speech recognition initialized!");
 }
 
+// Initialize TTS system
+function initializeTTS() {
+  console.log("🔊 Initializing TTS...");
+
+  // Create TTS manager
+  ttsManager = new TTSManager();
+
+  // Create Lip Sync controller
+  lipSyncController = new LipSyncController(avatarController);
+
+  // Setup TTS callbacks
+  ttsManager.onStart = () => {
+    console.log("🔊 TTS started");
+    uiController.setSpeakingStatus(true);
+    lipSyncController.start();
+
+    // Stop speech recognition while speaking to avoid feedback
+    if (speechManager && speechManager.isListening) {
+      speechManager.stop();
+    }
+  };
+
+  ttsManager.onEnd = () => {
+    console.log("🔇 TTS ended");
+    uiController.setSpeakingStatus(false);
+    lipSyncController.stop();
+  };
+
+  ttsManager.onError = (error) => {
+    console.error("❌ TTS error:", error);
+    uiController.setSpeakingStatus(false);
+    lipSyncController.stop();
+  };
+
+  // Connect stop TTS button
+  if (uiController.stopTTSButton) {
+    uiController.stopTTSButton.addEventListener("click", () => {
+      ttsManager.stop();
+    });
+  }
+
+  console.log("✅ TTS initialized!");
+}
+
 async function analyzeEmotionWithGPT(text) {
-  console.log("🧠 Analyzing emotion with GPT-4o-mini:", text);
+  console.log("🧠 Analyzing emotion with Gemini:", text);
 
   // Show loading state
   uiController.setAnalyzing(true);
@@ -153,11 +211,32 @@ async function analyzeEmotionWithGPT(text) {
     // Display counselor response
     uiController.addCounselorMessage(result.response);
 
-    // TODO Phase 1-4: Speak the response with TTS
-    // await speakResponse(result.response);
+    // NEW: Speak the response with TTS
+    await speakResponse(result.response);
   }
 
   uiController.setAnalyzing(false);
+}
+
+// Speak counselor response with TTS
+async function speakResponse(text) {
+  if (!ttsManager || !text || text.trim().length === 0) {
+    return;
+  }
+
+  try {
+    // Detect language (simple heuristic)
+    const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
+    const language = hasKorean ? "ko-KR" : "en-US";
+
+    console.log(`🔊 Speaking in ${language}:`, text.substring(0, 50) + "...");
+
+    // Speak with TTS (callbacks handle UI and lip sync)
+    await ttsManager.speak(text, language);
+  } catch (error) {
+    console.error("❌ Error in TTS:", error);
+    // Continue even if TTS fails - don't break the flow
+  }
 }
 
 // UI Controls
