@@ -1,8 +1,25 @@
-# AI Avatar Counselor 🤖
+# AI Avatar Counselor
 
-**Research Project**: Effects of Non-verbal Empathy Expressions by AI Avatar Counselors on Client Responses
+> **Effects of Non-verbal Empathy Expressions by AI Avatar Counselors on Client Responses**
+>
+> POSTECH CSE Undergraduate Research Project (2025 Fall)
 
-POSTECH CSE Undergraduate Research Project (2025 Fall)
+---
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Research Background](#research-background)
+- [System Architecture](#system-architecture)
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Development Roadmap](#development-roadmap)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Project Structure](#project-structure)
+- [References](#references)
+
+---
 
 ## 🎯 Overview
 
@@ -14,6 +31,28 @@ This project implements an **AI Avatar Counselor** system that generates real-ti
 2. **Dual Expression System**: Implement both Micro Response (listening signals) and Full Response (empathic expressions)
 3. **Personalized Customization**: Provide user-adjustable intensity and frequency parameters
 4. **Experimental Validation**: Verify effectiveness through user studies
+
+---
+
+## 🔬 Research Background
+
+### Key Findings from Literature
+
+- **Empathy in Counseling**: Therapist empathy positively impacts client outcomes (Elliott et al., 2018)
+- **Non-verbal Communication**: Virtual healthcare professionals' gaze, facial expressions, and body lean significantly enhance empathy perception (Marcoux et al., 2023)
+- **Research Gap**: While Choi et al. (2024) demonstrated effectiveness of non-verbal empathy in AI counselors using Wizard-of-Oz methodology, **automated real-time systems remain unvalidated**
+
+### Needfinding Study Results
+
+**Participants:** 3 university students (20s)
+
+**Key Insights:**
+
+1. **Non-verbal Expression Importance**: Text-based AI counseling limited by lack of facial expressions
+2. **Individual Differences**: Strong preferences for timing and intensity of reactions
+3. **Listening Signals**: Need for continuous listening cues without interrupting conversation flow
+
+---
 
 ## 🏗️ System Architecture
 
@@ -51,6 +90,8 @@ This project implements an **AI Avatar Counselor** system that generates real-ti
                           └─→ Counselor Response (GPT-4)
                                └─→ TTS + Lip Sync
 ```
+
+---
 
 ## ✨ Key Features
 
@@ -140,11 +181,21 @@ Settings saved in `localStorage` for persistence across sessions.
 - **LLM**:
   - Development: Google Gemini 2.5 Flash
   - Production: OpenAI GPT-4
-- **Runtime**: Node.js 20.x
+- **Runtime**: Node.js 18.x
+
+### Development
+
+- **Version Control**: Git/GitHub
+- **Package Manager**: npm
+- **Environment**: `.env` for API keys
+
+---
 
 ## 🗓️ Development Roadmap
 
 ### ✅ Phase 1: Basic Prototype (Completed)
+
+**Timeline**: ~2024.12
 
 **Achievements**:
 
@@ -157,7 +208,11 @@ Settings saved in `localStorage` for persistence across sessions.
 
 **Deliverables**: Working prototype with basic facial expressions
 
+---
+
 ### 🔄 Phase 2: Core System Implementation (Current)
+
+**Timeline**: ~2025.01
 
 **Objectives**: Implement full system design from interim report
 
@@ -228,7 +283,11 @@ Settings saved in `localStorage` for persistence across sessions.
 - Customizable user parameters
 - Production-ready codebase
 
+---
+
 ### 🎯 Phase 3: User Study & Evaluation (Planned)
+
+**Timeline**: ~2025.02
 
 **Objectives**: Experimental validation of system effectiveness
 
@@ -237,17 +296,27 @@ Settings saved in `localStorage` for persistence across sessions.
 - [ ] Define experimental conditions
 - [ ] Prepare counseling scenarios
 - [ ] Design questionnaires (empathy perception, satisfaction, trust)
+- [ ] IRB approval
 
 #### Phase 3-2: User Recruitment & Study
 
-- [ ] Recruit 10 participants
+- [ ] Recruit 20-30 participants
 - [ ] Conduct counseling sessions
 - [ ] Collect quantitative & qualitative data
 - [ ] Post-session interviews
 
 #### Phase 3-3: Data Analysis
 
+- [ ] Statistical analysis (ANOVA, regression)
+- [ ] Qualitative coding (thematic analysis)
+- [ ] Compare across experimental conditions
+
 #### Phase 3-4: Final Report
+
+- [ ] Results interpretation
+- [ ] Discussion & implications
+- [ ] Limitations & future work
+- [ ] Final thesis submission
 
 **Deliverables**:
 
@@ -262,8 +331,7 @@ Settings saved in `localStorage` for persistence across sessions.
 ### Prerequisites
 
 ```bash
-Python 3.x
-node >= 18.0.0
+node >= 20.0.0
 npm >= 9.0.0
 ```
 
@@ -285,7 +353,6 @@ npm install
 3. **Environment Configuration**
 
 Create `.env` file:
-echo "PORT=3000" >> .env
 
 ```env
 # Current (Development)
@@ -295,23 +362,52 @@ GEMINI_API_KEY=your_gemini_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-4. **Start backend server (Terminal 1)**
+4. **Start Development Server**
 
 ```bash
 npm run dev
 ```
 
-5. **Start frontend server (Terminal 2)**
-
-```bash
-python -m http.server 8000
-```
-
-6. **Open Browser**
+5. **Open Browser**
 
 ```
 http://localhost:3000
 ```
+
+---
+
+## 🎮 Usage
+
+### Basic Interaction
+
+1. **Start Conversation**
+
+   - Click "Start Listening" button
+   - Speak naturally in Korean or English
+
+2. **Observe Avatar**
+
+   - **During Speech**: Subtle listening signals (Micro Response)
+   - **After Speech**: Clear empathetic expression (Full Response)
+   - **Counselor Turn**: Vocal response with lip sync
+
+3. **Adjust Settings** (Phase 2)
+   - Open Customization panel
+   - Adjust "Base Intensity" slider (expression strength)
+   - Adjust "Base Frequency" slider (listening signal frequency)
+
+### Example Conversation Flow
+
+```
+User: "I've been feeling really stressed lately..."
+      └→ Micro Response: Concerned eyebrow raise + head nod
+
+User: [Finishes speaking]
+      └→ Full Response: Sadness expression (AU1+AU4+AU15)
+      └→ TTS: "I understand how difficult that must be..."
+```
+
+---
 
 ## 📁 Project Structure
 
@@ -339,20 +435,115 @@ AvatarCounselor/
 └── README.md
 ```
 
-## 🐛 Common Issues
+### Key Modules (Phase 2)
 
-**"Module not found" error**
-→ Hard refresh: `Ctrl + Shift + R`
+#### `emotionalState.js`
 
-**"API key not valid"**
-→ Check `.env` file, restart backend server
+```javascript
+export class EmotionalStateTracker {
+    updateFromInterim(chunk)       // Sentiment for Micro
+    updateFromFinal(text, llmData) // Full emotion analysis
+    getState()                      // Current + history + trend
+}
+```
 
-**No microphone input**
-→ Use Chrome, check browser permissions
+#### `microResponse.js`
 
-**Avatar doesn't load**
-→ Verify Python server running on port 8000
+```javascript
+export class MicroResponseController {
+    trigger(sentiment)              // Generate listening signal
+    showConcern()                   // Eyebrow raise
+    showInterest()                  // Slight smile
+    headNod()                       // Subtle nod
+}
+```
+
+#### `customization.js`
+
+```javascript
+export class CustomizationManager {
+    getSettings()                   // { baseIntensity, baseFrequency }
+    updateSettings(settings)        // Save to localStorage
+    applyDefaults()                 // Load defaults
+}
+```
+
+#### `emotions.js` (FACS-based)
+
+```javascript
+export const EMOTION_CONFIGS = {
+  joy: {
+    actionUnits: [6, 12],
+    blendshapes: {
+      /* AU → ARKit mapping */
+    },
+    duration: 3.5,
+    reference: "Ekman & Friesen (1978)",
+  },
+  // ... sadness, anger, fear, surprise, disgust
+};
+```
 
 ---
 
-**Last Updated**: Nov 3, 2025
+## 🔬 References
+
+### Academic Papers
+
+- **Elliott, R., Bohart, A. C., Watson, J. C., & Murphy, D. (2018).** Therapist empathy and client outcome: An updated meta-analysis. _Psychotherapy, 55_(4), 399–410. https://doi.org/10.1037/pst0000175
+
+- **Marcoux, A., Tessier, M.-H., & Jackson, P. L. (2023).** Nonverbal markers of empathy in virtual healthcare professionals. In _Proceedings of the 23rd ACM International Conference on Intelligent Virtual Agents (IVA '23)_, Article 43, 1–4. https://doi.org/10.1145/3570945.3607291
+
+- **Choi, D. S., Park, J., Loeser, M., & Seo, K. (2024).** Improving counseling effectiveness with virtual counselors through nonverbal compassion involving eye contact, facial mimicry, and head-nodding. _Scientific Reports, 14_, 506. https://doi.org/10.1038/s41598-023-51115-y
+
+- **Ekman, P., & Friesen, W. V. (1978).** _Facial Action Coding System: A technique for the measurement of facial movement._ Consulting Psychologists Press.
+
+- **Rogers, C. R. (1951).** _Client-centered therapy: Its current practice, implications, and theory._ Houghton Mifflin.
+
+### Technical Documentation
+
+- [Three.js Documentation](https://threejs.org/docs/)
+- [Ready Player Me Developer Docs](https://docs.readyplayer.me/)
+- [ARKit Blendshapes Reference](https://developer.apple.com/documentation/arkit/arfaceanchor/blendshapelocation)
+- [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API)
+- [OpenAI API Documentation](https://platform.openai.com/docs)
+
+---
+
+## 👤 Author
+
+**Jimin Lee**
+
+- Student ID: 20210212
+- Institution: POSTECH Computer Science and Engineering
+- Advisor: Prof. Eunkyoung Cho
+- Email: [Your Email]
+- GitHub: [@dommanga](https://github.com/dommanga)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **POSTECH HCI Lab** for research support and guidance
+- **Ready Player Me** for avatar technology
+- **OpenAI** for GPT-4 and TTS API
+- **Google** for Gemini API (development phase)
+
+---
+
+## 📊 Project Status
+
+**Current Phase**: Phase 2 - Core System Implementation  
+**Progress**: FACS Mapping & Dual Expression System in progress  
+**Target Completion**: January 2025  
+**Next Milestone**: User Study (Phase 3)
+
+---
+
+**Last Updated**: December 2024
