@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phase 2 FACS Emotion Test</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      #canvas-container {
+        width: 100vw;
+        height: 60vh;
+        position: relative;
+      }
+
+      #controls {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.85);
+        padding: 20px;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+      }
+
+      .control-section {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      .emotion-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      button {
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+      }
+
+      .btn-joy {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+      }
+      .btn-sadness {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+      }
+      .btn-anger {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        color: white;
+      }
+      .btn-fear {
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        color: #333;
+      }
+      .btn-surprise {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        color: #333;
+      }
+      .btn-disgust {
+        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        color: white;
+      }
+      .btn-neutral {
+        background: linear-gradient(135deg, #e0e0e0 0%, #b0b0b0 100%);
+        color: #333;
+      }
+
+      .sliders {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: 15px;
+      }
+
+      .slider-group {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 15px;
+        border-radius: 8px;
+      }
+
+      .slider-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .slider-group input[type="range"] {
+        width: 100%;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.3);
+        outline: none;
+        -webkit-appearance: none;
+      }
+
+      .slider-group input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: white;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      .value-display {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 4px 12px;
+        border-radius: 4px;
+        margin-left: 10px;
+        font-weight: 600;
+      }
+
+      h3 {
+        margin-top: 0;
+        font-size: 16px;
+        color: #ffd700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      #info {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        max-width: 300px;
+      }
+
+      #info h4 {
+        margin: 0 0 10px 0;
+        color: #ffd700;
+      }
+
+      #info p {
+        margin: 5px 0;
+        line-height: 1.5;
+      }
+
+      .status {
+        color: #4ade80;
+        font-weight: 600;
+      }
+    </style>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="info">
+      <h4>🎭 Phase 2 FACS Test</h4>
+      <p>Current: <span id="current-emotion" class="status">neutral</span></p>
+      <p>Intensity: <span id="current-intensity" class="status">0.50</span></p>
+      <p>Final: <span id="current-final" class="status">0.70</span></p>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="controls">
+      <div class="control-section">
+        <h3>🎭 Test Emotions (FACS-based)</h3>
+        <div class="emotion-buttons">
+          <button class="btn-joy" onclick="testEmotion('joy')">
+            😊 Joy<br /><small>(AU6, AU12)</small>
+          </button>
+          <button class="btn-sadness" onclick="testEmotion('sadness')">
+            😢 Sadness<br /><small>(AU1, AU4, AU15)</small>
+          </button>
+          <button class="btn-anger" onclick="testEmotion('anger')">
+            😠 Anger<br /><small>(AU4, AU5, AU7, AU23)</small>
+          </button>
+          <button class="btn-fear" onclick="testEmotion('fear')">
+            😨 Fear<br /><small>(AU1, AU2, AU5, AU20)</small>
+          </button>
+          <button class="btn-surprise" onclick="testEmotion('surprise')">
+            😲 Surprise<br /><small>(AU1, AU2, AU5, AU26)</small>
+          </button>
+          <button class="btn-disgust" onclick="testEmotion('disgust')">
+            🤢 Disgust<br /><small>(AU9, AU15, AU16)</small>
+          </button>
+          <button class="btn-neutral" onclick="testEmotion('neutral')">
+            😐 Neutral<br /><small>(Baseline)</small>
+          </button>
+        </div>
+
+        <div class="sliders">
+          <div class="slider-group">
+            <label>
+              Emotion Intensity (LLM):
+              <span class="value-display" id="intensity-value">0.50</span>
+            </label>
+            <input
+              type="range"
+              id="intensity-slider"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0.5"
+              oninput="updateSliders()"
+            />
+            <small>LLM이 분석한 감정의 강도</small>
+          </div>
+
+          <div class="slider-group">
+            <label>
+              Final Intensity (Base × Multiplier):
+              <span class="value-display" id="final-value">0.70</span>
+            </label>
+            <input
+              type="range"
+              id="final-slider"
+              min="0"
+              max="1.5"
+              step="0.05"
+              value="0.7"
+              oninput="updateSliders()"
+            />
+            <small>baseIntensity × intensityMultiplier</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { AvatarController } from "./src/avatar.js";
+      import { EMOTION_CONFIGS } from "./src/emotions.js";
+
+      // Make EMOTION_CONFIGS available globally for console debugging
+      window.EMOTION_CONFIGS = EMOTION_CONFIGS;
+
+      // Scene setup
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+
+      // Camera
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / (window.innerHeight * 0.6),
+        0.1,
+        1000
+      );
+      camera.position.set(0, 0.5, 1);
+
+      // Renderer
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      const container = document.getElementById("canvas-container");
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.shadowMap.enabled = true;
+      container.appendChild(renderer.domElement);
+
+      // Controls
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0.5, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.update();
+
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      directionalLight.position.set(5, 10, 5);
+      directionalLight.castShadow = true;
+      scene.add(directionalLight);
+
+      // Rim light for better visual
+      const rimLight = new THREE.DirectionalLight(0x667eea, 0.5);
+      rimLight.position.set(-5, 3, -5);
+      scene.add(rimLight);
+
+      // Avatar Controller
+      const avatarController = new AvatarController();
+      window.avatarController = avatarController; // For console debugging
+
+      // Load Avatar
+      const loader = new GLTFLoader();
+      loader.load(
+        "./assets/avatar_torso.glb",
+        (gltf) => {
+          const avatar = gltf.scene;
+          scene.add(avatar);
+          avatarController.init(avatar);
+          console.log("✅ Avatar loaded! Ready to test FACS emotions.");
+          console.log("💡 Available emotions:", Object.keys(EMOTION_CONFIGS));
+
+          // Log available blendshapes
+          if (avatarController.morphTargetDictionary) {
+            console.log(
+              "💡 Available blendshapes:",
+              Object.keys(avatarController.morphTargetDictionary).sort()
+            );
+          }
+        },
+        (progress) => {
+          console.log(
+            "Loading:",
+            ((progress.loaded / progress.total) * 100).toFixed(0) + "%"
+          );
+        },
+        (error) => {
+          console.error("❌ Error loading avatar:", error);
+        }
+      );
+
+      // Test function (exposed globally)
+      window.testEmotion = function (emotion) {
+        const intensity = parseFloat(
+          document.getElementById("intensity-slider").value
+        );
+        const finalIntensity = parseFloat(
+          document.getElementById("final-slider").value
+        );
+
+        console.log(`\n🎭 Testing ${emotion.toUpperCase()}`);
+        console.log(`   Intensity: ${intensity}`);
+        console.log(`   Final: ${finalIntensity}`);
+
+        avatarController.setEmotion(emotion, intensity, finalIntensity);
+
+        // Update UI
+        document.getElementById("current-emotion").textContent = emotion;
+        document.getElementById("current-intensity").textContent =
+          intensity.toFixed(2);
+        document.getElementById("current-final").textContent =
+          finalIntensity.toFixed(2);
+      };
+
+      // Update slider displays
+      window.updateSliders = function () {
+        const intensity = parseFloat(
+          document.getElementById("intensity-slider").value
+        );
+        const finalIntensity = parseFloat(
+          document.getElementById("final-slider").value
+        );
+
+        document.getElementById("intensity-value").textContent =
+          intensity.toFixed(2);
+        document.getElementById("final-value").textContent =
+          finalIntensity.toFixed(2);
+      };
+
+      // Animation loop
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        avatarController.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Handle window resize
+      window.addEventListener("resize", () => {
+        const container = document.getElementById("canvas-container");
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      });
+
+      console.log("🎭 Phase 2 FACS Test loaded!");
+      console.log('💡 Try: testEmotion("joy", 0.8, 1.0) in console');
+    </script>
+  </body>
+</html>
