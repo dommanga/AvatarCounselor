@@ -310,7 +310,7 @@ python -m http.server 8000
 6. **Open Browser**
 
 ```
-http://localhost:3000
+http://localhost:8000
 ```
 
 ## 📁 Project Structure
