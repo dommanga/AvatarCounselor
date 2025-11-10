@@ -163,11 +163,11 @@ Settings saved in `localStorage` for persistence across sessions.
 
 #### Phase 2-1: FACS-based Emotion Mapping
 
-- [ ] Research FACS Action Units for 6 basic emotions
-- [ ] Map Action Units to ARKit blendshapes
-- [ ] Implement `EMOTION_CONFIGS` in `emotions.js`
-- [ ] Test and calibrate with Ready Player Me avatar
-- [ ] Validate naturalness of expressions
+- [x] Research FACS Action Units for 6 basic emotions
+- [x] Map Action Units to ARKit blendshapes
+- [x] Implement `EMOTION_CONFIGS` in `emotions.js`
+- [x] Test and calibrate with Ready Player Me avatar
+- [x] Validate naturalness of expressions
 
 #### Phase 2-2: Emotional State Tracking System
 
@@ -355,4 +355,4 @@ AvatarCounselor/
 
 ---
 
-**Last Updated**: Nov 3, 2025
+**Last Updated**: Nov 10, 2025
