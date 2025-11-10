@@ -117,8 +117,8 @@ export class AvatarController {
 
     // 3. Auto fade to neutral after duration
     setTimeout(() => {
-      this.fadeToNeutral(EMOTION_CONFIGS.duration * 0.3); // Fade duration = 30% of expression
-    }, EMOTION_CONFIGS.duration * 1000);
+      this.fadeToNeutral(duration * 0.3); // Fade duration = 30% of expression
+    }, duration * 1000);
   }
 
   /**
