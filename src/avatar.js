@@ -115,10 +115,10 @@ export class AvatarController {
       this.setMorphTarget(blendshapeName, finalValue);
     }
 
-    // Auto-fade to neutral after duration
+    // 3. Auto fade to neutral after duration
     setTimeout(() => {
-      this.fadeToNeutral(0.5);
-    }, 1000);
+      this.fadeToNeutral(config.duration * 0.3); // Fade duration = 30% of expression
+    }, config.duration * 1000);
   }
 
   /**
