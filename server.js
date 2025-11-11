@@ -313,7 +313,7 @@ Return ONLY the JSON object, no other text.`;
       model: COUNSELOR_MODEL,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: 400,
+      max_tokens: 300,
     });
 
     const text = completion.choices[0].message.content;
@@ -346,6 +346,51 @@ Return ONLY the JSON object, no other text.`;
       intensity: 0.5,
       response: "죄송합니다. 잠시 후 다시 말씀해 주세요.",
       error: true,
+    });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// ENDPOINT 4: OpenAI TTS (Text-to-Speech)
+// ═════════════════════════════════════════════════════════════════════
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text, language } = req.body;
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ error: "Text is required" });
+    }
+
+    console.log(`🔊 TTS request: ${text.substring(0, 50)}... (${language})`);
+
+    // Select voice based on language
+    const voice = language === "ko-KR" ? "nova" : "alloy";
+
+    // Generate speech using OpenAI TTS
+    const mp3 = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: voice,
+      input: text,
+      response_format: "mp3",
+      speed: 1.0,
+    });
+
+    // Convert response to buffer
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+
+    console.log(`✅ TTS generated: ${buffer.length} bytes`);
+
+    // Send audio as response
+    res.set({
+      "Content-Type": "audio/mpeg",
+      "Content-Length": buffer.length,
+    });
+    res.send(buffer);
+  } catch (error) {
+    console.error("❌ TTS generation error:", error.message);
+    res.status(500).json({
+      error: "TTS generation failed",
+      message: error.message,
     });
   }
 });

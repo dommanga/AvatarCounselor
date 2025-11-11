@@ -1,11 +1,11 @@
 /**
- * TTSManager - Text-to-Speech using Web Speech API
- * Minimal implementation for Phase 1-4
+ * TTSManager - Text-to-Speech using OpenAI TTS API
+ * Replaced Web Speech API with OpenAI for natural voice quality
  */
 export class TTSManager {
-  constructor() {
-    this.synth = window.speechSynthesis;
-    this.currentUtterance = null;
+  constructor(apiBase = "http://localhost:3000") {
+    this.apiBase = apiBase;
+    this.audio = null;
     this.isSpeaking = false;
     this.volume = 1.0;
 
@@ -14,103 +14,89 @@ export class TTSManager {
     this.onEnd = null;
     this.onError = null;
 
-    // Load available voices
-    this.voices = [];
-    this.loadVoices();
-
-    // Voice loading can be async in some browsers
-    if (speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = () => this.loadVoices();
-    }
+    console.log("🔊 TTSManager initialized (OpenAI TTS)");
   }
 
-  loadVoices() {
-    this.voices = this.synth.getVoices();
-    if (this.voices.length > 0) {
-      console.log(`🔊 Loaded ${this.voices.length} TTS voices`);
-    }
-  }
+  async speak(text, language = "ko-KR") {
+    // Stop any ongoing speech
+    this.stop();
 
-  selectVoice(language) {
-    if (this.voices.length === 0) {
-      this.loadVoices();
+    if (!text || text.trim().length === 0) {
+      return;
     }
 
-    // Try exact match first
-    let voice = this.voices.find((v) => v.lang === language);
+    try {
+      console.log(`🔊 Requesting TTS: ${text.substring(0, 50)}...`);
 
-    // Try language prefix match
-    if (!voice) {
-      const langPrefix = language.split("-")[0];
-      voice = this.voices.find((v) => v.lang.startsWith(langPrefix));
-    }
+      // Request TTS from server
+      const response = await fetch(`${this.apiBase}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, language }),
+      });
 
-    // Fallback to default voice
-    if (!voice && this.voices.length > 0) {
-      voice = this.voices.find((v) => v.default) || this.voices[0];
-    }
-
-    return voice;
-  }
-
-  speak(text, language = "ko-KR") {
-    return new Promise((resolve, reject) => {
-      // Stop any ongoing speech
-      this.stop();
-
-      if (!text || text.trim().length === 0) {
-        resolve();
-        return;
+      if (!response.ok) {
+        throw new Error(`TTS API error: ${response.status}`);
       }
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = language;
-      utterance.volume = this.volume;
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
+      // Get audio blob
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
 
-      // Select appropriate voice
-      const voice = this.selectVoice(language);
-      if (voice) {
-        utterance.voice = voice;
-        console.log(`🔊 Using TTS voice: ${voice.name}`);
-      }
+      // Create audio element
+      this.audio = new Audio(audioUrl);
+      this.audio.volume = this.volume;
 
-      // Event handlers
-      utterance.onstart = () => {
+      // Set up event handlers
+      this.audio.onplay = () => {
         this.isSpeaking = true;
         if (this.onStart) this.onStart();
+        console.log("🔊 TTS playback started");
       };
 
-      utterance.onend = () => {
+      this.audio.onended = () => {
         this.isSpeaking = false;
-        this.currentUtterance = null;
+        URL.revokeObjectURL(audioUrl); // Clean up
         if (this.onEnd) this.onEnd();
-        resolve();
+        console.log("🔇 TTS playback ended");
       };
 
-      utterance.onerror = (event) => {
+      this.audio.onerror = (event) => {
         this.isSpeaking = false;
-        this.currentUtterance = null;
-        console.error("TTS error:", event.error);
-        if (this.onError) this.onError(event.error);
-        reject(new Error(`TTS error: ${event.error}`));
+        URL.revokeObjectURL(audioUrl);
+        console.error("❌ TTS playback error:", event);
+        if (this.onError) this.onError("playback-error");
       };
 
-      this.currentUtterance = utterance;
-      this.synth.speak(utterance);
-    });
+      // Play audio
+      await this.audio.play();
+    } catch (error) {
+      console.error("❌ TTS error:", error);
+      this.isSpeaking = false;
+      if (this.onError) this.onError(error.message);
+      throw error;
+    }
   }
 
   stop() {
-    if (this.synth.speaking) {
-      this.synth.cancel();
+    if (this.audio) {
+      this.audio.pause();
+      this.audio.currentTime = 0;
       this.isSpeaking = false;
-      this.currentUtterance = null;
+
+      // Trigger interrupted error
+      if (this.onError) {
+        this.onError("interrupted");
+      }
+
+      this.audio = null;
     }
   }
 
   setVolume(volume) {
     this.volume = Math.max(0, Math.min(1, volume));
+    if (this.audio) {
+      this.audio.volume = this.volume;
+    }
   }
 }
