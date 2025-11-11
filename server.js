@@ -313,7 +313,7 @@ Return ONLY the JSON object, no other text.`;
       model: COUNSELOR_MODEL,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: 200,
+      max_tokens: 400,
     });
 
     const text = completion.choices[0].message.content;
