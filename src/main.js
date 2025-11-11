@@ -163,8 +163,8 @@ function initializeSpeechRecognition() {
 
     console.log("📝 Final transcript:", text);
 
-    // transition to Full response
-    if (microResponseController && microResponseController.isActive()) {
+    // Micro → Full transition
+    if (microResponseController?.isActive()) {
       console.log("🔄 Switching from Micro to Full response");
       microResponseController.stop();
     }
@@ -172,38 +172,73 @@ function initializeSpeechRecognition() {
     uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
-    // Emotion analysis
+    // ---- Parallel execution start ----
     uiController.setAnalyzing(true);
-    const analysis = await stateTracker.analyzeFinalEmotion(text);
-    uiController.setAnalyzing(false);
 
-    // Set avatar emotion
+    const analysisPromise = stateTracker
+      .analyzeFinalEmotion(text)
+      .catch((e) => {
+        console.warn("⚠️ analyzeFinalEmotion failed:", e);
+        return {
+          emotions: {
+            joy: 0,
+            sadness: 0,
+            anger: 0,
+            fear: 0,
+            surprise: 0,
+            disgust: 0,
+          },
+          intensityMultiplier: 1.0,
+          dominantEmotion: "neutral",
+        };
+      });
+
+    const responsePromise = fetch(
+      "http://localhost:3000/api/generate-response",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          conversationHistory: stateTracker.conversationHistory,
+          emotionHistory: stateTracker.emotionHistory,
+        }),
+      }
+    )
+      .then((r) => r.json())
+      .catch((e) => {
+        console.error("❌ generate-response failed:", e);
+        return { response: "" };
+      });
+
+    // Promise
+    const [analysis, resp] = await Promise.all([
+      analysisPromise,
+      responsePromise,
+    ]);
+
+    uiController.setAnalyzing(false);
+    const counselorText = (resp && resp.response) || "";
+    if (!counselorText) {
+      console.log("⏭️  Empty counselor text, skipping.");
+      return;
+    }
+
+    // UI update
+    uiController.addCounselorMessage(counselorText);
+    stateTracker.addToConversation("counselor", counselorText);
+
+    // Set Avatar emotion
     const dom = analysis.dominantEmotion || "neutral";
     const emoIntensity =
       analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
     const finalIntensity = 0.7 * Number(analysis.intensityMultiplier ?? 1.0);
+    avatarController.setEmotion(dom, emoIntensity, finalIntensity);
 
-    // Generate counselor response
-    const resp = await fetch("http://localhost:3000/api/generate-response", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: text,
-        conversationHistory: stateTracker.conversationHistory,
-        emotionHistory: stateTracker.emotionHistory,
-      }),
-    }).then((r) => r.json());
-
-    const counselorText = (resp && resp.response) || "";
-    if (counselorText) {
-      uiController.addCounselorMessage(counselorText);
-      stateTracker.addToConversation("counselor", counselorText);
-
-      // Actual emotion expression
-      avatarController.setEmotion(dom, emoIntensity, finalIntensity);
-      // TTS
-      await speakResponse(counselorText);
-    }
+    // TTS start - no await
+    void speakResponse(counselorText).catch((err) =>
+      console.warn("TTS play error:", err)
+    );
   };
 
   speechManager.onError = (error) => {
