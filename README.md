@@ -197,6 +197,10 @@ Settings saved in `localStorage` for persistence across sessions.
 - [x] 3-5s duration with smooth transitions
 - [ ] Integrate with TTS timing
 
+**Additional**
+
+- [ ] Natural facial movement and expression
+
 #### Phase 2-4: Customization System
 
 - [ ] Implement user settings management
