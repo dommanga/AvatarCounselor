@@ -7,6 +7,7 @@ import { UIController } from "./ui.js";
 import { TTSManager } from "./tts.js";
 import { LipSyncController } from "./lipSync.js";
 import { EmotionalStateTracker } from "./emotionalState.js";
+import { MicroResponseController } from "./microResponse.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -61,6 +62,9 @@ let uiController = null;
 let ttsManager = null;
 let lipSyncController = null;
 
+// Micro Response controller
+let microResponseController = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -106,6 +110,13 @@ function initializeSpeechRecognition() {
   // Initialize TTS and Lip Sync
   initializeTTS();
 
+  // Initialize Micro Response controller
+  microResponseController = new MicroResponseController(avatarController, {
+    baseIntensity: 0.7,
+    baseFrequency: 1.0,
+  });
+  console.log("✅ Micro response controller initialized!");
+
   // Set up callbacks
   speechManager.onTranscriptUpdate = async (finalText, interimText) => {
     uiController.updateTranscript(finalText, interimText);
@@ -125,7 +136,7 @@ function initializeSpeechRecognition() {
       const sentiment = await stateTracker.analyzeChunkSentiment(interimText);
       if (sentiment && sentiment !== "neutral") {
         console.log(`💡 Micro response trigger: ${sentiment}`);
-        // TODO Step 4: microResponseController.trigger(sentiment);
+        microResponseController.trigger(sentiment);
       }
     }
   };
@@ -138,7 +149,12 @@ function initializeSpeechRecognition() {
 
     console.log("📝 Final transcript:", text);
 
-    // Add to history
+    // transition to Full response
+    if (microResponseController && microResponseController.isActive()) {
+      console.log("🔄 Switching from Micro to Full response");
+      microResponseController.stop();
+    }
+
     uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
