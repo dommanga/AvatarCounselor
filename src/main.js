@@ -8,6 +8,7 @@ import { TTSManager } from "./tts.js";
 import { LipSyncController } from "./lipSync.js";
 import { EmotionalStateTracker } from "./emotionalState.js";
 import { MicroResponseController } from "./microResponse.js";
+import { EyeMovementController } from "./eyeMovement.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -65,6 +66,9 @@ let lipSyncController = null;
 // Micro Response controller
 let microResponseController = null;
 
+// Eye Movement controller
+let eyeMovementController = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -75,6 +79,11 @@ loader.load(
     scene.add(avatar);
     avatarController.init(avatar);
     console.log("✅ Avatar loaded successfully!");
+
+    // Initialize Eye Movement
+    eyeMovementController = new EyeMovementController(avatarController);
+    eyeMovementController.start();
+    console.log("✅ Eye movements started!");
 
     // Initialize speech recognition after avatar loads
     initializeSpeechRecognition();
