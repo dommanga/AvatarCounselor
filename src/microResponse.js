@@ -92,6 +92,9 @@ export class MicroResponseController {
           browInnerUp: { value: 0.3 },
           browOuterUpLeft: { value: 0.2 },
           browOuterUpRight: { value: 0.2 },
+          // Eye expression
+          eyeWideLeft: { value: 0.2 },
+          eyeWideRight: { value: 0.2 },
           // Slight mouth press (empathy)
           mouthPressLeft: { value: 0.15 },
           mouthPressRight: { value: 0.15 },
