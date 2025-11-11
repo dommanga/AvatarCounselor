@@ -183,8 +183,6 @@ function initializeSpeechRecognition() {
       analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
     const finalIntensity = 0.7 * Number(analysis.intensityMultiplier ?? 1.0);
 
-    avatarController.setEmotion(dom, emoIntensity, finalIntensity);
-
     // Generate counselor response
     const resp = await fetch("http://localhost:3000/api/generate-response", {
       method: "POST",
@@ -201,6 +199,8 @@ function initializeSpeechRecognition() {
       uiController.addCounselorMessage(counselorText);
       stateTracker.addToConversation("counselor", counselorText);
 
+      // Actual emotion expression
+      avatarController.setEmotion(dom, emoIntensity, finalIntensity);
       // TTS
       await speakResponse(counselorText);
     }
