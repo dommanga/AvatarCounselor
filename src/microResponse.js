@@ -79,7 +79,7 @@ export class MicroResponseController {
           // Slight brow raise (interest)
           browInnerUp: { value: 0.1 },
         },
-        duration: 1.0, // seconds
+        duration: 1.5, // 1.0 → 1.5 (더 길게 유지)
       },
 
       negative: {
@@ -92,14 +92,11 @@ export class MicroResponseController {
           browInnerUp: { value: 0.3 },
           browOuterUpLeft: { value: 0.2 },
           browOuterUpRight: { value: 0.2 },
-          // Eye expression
-          eyeWideLeft: { base: 0.2, scale: 0.15 },
-          eyeWideRight: { base: 0.2, scale: 0.15 },
           // Slight mouth press (empathy)
           mouthPressLeft: { value: 0.15 },
           mouthPressRight: { value: 0.15 },
         },
-        duration: 1.2,
+        duration: 1.8,
       },
 
       neutral: {
@@ -110,7 +107,7 @@ export class MicroResponseController {
           // Slight brow raise (attention)
           browInnerUp: { value: 0.08 },
         },
-        duration: 0.8,
+        duration: 1.2,
       },
     };
 
@@ -135,7 +132,7 @@ export class MicroResponseController {
 
     // Auto-fade after duration
     setTimeout(() => {
-      this._fadeToNeutral(microConfig.duration * 0.3);
+      this._fadeToNeutral(microConfig.duration * 0.6);
     }, microConfig.duration * 1000);
   }
 
@@ -148,15 +145,46 @@ export class MicroResponseController {
 
     console.log(`😐 Micro response fading to neutral (${fadeDuration}s)`);
 
-    // Reset all blendshapes to 0
-    for (const blendshapeName of Object.keys(
+    // Gradual fadeout(20 steps)
+    const steps = 20;
+    const stepDuration = (fadeDuration * 1000) / steps; // ms per step
+    let currentStep = 0;
+
+    // store curren blendshapes value
+    const initialValues = {};
+    for (const [blendshapeName, params] of Object.entries(
       this._currentMicroResponse.blendshapes
     )) {
-      this.avatarController.setMorphTarget(blendshapeName, 0);
+      initialValues[blendshapeName] =
+        params.value * this.customization.baseIntensity;
     }
 
-    this._isActive = false;
-    this._currentMicroResponse = null;
+    const fadeInterval = setInterval(() => {
+      currentStep++;
+      const progress = currentStep / steps; // 0 → 1
+
+      for (const [blendshapeName, initialValue] of Object.entries(
+        initialValues
+      )) {
+        const targetValue = initialValue * (1 - progress);
+        this.avatarController.setMorphTarget(blendshapeName, targetValue);
+      }
+
+      // Fade complete
+      if (currentStep >= steps) {
+        clearInterval(fadeInterval);
+
+        // Finally, 0 value
+        for (const blendshapeName of Object.keys(
+          this._currentMicroResponse.blendshapes
+        )) {
+          this.avatarController.setMorphTarget(blendshapeName, 0);
+        }
+
+        this._isActive = false;
+        this._currentMicroResponse = null;
+      }
+    }, stepDuration);
   }
 
   /**

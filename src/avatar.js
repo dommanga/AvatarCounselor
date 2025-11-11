@@ -115,9 +115,9 @@ export class AvatarController {
       this.setMorphTarget(blendshapeName, finalValue);
     }
 
-    // 3. Auto fade to neutral after duration
+    // Auto fade to neutral after duration
     setTimeout(() => {
-      this.fadeToNeutral(duration * 0.3); // Fade duration = 30% of expression
+      this.fadeToNeutral(duration * 0.3);
     }, duration * 1000);
   }
 
@@ -128,13 +128,39 @@ export class AvatarController {
   fadeToNeutral(fadeDuration = 1.0) {
     console.log(`Fading to neutral over ${fadeDuration}s`);
 
-    // Set all target values to 0
-    for (let key in this.targetMorphValues) {
-      this.targetMorphValues[key] = 0;
+    // Gradual fade out (20 steps)
+    const steps = 20;
+    const stepDuration = (fadeDuration * 1000) / steps;
+    let currentStep = 0;
+
+    // Store initial values
+    const initialValues = {};
+    for (let morphName in this.targetMorphValues) {
+      if (this.targetMorphValues[morphName] > 0) {
+        initialValues[morphName] = this.targetMorphValues[morphName];
+      }
     }
 
-    // Note: The actual smooth interpolation happens in update() loop
-    // with this.transitionSpeed parameter
+    const fadeInterval = setInterval(() => {
+      currentStep++;
+      const progress = currentStep / steps; // 0 → 1
+
+      // Gradually reduce each blendshape to 0
+      for (const [morphName, initialValue] of Object.entries(initialValues)) {
+        const targetValue = initialValue * (1 - progress);
+        this.targetMorphValues[morphName] = targetValue;
+      }
+
+      // Fade complete
+      if (currentStep >= steps) {
+        clearInterval(fadeInterval);
+
+        // Final reset to 0
+        for (let key in this.targetMorphValues) {
+          this.targetMorphValues[key] = 0;
+        }
+      }
+    }, stepDuration);
   }
 
   update() {
