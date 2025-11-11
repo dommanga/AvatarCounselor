@@ -50,7 +50,6 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 // Initialize emotion analyzer
-// const emotionAnalyzer = new EmotionAnalyzer();
 const stateTracker = new EmotionalStateTracker();
 
 // Avatar and Speech Recognition managers
@@ -58,7 +57,7 @@ const avatarController = new AvatarController();
 let speechManager = null;
 let uiController = null;
 
-// NEW: TTS and Lip Sync managers
+// TTS and Lip Sync managers
 let ttsManager = null;
 let lipSyncController = null;
 
@@ -111,6 +110,16 @@ function initializeSpeechRecognition() {
   speechManager.onTranscriptUpdate = async (finalText, interimText) => {
     uiController.updateTranscript(finalText, interimText);
 
+    // CRITICAL: If detect Interim -> immediately stop TTS
+    if (interimText && interimText.trim().length > 0) {
+      if (ttsManager && ttsManager.isSpeaking) {
+        console.log(
+          "🎤 User started speaking (interim detected), stopping TTS"
+        );
+        ttsManager.stop();
+      }
+    }
+
     // Micro Response
     if (interimText && interimText.length > 10) {
       const sentiment = await stateTracker.analyzeChunkSentiment(interimText);
@@ -122,27 +131,31 @@ function initializeSpeechRecognition() {
   };
 
   speechManager.onFinalTranscript = async (text) => {
-    console.log("📝 Final transcript:", text);
-    uiController.addToHistory(text);
+    if (!text || text.trim().length === 0) {
+      console.log("⏭️  Skipping empty transcript");
+      return;
+    }
 
+    console.log("📝 Final transcript:", text);
+
+    // Add to history
+    uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
-    // Entire emotion analysis
+    // Emotion analysis
     uiController.setAnalyzing(true);
     const analysis = await stateTracker.analyzeFinalEmotion(text);
     uiController.setAnalyzing(false);
 
-    // Set facial expression of Avatar
+    // Set avatar emotion
     const dom = analysis.dominantEmotion || "neutral";
     const emoIntensity =
       analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
-    const finalIntensity =
-      // baseIntensity(customization not yet - step 4) × multiplier
-      0.7 * Number(analysis.intensityMultiplier ?? 1.0);
+    const finalIntensity = 0.7 * Number(analysis.intensityMultiplier ?? 1.0);
 
     avatarController.setEmotion(dom, emoIntensity, finalIntensity);
 
-    // Counselor response
+    // Generate counselor response
     const resp = await fetch("http://localhost:3000/api/generate-response", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -176,11 +189,6 @@ function initializeSpeechRecognition() {
 
   // Connect UI buttons
   uiController.micButton.addEventListener("click", () => {
-    // Don't start mic if TTS is speaking
-    if (ttsManager && ttsManager.isSpeaking) {
-      console.log("⚠️ Cannot start recording while avatar is speaking");
-      return;
-    }
     speechManager.toggle();
   });
 
@@ -211,11 +219,6 @@ function initializeTTS() {
     console.log("🔊 TTS started");
     uiController.setSpeakingStatus(true);
     lipSyncController.start();
-
-    // Stop speech recognition while speaking to avoid feedback
-    if (speechManager && speechManager.isListening) {
-      speechManager.stop();
-    }
   };
 
   ttsManager.onEnd = () => {
@@ -228,6 +231,10 @@ function initializeTTS() {
     console.error("❌ TTS error:", error);
     uiController.setSpeakingStatus(false);
     lipSyncController.stop();
+
+    if (error === "interrupted") {
+      console.log("ℹ️  TTS was interrupted by user (this is normal)");
+    }
   };
 
   // Connect stop TTS button
@@ -256,8 +263,13 @@ async function speakResponse(text) {
     // Speak with TTS (callbacks handle UI and lip sync)
     await ttsManager.speak(text, language);
   } catch (error) {
-    console.error("❌ Error in TTS:", error);
-    // Continue even if TTS fails - don't break the flow
+    // Interrupt error: normal
+    if (error.message && error.message.includes("interrupted")) {
+      console.log("ℹ️  TTS interrupted by user input");
+    } else {
+      console.error("❌ Error in TTS:", error);
+    }
+    // Continue even if TTS fails
   }
 }
 

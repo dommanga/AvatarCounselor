@@ -33,10 +33,11 @@ export class SpeechRecognitionManager {
     this._finalDebounceTimer = null;
     this._pendingFinalTranscript = "";
 
+    // Debounce configuration
     this.config = {
-      shortPhraseDelay: 800, // short speaking wait time (ms)
-      longPhraseDelay: 1800, // long speaking wait time (ms)
-      shortPhraseThreshold: 5, // work num threshold
+      shortPhraseDelay: 800,
+      longPhraseDelay: 1800,
+      shortPhraseThreshold: 5, // short - long criteria
     };
 
     this.setupEventHandlers();
@@ -60,7 +61,7 @@ export class SpeechRecognitionManager {
         }
       }
 
-      // Debounce processing
+      // When Final, debounce processing
       if (hasFinal) {
         if (this._finalDebounceTimer) {
           clearTimeout(this._finalDebounceTimer);
@@ -74,7 +75,6 @@ export class SpeechRecognitionManager {
 
         console.log(`⏱️  Final debounce: ${delay}ms (${wordCount} words)`);
 
-        // New timer start
         this._finalDebounceTimer = setTimeout(() => {
           if (this.onFinalTranscript && this._pendingFinalTranscript) {
             console.log(
@@ -87,6 +87,7 @@ export class SpeechRecognitionManager {
         }, delay);
       }
 
+      // user keep speaking
       if (this.interimTranscript && this._pendingFinalTranscript) {
         console.log("⏭️  Speech continuing, canceling pending final");
         clearTimeout(this._finalDebounceTimer);
@@ -163,7 +164,7 @@ export class SpeechRecognitionManager {
       return;
     }
 
-    // If there's pending final --> immediate processing
+    // If exist Pending final -> immediate processing
     if (this._pendingFinalTranscript && this._finalDebounceTimer) {
       clearTimeout(this._finalDebounceTimer);
       console.log("⏹️  Stop triggered, processing pending final immediately");
@@ -192,9 +193,26 @@ export class SpeechRecognitionManager {
   clearTranscript() {
     this.transcript = "";
     this.interimTranscript = "";
+
+    // Initialize pending final
+    if (this._finalDebounceTimer) {
+      clearTimeout(this._finalDebounceTimer);
+      this._finalDebounceTimer = null;
+    }
+    this._pendingFinalTranscript = "";
   }
 
   setLanguage(lang) {
     this.recognition.lang = lang;
+  }
+
+  // Debounce delay managing method
+  setFinalDelay(shortDelay, longDelay, threshold) {
+    this.config.shortPhraseDelay = shortDelay || this.config.shortPhraseDelay;
+    this.config.longPhraseDelay = longDelay || this.config.longPhraseDelay;
+    this.config.shortPhraseThreshold =
+      threshold || this.config.shortPhraseThreshold;
+
+    console.log("⏱️  Debounce config updated:", this.config);
   }
 }
