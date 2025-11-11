@@ -36,7 +36,6 @@ export class UIController {
                   <div id="conversation-history" class="conversation-history"></div>
               </div>
               
-              <!-- NEW: TTS Status Indicator -->
               <div id="tts-status" class="tts-status" style="display: none;">
                   <span class="tts-icon">🔊</span>
                   <span class="tts-text">Speaking...</span>
