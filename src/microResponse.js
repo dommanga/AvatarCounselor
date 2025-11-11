@@ -79,7 +79,7 @@ export class MicroResponseController {
           // Slight brow raise (interest)
           browInnerUp: { value: 0.1 },
         },
-        duration: 1.5, // 1.0 → 1.5 (더 길게 유지)
+        duration: 1.5,
       },
 
       negative: {
