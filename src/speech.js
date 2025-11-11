@@ -29,6 +29,16 @@ export class SpeechRecognitionManager {
     this.onError = null;
     this.onStatusChange = null;
 
+    // Final transcript debouncing
+    this._finalDebounceTimer = null;
+    this._pendingFinalTranscript = "";
+
+    this.config = {
+      shortPhraseDelay: 800, // short speaking wait time (ms)
+      longPhraseDelay: 1800, // long speaking wait time (ms)
+      shortPhraseThreshold: 5, // work num threshold
+    };
+
     this.setupEventHandlers();
   }
 
@@ -36,23 +46,54 @@ export class SpeechRecognitionManager {
     // Handle results
     this.recognition.onresult = (event) => {
       this.interimTranscript = "";
+      let hasFinal = false;
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
 
         if (event.results[i].isFinal) {
+          hasFinal = true;
           this.transcript += transcript + " ";
-
-          // Callback for final transcript
-          if (this.onFinalTranscript) {
-            this.onFinalTranscript(transcript.trim());
-          }
+          this._pendingFinalTranscript = transcript.trim();
         } else {
           this.interimTranscript += transcript;
         }
       }
 
-      // Callback for real-time updates
+      // Debounce processing
+      if (hasFinal) {
+        if (this._finalDebounceTimer) {
+          clearTimeout(this._finalDebounceTimer);
+        }
+
+        const wordCount = this._pendingFinalTranscript.split(/\s+/).length;
+        const delay =
+          wordCount <= this.config.shortPhraseThreshold
+            ? this.config.shortPhraseDelay
+            : this.config.longPhraseDelay;
+
+        console.log(`⏱️  Final debounce: ${delay}ms (${wordCount} words)`);
+
+        // New timer start
+        this._finalDebounceTimer = setTimeout(() => {
+          if (this.onFinalTranscript && this._pendingFinalTranscript) {
+            console.log(
+              "✅ Processing final transcript:",
+              this._pendingFinalTranscript
+            );
+            this.onFinalTranscript(this._pendingFinalTranscript);
+            this._pendingFinalTranscript = "";
+          }
+        }, delay);
+      }
+
+      if (this.interimTranscript && this._pendingFinalTranscript) {
+        console.log("⏭️  Speech continuing, canceling pending final");
+        clearTimeout(this._finalDebounceTimer);
+        this._pendingFinalTranscript = "";
+      }
+
+      // Update callback
       if (this.onTranscriptUpdate) {
         this.onTranscriptUpdate(this.transcript, this.interimTranscript);
       }
@@ -120,6 +161,16 @@ export class SpeechRecognitionManager {
   stop() {
     if (!this.isListening) {
       return;
+    }
+
+    // If there's pending final --> immediate processing
+    if (this._pendingFinalTranscript && this._finalDebounceTimer) {
+      clearTimeout(this._finalDebounceTimer);
+      console.log("⏹️  Stop triggered, processing pending final immediately");
+      if (this.onFinalTranscript) {
+        this.onFinalTranscript(this._pendingFinalTranscript);
+      }
+      this._pendingFinalTranscript = "";
     }
 
     this.isListening = false;

@@ -4,9 +4,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { AvatarController } from "./avatar.js";
 import { SpeechRecognitionManager } from "./speech.js";
 import { UIController } from "./ui.js";
-import { EmotionAnalyzer } from "./api.js";
 import { TTSManager } from "./tts.js";
 import { LipSyncController } from "./lipSync.js";
+import { EmotionalStateTracker } from "./emotionalState.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -33,7 +33,7 @@ controls.target.set(0, 0.5, 0);
 controls.update();
 
 // Lights
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -50,7 +50,8 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 // Initialize emotion analyzer
-const emotionAnalyzer = new EmotionAnalyzer();
+// const emotionAnalyzer = new EmotionAnalyzer();
+const stateTracker = new EmotionalStateTracker();
 
 // Avatar and Speech Recognition managers
 const avatarController = new AvatarController();
@@ -107,16 +108,59 @@ function initializeSpeechRecognition() {
   initializeTTS();
 
   // Set up callbacks
-  speechManager.onTranscriptUpdate = (finalText, interimText) => {
+  speechManager.onTranscriptUpdate = async (finalText, interimText) => {
     uiController.updateTranscript(finalText, interimText);
+
+    // Micro Response
+    if (interimText && interimText.length > 10) {
+      const sentiment = await stateTracker.analyzeChunkSentiment(interimText);
+      if (sentiment && sentiment !== "neutral") {
+        console.log(`💡 Micro response trigger: ${sentiment}`);
+        // TODO Step 4: microResponseController.trigger(sentiment);
+      }
+    }
   };
 
-  speechManager.onFinalTranscript = (text) => {
+  speechManager.onFinalTranscript = async (text) => {
     console.log("📝 Final transcript:", text);
     uiController.addToHistory(text);
 
-    // Send to LLM(Gemini) for emotion analysis
-    analyzeEmotionWithGPT(text);
+    stateTracker.addToConversation("user", text);
+
+    // Entire emotion analysis
+    uiController.setAnalyzing(true);
+    const analysis = await stateTracker.analyzeFinalEmotion(text);
+    uiController.setAnalyzing(false);
+
+    // Set facial expression of Avatar
+    const dom = analysis.dominantEmotion || "neutral";
+    const emoIntensity =
+      analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
+    const finalIntensity =
+      // baseIntensity(customization not yet - step 4) × multiplier
+      0.7 * Number(analysis.intensityMultiplier ?? 1.0);
+
+    avatarController.setEmotion(dom, emoIntensity, finalIntensity);
+
+    // Counselor response
+    const resp = await fetch("http://localhost:3000/api/generate-response", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        conversationHistory: stateTracker.conversationHistory,
+        emotionHistory: stateTracker.emotionHistory,
+      }),
+    }).then((r) => r.json());
+
+    const counselorText = (resp && resp.response) || "";
+    if (counselorText) {
+      uiController.addCounselorMessage(counselorText);
+      stateTracker.addToConversation("counselor", counselorText);
+
+      // TTS
+      await speakResponse(counselorText);
+    }
   };
 
   speechManager.onError = (error) => {
@@ -194,28 +238,6 @@ function initializeTTS() {
   }
 
   console.log("✅ TTS initialized!");
-}
-
-async function analyzeEmotionWithGPT(text) {
-  console.log("🧠 Analyzing emotion with Gemini:", text);
-
-  // Show loading state
-  uiController.setAnalyzing(true);
-
-  const result = await emotionAnalyzer.analyzeEmotion(text);
-
-  if (result) {
-    // Update avatar expression
-    avatarController.setEmotion(result.emotion, result.intensity);
-
-    // Display counselor response
-    uiController.addCounselorMessage(result.response);
-
-    // NEW: Speak the response with TTS
-    await speakResponse(result.response);
-  }
-
-  uiController.setAnalyzing(false);
 }
 
 // Speak counselor response with TTS
