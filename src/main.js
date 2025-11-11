@@ -128,10 +128,15 @@ function initializeSpeechRecognition() {
           "🎤 User started speaking (interim detected), stopping TTS"
         );
         ttsManager.stop();
+
+        // Mark last counselor message as interrupted
+        if (uiController) {
+          uiController.markLastCounselorMessageAsInterrupted();
+        }
       }
     }
 
-    // Micro Response
+    // Micro Response (Step 4 - sentiment 기반 미세 표정)
     if (interimText && interimText.length > 10) {
       const sentiment = await stateTracker.analyzeChunkSentiment(interimText);
       if (sentiment && sentiment !== "neutral") {

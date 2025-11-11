@@ -2,6 +2,7 @@
 export class UIController {
   constructor() {
     this.conversationHistory = [];
+    this.lastCounselorMessageElement = null; // Track last counselor message for interrupt marking
     this.setupUI();
   }
 
@@ -10,38 +11,38 @@ export class UIController {
     const speechUI = document.createElement("div");
     speechUI.id = "speech-ui";
     speechUI.innerHTML = `
-              <div class="speech-control-panel">
-                  <button id="mic-button" class="mic-button" title="Start/Stop Recording">
-                      <span class="mic-icon">🎤</span>
-                      <span class="status-text">Start Recording</span>
-                  </button>
-                  <button id="clear-history-button" class="clear-button" title="Clear Conversation">
-                      Clear
-                  </button>
-                  <select id="language-select" class="language-select">
-                      <option value="ko-KR">한국어</option>
-                      <option value="en-US">English</option>
-                  </select>
-              </div>
-              
-              <div class="transcript-panel">
-                  <div class="panel-header">Real-time Transcription</div>
-                  <div id="current-transcript" class="current-transcript">
-                      <span class="interim"></span>
-                  </div>
-              </div>
-              
-              <div class="conversation-panel">
-                  <div class="panel-header">Conversation History</div>
-                  <div id="conversation-history" class="conversation-history"></div>
-              </div>
-              
-              <div id="tts-status" class="tts-status" style="display: none;">
-                  <span class="tts-icon">🔊</span>
-                  <span class="tts-text">Speaking...</span>
-                  <button id="stop-tts-button" class="stop-tts-button" title="Stop Speaking">Stop</button>
-              </div>
-          `;
+                <div class="speech-control-panel">
+                    <button id="mic-button" class="mic-button" title="Start/Stop Recording">
+                        <span class="mic-icon">🎤</span>
+                        <span class="status-text">Start Recording</span>
+                    </button>
+                    <button id="clear-history-button" class="clear-button" title="Clear Conversation">
+                        Clear
+                    </button>
+                    <select id="language-select" class="language-select">
+                        <option value="ko-KR">한국어</option>
+                        <option value="en-US">English</option>
+                    </select>
+                </div>
+                
+                <div class="transcript-panel">
+                    <div class="panel-header">Real-time Transcription</div>
+                    <div id="current-transcript" class="current-transcript">
+                        <span class="interim"></span>
+                    </div>
+                </div>
+                
+                <div class="conversation-panel">
+                    <div class="panel-header">Conversation History</div>
+                    <div id="conversation-history" class="conversation-history"></div>
+                </div>
+                
+                <div id="tts-status" class="tts-status" style="display: none;">
+                    <span class="tts-icon">🔊</span>
+                    <span class="tts-text">Speaking...</span>
+                    <button id="stop-tts-button" class="stop-tts-button" title="Stop Speaking">Stop</button>
+                </div>
+            `;
 
     document.body.appendChild(speechUI);
 
@@ -63,222 +64,244 @@ export class UIController {
   addStyles() {
     const style = document.createElement("style");
     style.textContent = `
-              #speech-ui {
-                  position: fixed;
-                  right: 20px;
-                  top: 20px;
-                  width: 380px;
-                  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                  z-index: 1000;
-              }
-              
-              .speech-control-panel {
-                  background: rgba(255, 255, 255, 0.95);
-                  border-radius: 12px;
-                  padding: 15px;
-                  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                  display: flex;
-                  gap: 10px;
-                  margin-bottom: 15px;
-              }
-              
-              .mic-button {
-                  flex: 1;
-                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                  color: white;
-                  border: none;
-                  border-radius: 8px;
-                  padding: 12px 20px;
-                  font-size: 14px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  gap: 8px;
-                  transition: transform 0.2s, box-shadow 0.2s;
-              }
-              
-              .mic-button:hover {
-                  transform: translateY(-2px);
-                  box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
-              }
-              
-              .mic-button:active {
-                  transform: translateY(0);
-              }
-              
-              .mic-button.listening {
-                  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                  animation: pulse 1.5s infinite;
-              }
-              
-              @keyframes pulse {
-                  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 87, 108, 0.7); }
-                  50% { box-shadow: 0 0 0 10px rgba(245, 87, 108, 0); }
-              }
-              
-              .clear-button {
-                  background: #f5f5f5;
-                  border: 1px solid #ddd;
-                  border-radius: 8px;
-                  padding: 12px 16px;
-                  font-size: 14px;
-                  cursor: pointer;
-                  transition: background 0.2s;
-              }
-              
-              .clear-button:hover {
-                  background: #e0e0e0;
-              }
-              
-              .language-select {
-                  background: white;
-                  border: 1px solid #ddd;
-                  border-radius: 8px;
-                  padding: 12px;
-                  font-size: 14px;
-                  cursor: pointer;
-              }
-              
-              .transcript-panel, .conversation-panel {
-                  background: rgba(255, 255, 255, 0.95);
-                  border-radius: 12px;
-                  padding: 15px;
-                  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                  margin-bottom: 15px;
-              }
-              
-              .panel-header {
-                  font-weight: 600;
-                  font-size: 14px;
-                  color: #333;
-                  margin-bottom: 10px;
-                  padding-bottom: 8px;
-                  border-bottom: 2px solid #667eea;
-              }
-              
-              .current-transcript {
-                  min-height: 60px;
-                  max-height: 120px;
-                  overflow-y: auto;
-                  font-size: 15px;
-                  line-height: 1.6;
-                  color: #333;
-              }
-              
-              .current-transcript .final {
-                  color: #000;
-              }
-              
-              .current-transcript .interim {
-                  color: #999;
-                  font-style: italic;
-              }
-              
-              .conversation-history {
-                  max-height: 300px;
-                  overflow-y: auto;
-                  font-size: 14px;
-              }
-              
-              .conversation-entry {
-                  margin-bottom: 12px;
-                  padding: 10px;
-                  border-radius: 8px;
-                  background: #f8f9fa;
-                  border-left: 3px solid #667eea;
-              }
-              
-              .conversation-entry .timestamp {
-                  font-size: 11px;
-                  color: #999;
-                  margin-bottom: 4px;
-              }
-              
-              .conversation-entry .text {
-                  color: #333;
-                  line-height: 1.5;
-              }
-              
-              .counselor-message {
-                  margin-bottom: 12px;
-                  padding: 12px;
-                  border-radius: 8px;
-                  background: #e3f2fd;
-                  border-left: 3px solid #2196f3;
-              }
-  
-              .counselor-message .label {
-                  font-weight: 600;
-                  font-size: 13px;
-                  color: #1976d2;
-                  display: block;
-                  margin-bottom: 6px;
-              }
-  
-              .counselor-message .text {
-                  color: #333;
-                  line-height: 1.6;
-                  font-size: 14px;
-              }
-              
-              /* NEW: TTS Status Indicator */
-              .tts-status {
-                  background: rgba(76, 175, 80, 0.95);
-                  border-radius: 12px;
-                  padding: 12px 15px;
-                  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                  display: flex;
-                  align-items: center;
-                  gap: 10px;
-                  animation: pulse 1.5s infinite;
-              }
-              
-              .tts-icon {
-                  font-size: 18px;
-              }
-              
-              .tts-text {
-                  flex: 1;
-                  color: white;
-                  font-weight: 600;
-                  font-size: 14px;
-              }
-              
-              .stop-tts-button {
-                  background: white;
-                  color: #4caf50;
-                  border: none;
-                  border-radius: 6px;
-                  padding: 6px 12px;
-                  font-size: 12px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  transition: background 0.2s;
-              }
-              
-              .stop-tts-button:hover {
-                  background: #f5f5f5;
-              }
-              
-              .conversation-history::-webkit-scrollbar,
-              .current-transcript::-webkit-scrollbar {
-                  width: 6px;
-              }
-              
-              .conversation-history::-webkit-scrollbar-track,
-              .current-transcript::-webkit-scrollbar-track {
-                  background: #f1f1f1;
-                  border-radius: 3px;
-              }
-              
-              .conversation-history::-webkit-scrollbar-thumb,
-              .current-transcript::-webkit-scrollbar-thumb {
-                  background: #888;
-                  border-radius: 3px;
-              }
-          `;
+                #speech-ui {
+                    position: fixed;
+                    right: 20px;
+                    top: 20px;
+                    width: 380px;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    z-index: 1000;
+                }
+                
+                .speech-control-panel {
+                    background: rgba(255, 255, 255, 0.95);
+                    border-radius: 12px;
+                    padding: 15px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 15px;
+                }
+                
+                .mic-button {
+                    flex: 1;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 12px 20px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                }
+                
+                .mic-button:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+                }
+                
+                .mic-button:active {
+                    transform: translateY(0);
+                }
+                
+                .mic-button.listening {
+                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    animation: pulse 1.5s infinite;
+                }
+                
+                @keyframes pulse {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 87, 108, 0.7); }
+                    50% { box-shadow: 0 0 0 10px rgba(245, 87, 108, 0); }
+                }
+                
+                .clear-button {
+                    background: #f5f5f5;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 12px 16px;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+                
+                .clear-button:hover {
+                    background: #e0e0e0;
+                }
+                
+                .language-select {
+                    background: white;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 12px;
+                    font-size: 14px;
+                    cursor: pointer;
+                }
+                
+                .transcript-panel, .conversation-panel {
+                    background: rgba(255, 255, 255, 0.95);
+                    border-radius: 12px;
+                    padding: 15px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    margin-bottom: 15px;
+                }
+                
+                .panel-header {
+                    font-weight: 600;
+                    font-size: 14px;
+                    color: #333;
+                    margin-bottom: 10px;
+                    padding-bottom: 8px;
+                    border-bottom: 2px solid #667eea;
+                }
+                
+                .current-transcript {
+                    min-height: 60px;
+                    max-height: 120px;
+                    overflow-y: auto;
+                    font-size: 15px;
+                    line-height: 1.6;
+                    color: #333;
+                }
+                
+                .current-transcript .final {
+                    color: #000;
+                }
+                
+                .current-transcript .interim {
+                    color: #999;
+                    font-style: italic;
+                }
+                
+                .conversation-history {
+                    max-height: 300px;
+                    overflow-y: auto;
+                    font-size: 14px;
+                }
+                
+                .conversation-entry {
+                    margin-bottom: 12px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    background: #f8f9fa;
+                    border-left: 3px solid #667eea;
+                }
+                
+                .conversation-entry .timestamp {
+                    font-size: 11px;
+                    color: #999;
+                    margin-bottom: 4px;
+                }
+                
+                .conversation-entry .text {
+                    color: #333;
+                    line-height: 1.5;
+                }
+                
+                .counselor-message {
+                    margin-bottom: 12px;
+                    padding: 12px;
+                    border-radius: 8px;
+                    background: #e3f2fd;
+                    border-left: 3px solid #2196f3;
+                }
+    
+                .counselor-message .label {
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: #1976d2;
+                    display: block;
+                    margin-bottom: 6px;
+                }
+    
+                .counselor-message .text {
+                    color: #333;
+                    line-height: 1.6;
+                    font-size: 14px;
+                }
+                
+                /* Interrupted message style */
+                .counselor-message.interrupted {
+                    background: #f5f5f5;
+                    border-left: 3px solid #999;
+                    opacity: 0.6;
+                }
+                
+                .counselor-message.interrupted .label {
+                    color: #999;
+                }
+                
+                .counselor-message.interrupted .label::after {
+                    content: " (interrupted)";
+                    font-size: 11px;
+                    font-weight: normal;
+                }
+                
+                .counselor-message.interrupted .text {
+                    text-decoration: line-through;
+                    color: #999;
+                }
+                
+                /* TTS Status Indicator */
+                .tts-status {
+                    background: rgba(76, 175, 80, 0.95);
+                    border-radius: 12px;
+                    padding: 12px 15px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    animation: pulse 1.5s infinite;
+                }
+                
+                .tts-icon {
+                    font-size: 18px;
+                }
+                
+                .tts-text {
+                    flex: 1;
+                    color: white;
+                    font-weight: 600;
+                    font-size: 14px;
+                }
+                
+                .stop-tts-button {
+                    background: white;
+                    color: #4caf50;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+                
+                .stop-tts-button:hover {
+                    background: #f5f5f5;
+                }
+                
+                .conversation-history::-webkit-scrollbar,
+                .current-transcript::-webkit-scrollbar {
+                    width: 6px;
+                }
+                
+                .conversation-history::-webkit-scrollbar-track,
+                .current-transcript::-webkit-scrollbar-track {
+                    background: #f1f1f1;
+                    border-radius: 3px;
+                }
+                
+                .conversation-history::-webkit-scrollbar-thumb,
+                .current-transcript::-webkit-scrollbar-thumb {
+                    background: #888;
+                    border-radius: 3px;
+                }
+            `;
     document.head.appendChild(style);
   }
 
@@ -301,9 +324,9 @@ export class UIController {
     const entryEl = document.createElement("div");
     entryEl.className = "conversation-entry";
     entryEl.innerHTML = `
-              <div class="timestamp">${timestamp}</div>
-              <div class="text">${this.escapeHtml(text)}</div>
-          `;
+                <div class="timestamp">${timestamp}</div>
+                <div class="text">${this.escapeHtml(text)}</div>
+            `;
 
     this.conversationHistoryEl.appendChild(entryEl);
     this.conversationHistoryEl.scrollTop =
@@ -346,13 +369,23 @@ export class UIController {
     const messageDiv = document.createElement("div");
     messageDiv.className = "counselor-message";
     messageDiv.innerHTML = `
-          <span class="label">🤖 Counselor (${timestamp}):</span>
-          <span class="text">${this.escapeHtml(message)}</span>
-      `;
+            <span class="label">🤖 Counselor (${timestamp}):</span>
+            <span class="text">${this.escapeHtml(message)}</span>
+        `;
 
     this.conversationHistoryEl.appendChild(messageDiv);
     this.conversationHistoryEl.scrollTop =
       this.conversationHistoryEl.scrollHeight;
+
+    // Track this message for interrupt marking
+    this.lastCounselorMessageElement = messageDiv;
+  }
+
+  markLastCounselorMessageAsInterrupted() {
+    if (this.lastCounselorMessageElement) {
+      this.lastCounselorMessageElement.classList.add("interrupted");
+      console.log("✂️ Marked last counselor message as interrupted");
+    }
   }
 
   // TTS status methods
