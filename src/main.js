@@ -21,7 +21,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 0.5, 1);
+camera.position.set(0, 0.65, 1);
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -31,7 +31,7 @@ document.getElementById("canvas-container").appendChild(renderer.domElement);
 
 // Controls
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.5, 0);
+controls.target.set(0, 0.6, 0);
 controls.update();
 
 // Lights
