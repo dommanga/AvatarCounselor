@@ -185,7 +185,7 @@ Settings saved in `localStorage` for persistence across sessions.
 
 - [x] Implement `MicroResponseController` class
 - [x] Sentiment-based expression triggers
-- [ ] Head nod, eyebrow, smile animations
+- [x] Head nod, eyebrow, smile animations
 - [x] 0.5-0.8s duration control
 - [x] Apply `baseIntensity` and `baseFrequency`
 

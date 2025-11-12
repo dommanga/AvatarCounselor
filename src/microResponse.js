@@ -9,6 +9,7 @@
  * - Short duration (0.5-1.5s)
  * - Frequency control (baseFrequency)
  * - Debouncing to avoid over-triggering
+ * - Head nodding synchronized with facial expressions
  */
 
 export class MicroResponseController {
@@ -17,8 +18,9 @@ export class MicroResponseController {
 
     // Customization settings
     this.customization = {
-      baseIntensity: customization.baseIntensity || 0.7, // 0.0-1.5
-      baseFrequency: customization.baseFrequency || 1.0, // 0.0-2.0
+      baseIntensity: customization.baseIntensity || 0.5, // 0.0-1.0
+      baseFrequency: customization.baseFrequency || 0.5, // 0.0-1.0
+      noddingProbability: 0.5, // chance of nodding
       ...customization,
     };
 
@@ -28,6 +30,10 @@ export class MicroResponseController {
 
     this._isActive = false;
     this._currentMicroResponse = null;
+
+    // Head nodding state
+    this._noddingInterval = null;
+    this._isNodding = false;
   }
 
   /**
@@ -41,7 +47,7 @@ export class MicroResponseController {
       this._minTriggerInterval / this.customization.baseFrequency;
 
     if (now - this._lastTriggerTime < adjustedInterval) {
-      console.log(`⏭️  Micro response debounced (${sentiment})`);
+      console.log(`⏭️ Micro response debounced (${sentiment})`);
       return;
     }
 
@@ -73,44 +79,54 @@ export class MicroResponseController {
         name: "Gentle Smile",
         blendshapes: {
           mouthSmile: { value: 0.3 },
-          // Subtle eye smile
           eyeSquintLeft: { value: 0.15 },
           eyeSquintRight: { value: 0.15 },
-          // Slight brow raise (interest)
           browInnerUp: { value: 0.1 },
         },
         duration: 1.5,
+        // Head nodding config
+        nodding: {
+          delay: 0.15, // Start after facial expression
+          count: 2, // Number of nods
+          speed: 0.4, // Faster for positive
+        },
       },
 
       negative: {
         name: "Empathetic Concern",
         blendshapes: {
-          // Slight frown
           mouthFrownLeft: { value: 0.25 },
           mouthFrownRight: { value: 0.25 },
-          // Concerned brows
           browInnerUp: { value: 0.3 },
           browOuterUpLeft: { value: 0.2 },
           browOuterUpRight: { value: 0.2 },
-          // Eye expression
           eyeWideLeft: { value: 0.2 },
           eyeWideRight: { value: 0.2 },
-          // Slight mouth press (empathy)
           mouthPressLeft: { value: 0.15 },
           mouthPressRight: { value: 0.15 },
         },
         duration: 1.8,
+        // Head nodding config
+        nodding: {
+          delay: 0.2,
+          count: 2, // Fewer nods for negative
+          speed: 0.5, // Slower for empathy
+        },
       },
 
       neutral: {
         name: "Attentive Listening",
         blendshapes: {
-          // Very subtle smile
           mouthSmile: { value: 0.15 },
-          // Slight brow raise (attention)
           browInnerUp: { value: 0.08 },
         },
         duration: 1.2,
+        // Head nodding config
+        nodding: {
+          delay: 0.15,
+          count: 1,
+          speed: 0.45,
+        },
       },
     };
 
@@ -133,10 +149,101 @@ export class MicroResponseController {
       this.avatarController.setMorphTarget(blendshapeName, adjustedValue);
     }
 
+    // Start head nodding after delay (with probability check)
+    if (
+      microConfig.nodding &&
+      Math.random() < this.customization.noddingProbability
+    ) {
+      // baseIntensity 0.0 → delay ×2.0, baseIntensity 0.5 → delay ×1.0, baseIntensity 1.0 → delay ×0.5
+      const intensityFactor = 2.0 - this.customization.baseIntensity * 1.5;
+      const adjustedDelay = microConfig.nodding.delay * intensityFactor;
+
+      setTimeout(() => {
+        this._startHeadNodding(microConfig.nodding);
+      }, adjustedDelay * 1000);
+    }
+
     // Auto-fade after duration
     setTimeout(() => {
       this._fadeToNeutral(microConfig.duration * 0.6);
     }, microConfig.duration * 1000);
+  }
+
+  /**
+   * Start head nodding animation
+   * @param {Object} noddingConfig - { delay, count, speed }
+   */
+  _startHeadNodding(noddingConfig) {
+    if (this._isNodding) {
+      console.log("⏭️ Nodding already in progress, skipping new trigger");
+      return;
+    }
+
+    const headBone = this.avatarController.getHeadBone();
+    if (!headBone) {
+      console.warn("⚠️ Head bone not available for nodding");
+      return;
+    }
+
+    this._isNodding = true;
+
+    // Nodding parameters
+    const { count, speed } = noddingConfig;
+    const baseIntensity = this.customization.baseIntensity;
+
+    // Rotation range: -2° to 10° (asymmetric, more downward)
+    const minRotation = -2 * (Math.PI / 180) * baseIntensity;
+    const maxRotation = 8 * (Math.PI / 180) * baseIntensity;
+
+    let currentNod = 0;
+    const stepsPerNod = 20;
+    let currentStep = 0;
+
+    console.log(`👤 Starting head nodding (${count} nods, speed: ${speed})`);
+
+    this._noddingInterval = setInterval(() => {
+      currentStep++;
+
+      // Progress within current nod (0 → 1)
+      const nodProgress = (currentStep % stepsPerNod) / stepsPerNod;
+
+      // Smoothstep function for smooth start and end (sigmoid-like)
+      // Goes from 0 → 1 → 0 with smooth transitions at both ends
+      const smoothValue =
+        nodProgress < 0.5
+          ? 2 * nodProgress * nodProgress // Ease in (0 → 0.5)
+          : 1 - 2 * (1 - nodProgress) * (1 - nodProgress); // Ease out (0.5 → 1)
+
+      // Map to sine-like range (0 → 1 → 0)
+      const easeValue = Math.sin(smoothValue * Math.PI);
+
+      // Fade out the last nod
+      const nodFadeFactor =
+        currentNod === count - 1
+          ? 1 - ((currentStep % stepsPerNod) / stepsPerNod) * 0.3 // Last nod: reduce by 30%
+          : 1.0;
+
+      // Calculate rotation: starts at 0, goes down (positive rotation in X)
+      const rotationX =
+        (minRotation + (maxRotation - minRotation) * easeValue) * nodFadeFactor;
+
+      // Apply rotation
+      headBone.rotation.x = rotationX;
+
+      // Move to next nod
+      if (currentStep % stepsPerNod === 0) {
+        currentNod++;
+
+        // Stop after all nods complete
+        if (currentNod >= count) {
+          clearInterval(this._noddingInterval);
+          this._noddingInterval = null;
+          this._isNodding = false;
+
+          console.log("👤 Head nodding complete");
+        }
+      }
+    }, speed * 100); // Speed multiplier (smaller = faster)
   }
 
   /**
@@ -148,12 +255,12 @@ export class MicroResponseController {
 
     console.log(`😐 Micro response fading to neutral (${fadeDuration}s)`);
 
-    // Gradual fadeout(20 steps)
+    // Gradual fadeout (20 steps)
     const steps = 20;
-    const stepDuration = (fadeDuration * 1000) / steps; // ms per step
+    const stepDuration = (fadeDuration * 1000) / steps;
     let currentStep = 0;
 
-    // store curren blendshapes value
+    // Store current blendshapes value
     const initialValues = {};
     for (const [blendshapeName, params] of Object.entries(
       this._currentMicroResponse.blendshapes
@@ -196,9 +303,23 @@ export class MicroResponseController {
   stop() {
     if (!this._currentMicroResponse) return;
 
-    console.log("⏹️  Stopping micro response");
+    console.log("ℹ️ Stopping micro response");
 
-    // Immediate reset
+    // Stop head nodding
+    if (this._noddingInterval) {
+      clearInterval(this._noddingInterval);
+      this._noddingInterval = null;
+    }
+
+    // Reset head rotation
+    const headBone = this.avatarController.getHeadBone();
+    if (headBone) {
+      headBone.rotation.x = 0;
+    }
+
+    this._isNodding = false;
+
+    // Immediate reset of facial expressions
     for (const blendshapeName of Object.keys(
       this._currentMicroResponse.blendshapes
     )) {
@@ -219,10 +340,7 @@ export class MicroResponseController {
       ...newCustomization,
     };
 
-    console.log(
-      "⚙️  Micro response customization updated:",
-      this.customization
-    );
+    console.log("⚙️ Micro response customization updated:", this.customization);
   }
 
   /**
@@ -231,5 +349,13 @@ export class MicroResponseController {
    */
   isActive() {
     return this._isActive;
+  }
+
+  /**
+   * Check if head is currently nodding
+   * @returns {boolean}
+   */
+  isNodding() {
+    return this._isNodding;
   }
 }

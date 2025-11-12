@@ -121,8 +121,8 @@ function initializeSpeechRecognition() {
 
   // Initialize Micro Response controller
   microResponseController = new MicroResponseController(avatarController, {
-    baseIntensity: 0.7,
-    baseFrequency: 1.0,
+    baseIntensity: 0.5,
+    baseFrequency: 0.5,
   });
   console.log("✅ Micro response controller initialized!");
 

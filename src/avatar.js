@@ -4,6 +4,7 @@ export class AvatarController {
   constructor() {
     this.avatar = null;
     this.headMesh = null;
+    this.headBone = null;
     this.morphTargetDictionary = null;
     this.currentEmotion = "neutral";
     this.targetMorphValues = {};
@@ -14,7 +15,7 @@ export class AvatarController {
   init(avatar) {
     this.avatar = avatar;
 
-    // Find Wolf3D_Avatar mesh (Ready Player Me standard)
+    // Find Wolf3D_Avatar mesh and Head bone
     avatar.traverse((node) => {
       if (
         node.isMesh &&
@@ -23,6 +24,12 @@ export class AvatarController {
       ) {
         this.headMesh = node;
         this.morphTargetDictionary = node.morphTargetDictionary;
+      }
+
+      // Find Head bone
+      if (node.isBone && node.name === "Head") {
+        this.headBone = node;
+        console.log("✅ Head bone found!");
       }
     });
 
@@ -38,6 +45,14 @@ export class AvatarController {
     );
 
     this.initializeMorphValues();
+  }
+
+  /**
+   * Get head bone for rotation manipulationi
+   * @returns {THREE.Bone|null}
+   */
+  getHeadBone() {
+    return this.headBone;
   }
 
   initializeMorphValues() {
