@@ -1,13 +1,53 @@
-// UI controller for speech recognition interface
+// UI controller for speech recognition interface with customization
 export class UIController {
   constructor() {
     this.conversationHistory = [];
-    this.lastCounselorMessageElement = null; // Track last counselor message for interrupt marking
+    this.lastCounselorMessageElement = null;
     this.setupUI();
   }
 
   setupUI() {
-    // Create speech UI container
+    // ✅ NEW: Create customization panel (LEFT side, separate container)
+    const customizationUI = document.createElement("div");
+    customizationUI.id = "customization-ui";
+    customizationUI.innerHTML = `
+                <div class="customization-panel">
+                    <div class="panel-header">
+                        <span>⚙️ Expression Settings</span>
+                        <button id="settings-toggle" class="settings-toggle" title="Show/Hide Settings">▲</button>
+                    </div>
+                    <div id="settings-content" class="settings-content" style="display: block;">
+                        <div class="setting-item">
+                            <label for="intensity-slider">
+                                <div class="setting-label">Intensity</div>
+                                <div class="setting-description">Expression strength (affects both Micro & Full responses)</div>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="intensity-slider" min="0" max="100" value="50" step="10" />
+                                <span id="intensity-value" class="slider-value">0.50</span>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <label for="frequency-slider">
+                                <div class="setting-label">Frequency</div>
+                                <div class="setting-description">Micro response rate (listening signals only)</div>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="frequency-slider" min="0" max="100" value="50" step="10" />
+                                <span id="frequency-value" class="slider-value">0.50</span>
+                            </div>
+                        </div>
+                        
+                        <button id="reset-settings" class="reset-button" title="Reset to defaults">
+                            🔄 Reset to Defaults
+                        </button>
+                    </div>
+                </div>
+            `;
+
+    document.body.appendChild(customizationUI);
+
     const speechUI = document.createElement("div");
     speechUI.id = "speech-ui";
     speechUI.innerHTML = `
@@ -57,13 +97,42 @@ export class UIController {
     this.ttsStatus = document.getElementById("tts-status");
     this.stopTTSButton = document.getElementById("stop-tts-button");
 
+    // Customization UI references
+    this.settingsToggle = document.getElementById("settings-toggle");
+    this.settingsContent = document.getElementById("settings-content");
+    this.intensitySlider = document.getElementById("intensity-slider");
+    this.intensityValue = document.getElementById("intensity-value");
+    this.frequencySlider = document.getElementById("frequency-slider");
+    this.frequencyValue = document.getElementById("frequency-value");
+    this.resetButton = document.getElementById("reset-settings");
+
+    // Setup settings toggle
+    this.settingsToggle.addEventListener("click", () => {
+      this.toggleSettings();
+    });
+
     // Add styles
     this.addStyles();
+  }
+
+  toggleSettings() {
+    const isHidden = this.settingsContent.style.display === "none";
+    this.settingsContent.style.display = isHidden ? "block" : "none";
+    this.settingsToggle.textContent = isHidden ? "▲" : "▼";
   }
 
   addStyles() {
     const style = document.createElement("style");
     style.textContent = `
+                #customization-ui {
+                    position: fixed;
+                    left: 20px;
+                    top: 20px;
+                    width: 320px;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    z-index: 1000;
+                }
+
                 #speech-ui {
                     position: fixed;
                     right: 20px;
@@ -140,6 +209,140 @@ export class UIController {
                     padding: 12px;
                     font-size: 14px;
                     cursor: pointer;
+                }
+                
+                /* Customization Panel */
+                .customization-panel {
+                    background: rgba(255, 255, 255, 0.95);
+                    border-radius: 12px;
+                    padding: 15px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    margin-bottom: 15px;
+                }
+                
+                .customization-panel .panel-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-weight: 600;
+                    font-size: 14px;
+                    color: #333;
+                    margin-bottom: 0;
+                    padding-bottom: 8px;
+                    border-bottom: 2px solid #667eea;
+                    cursor: pointer;
+                }
+                
+                .settings-toggle {
+                    background: none;
+                    border: none;
+                    font-size: 14px;
+                    cursor: pointer;
+                    padding: 4px 8px;
+                    color: #667eea;
+                    transition: transform 0.2s;
+                }
+                
+                .settings-toggle:hover {
+                    transform: scale(1.1);
+                }
+                
+                .settings-content {
+                    margin-top: 15px;
+                    display: none;
+                }
+                
+                .setting-item {
+                    margin-bottom: 20px;
+                }
+                
+                .setting-item:last-of-type {
+                    margin-bottom: 15px;
+                }
+                
+                .setting-label {
+                    display: block;
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: #333;
+                    margin-bottom: 4px;
+                }
+                
+                .setting-description {
+                    display: block;
+                    font-size: 11px;
+                    color: #666;
+                    margin-bottom: 8px;
+                }
+                
+                .slider-container {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                
+                .slider-container input[type="range"] {
+                    flex: 1;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: #e0e0e0;
+                    outline: none;
+                    -webkit-appearance: none;
+                }
+                
+                .slider-container input[type="range"]::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 50%;
+                    background: #667eea;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+                
+                .slider-container input[type="range"]::-webkit-slider-thumb:hover {
+                    background: #764ba2;
+                }
+                
+                .slider-container input[type="range"]::-moz-range-thumb {
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 50%;
+                    background: #667eea;
+                    cursor: pointer;
+                    border: none;
+                    transition: background 0.2s;
+                }
+                
+                .slider-container input[type="range"]::-moz-range-thumb:hover {
+                    background: #764ba2;
+                }
+                
+                .slider-value {
+                    min-width: 40px;
+                    text-align: right;
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: #667eea;
+                }
+                
+                .reset-button {
+                    width: 100%;
+                    background: #f5f5f5;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 10px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                    color: #666;
+                }
+                
+                .reset-button:hover {
+                    background: #e0e0e0;
+                    color: #333;
                 }
                 
                 .transcript-panel, .conversation-panel {
@@ -224,7 +427,6 @@ export class UIController {
                     font-size: 14px;
                 }
                 
-                /* Interrupted message style */
                 .counselor-message.interrupted {
                     background: #f5f5f5;
                     border-left: 3px solid #999;
@@ -245,7 +447,6 @@ export class UIController {
                     color: #999;
                 }
                 
-                /* TTS Status Indicator */
                 .tts-status {
                     background: rgba(76, 175, 80, 0.95);
                     border-radius: 12px;
@@ -355,13 +556,6 @@ export class UIController {
     return div.innerHTML;
   }
 
-  setAnalyzing(isAnalyzing) {
-    const indicator = document.getElementById("analyzing-indicator");
-    if (indicator) {
-      indicator.style.display = isAnalyzing ? "block" : "none";
-    }
-  }
-
   addCounselorMessage(message) {
     const timestamp = new Date().toLocaleTimeString();
 
@@ -376,7 +570,6 @@ export class UIController {
     this.conversationHistoryEl.scrollTop =
       this.conversationHistoryEl.scrollHeight;
 
-    // Track this message for interrupt marking
     this.lastCounselorMessageElement = messageDiv;
   }
 
@@ -387,10 +580,20 @@ export class UIController {
     }
   }
 
-  // TTS status methods
   setSpeakingStatus(isSpeaking) {
     if (this.ttsStatus) {
       this.ttsStatus.style.display = isSpeaking ? "flex" : "none";
     }
+  }
+
+  // Customization UI helpers
+  updateIntensityValue(value) {
+    this.intensityValue.textContent = value.toFixed(1);
+    this.intensitySlider.value = Math.round(value * 100);
+  }
+
+  updateFrequencyValue(value) {
+    this.frequencyValue.textContent = value.toFixed(1);
+    this.frequencySlider.value = Math.round(value * 100);
   }
 }

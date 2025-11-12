@@ -9,6 +9,7 @@ import { LipSyncController } from "./lipSync.js";
 import { EmotionalStateTracker } from "./emotionalState.js";
 import { MicroResponseController } from "./microResponse.js";
 import { IdleAnimationController } from "./IdleAnimation.js";
+import { CustomizationManager } from "./customization.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -55,6 +56,9 @@ const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
+
+// Initialize customization manager
+const customizationManager = new CustomizationManager();
 
 // Initialize emotion analyzer
 const stateTracker = new EmotionalStateTracker();
@@ -124,12 +128,54 @@ function initializeSpeechRecognition() {
   // Initialize TTS and Lip Sync
   initializeTTS();
 
-  // Initialize Micro Response controller
+  // Initialize Micro Response controller with current settings
+  const currentSettings = customizationManager.getSettings();
   microResponseController = new MicroResponseController(avatarController, {
-    baseIntensity: 0.5,
-    baseFrequency: 0.5,
+    baseIntensity: currentSettings.baseIntensity, // 0.0-2.0
+    baseFrequency: currentSettings.baseFrequency, // 0.0-1.0
   });
   console.log("✅ Micro response controller initialized!");
+
+  // ===== CUSTOMIZATION UI SETUP =====
+
+  // Initialize UI with current settings
+  uiController.updateIntensityValue(currentSettings.baseIntensity);
+  uiController.updateFrequencyValue(currentSettings.baseFrequency);
+
+  // Connect intensity slider
+  uiController.intensitySlider.addEventListener("input", (e) => {
+    const value = parseInt(e.target.value) / 100;
+    customizationManager.setBaseIntensity(value);
+    uiController.updateIntensityValue(value);
+  });
+
+  // Connect frequency slider
+  uiController.frequencySlider.addEventListener("input", (e) => {
+    const value = parseInt(e.target.value) / 100;
+    customizationManager.setBaseFrequency(value);
+    uiController.updateFrequencyValue(value);
+  });
+
+  // Connect reset button
+  uiController.resetButton.addEventListener("click", () => {
+    customizationManager.resetToDefaults();
+    const settings = customizationManager.getSettings();
+    uiController.updateIntensityValue(settings.baseIntensity);
+    uiController.updateFrequencyValue(settings.baseFrequency);
+  });
+
+  // Listen to customization changes and update micro response controller
+  customizationManager.addListener((settingName, newValue) => {
+    if (microResponseController) {
+      const updatedSettings = customizationManager.getActualSettings();
+      microResponseController.updateCustomization(updatedSettings);
+      console.log(
+        `🔄 Updated MicroResponse: ${settingName} = ${updatedSettings.baseIntensity.toFixed(
+          2
+        )}`
+      );
+    }
+  });
 
   // Set up callbacks
   speechManager.onTranscriptUpdate = async (finalText, interimText) => {
@@ -178,8 +224,6 @@ function initializeSpeechRecognition() {
     stateTracker.addToConversation("user", text);
 
     // ---- Parallel execution start ----
-    uiController.setAnalyzing(true);
-
     const analysisPromise = stateTracker
       .analyzeFinalEmotion(text)
       .catch((e) => {
@@ -222,7 +266,6 @@ function initializeSpeechRecognition() {
       responsePromise,
     ]);
 
-    uiController.setAnalyzing(false);
     const counselorText = (resp && resp.response) || "";
     if (!counselorText) {
       console.log("⏭️  Empty counselor text, skipping.");
@@ -233,11 +276,25 @@ function initializeSpeechRecognition() {
     uiController.addCounselorMessage(counselorText);
     stateTracker.addToConversation("counselor", counselorText);
 
-    // Set Avatar emotion
+    // ===== APPLY CUSTOMIZATION TO FULL RESPONSE =====
+    const currentSettings = customizationManager.getActualSettings();
     const dom = analysis.dominantEmotion || "neutral";
     const emoIntensity =
       analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
-    const finalIntensity = 0.7 * Number(analysis.intensityMultiplier ?? 1.0);
+
+    // Apply: actualIntensity (0.0-2.0) × intensityMultiplier (0.5-1.5)
+    const finalIntensity =
+      currentSettings.baseIntensity *
+      Number(analysis.intensityMultiplier ?? 1.0);
+
+    console.log(
+      `🎭 Full Response: emotion=${dom}, baseIntensity=${currentSettings.baseIntensity.toFixed(
+        2
+      )}, multiplier=${
+        analysis.intensityMultiplier
+      }, finalIntensity=${finalIntensity.toFixed(2)}`
+    );
+
     avatarController.setEmotion(dom, emoIntensity, finalIntensity);
 
     // TTS start - no await
@@ -342,31 +399,6 @@ async function speakResponse(text) {
     // Continue even if TTS fails
   }
 }
-
-// UI Controls
-document.getElementById("btn-smile").addEventListener("click", () => {
-  avatarController.setEmotion("joy");
-});
-
-document.getElementById("btn-sad").addEventListener("click", () => {
-  avatarController.setEmotion("sadness");
-});
-
-document.getElementById("btn-neutral").addEventListener("click", () => {
-  avatarController.setEmotion("neutral");
-});
-
-document.getElementById("smile-slider").addEventListener("input", (e) => {
-  const value = parseFloat(e.target.value);
-  document.getElementById("smile-value").textContent = value.toFixed(1);
-  avatarController.setMorphTarget("mouthSmile", value);
-});
-
-document.getElementById("brow-slider").addEventListener("input", (e) => {
-  const value = parseFloat(e.target.value);
-  document.getElementById("brow-value").textContent = value.toFixed(1);
-  avatarController.setMorphTarget("browInnerUp", value);
-});
 
 // Animation loop
 function animate() {
