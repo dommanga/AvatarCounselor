@@ -308,6 +308,7 @@ export class MicroResponseController {
     const headBone = this.avatarController.getHeadBone();
     if (headBone) {
       headBone.rotation.x = 0;
+      headBone.rotation.y = 0;
     }
 
     this._isNodding = false;

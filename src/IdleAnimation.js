@@ -1,13 +1,15 @@
 /**
- * EyeMovementController
+ * IdleAnimationController
  *
- * Manages natural eye movements for the avatar:
+ * Manages natural idle movements for the avatar:
  * 1. Eye Blink - Random blinking (2-6 seconds interval)
  * 2. Eye Gaze - Subtle eye tremor (always active)
  * 3. Eye Movement - Occasional gaze shift (10-20 seconds)
+ * 4. Breathing
+ * 5. Head sway - y-axis movement
  */
 
-export class EyeMovementController {
+export class IdleAnimationController {
   constructor(avatarController) {
     this.avatarController = avatarController;
 
@@ -23,6 +25,15 @@ export class EyeMovementController {
     this.movementInterval = null;
     this.isMoving = false;
     this.currentLookTarget = { up: 0, left: 0 };
+
+    // Breathing state
+    this.breathingInterval = null;
+    this.currentBreathPhase = 0;
+
+    // Head sway state
+    this.swayInterval = null;
+    this.currentSwayTarget = 0;
+    this.currentSwayValue = 0;
 
     // Configuration
     this.config = {
@@ -40,27 +51,40 @@ export class EyeMovementController {
       movementMaxInterval: 15000, // Max 20 seconds
       movementDuration: 1500, // Hold for 1.5 seconds
       movementIntensity: 0.3, // Max ±0.3 range
+
+      // Breathing config
+      breathingRate: 4000, // 4 seconds per breath cycle
+      breathingIntensity: 0.05, // Jaw opening amount
+
+      // Head sway config
+      swayUpdateRate: 80, // Update every 50ms
+      swayChangeInterval: 6000, // Change direction every 8 seconds
+      swayIntensity: 0.1, // Max ±0.15 radians (~8.6 degrees)
     };
   }
 
   /**
-   * Start all eye movement behaviors
+   * Start all idle movement behaviors
    */
   start() {
-    console.log("👁️ Starting eye movements");
+    console.log("🧍 Starting idle movements");
     this.startBlinking();
     this.startGaze();
     this.startMovement();
+    this.startBreathing();
+    this.startHeadSway();
   }
 
   /**
-   * Stop all eye movement behaviors
+   * Stop all idle movement behaviors
    */
   stop() {
-    console.log("👁️ Stopping eye movements");
+    console.log("🧍 Stopping idle movements");
     this.stopBlinking();
     this.stopGaze();
     this.stopMovement();
+    this.stopBreathing();
+    this.stopHeadSway();
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -232,6 +256,121 @@ export class EyeMovementController {
   }
 
   // ═══════════════════════════════════════════════════════════
+  // Breathing Animation
+  // ═══════════════════════════════════════════════════════════
+
+  startBreathing() {
+    this.breathingInterval = setInterval(() => {
+      this.updateBreathing();
+    }, 50); // Update every 50ms for smooth animation
+  }
+
+  updateBreathing() {
+    // Increment phase (0 → 2π per cycle)
+    const cycleSpeed = (2 * Math.PI) / (this.config.breathingRate / 50);
+    this.currentBreathPhase += cycleSpeed;
+
+    // Sine wave for breathing (smooth in/out)
+    const breathValue = Math.sin(this.currentBreathPhase) * 0.5 + 0.5; // 0 → 1 → 0
+
+    // Apply subtle jaw opening
+    const jawOpen = breathValue * this.config.breathingIntensity;
+    this.avatarController.setMorphTarget("jawOpen", jawOpen);
+
+    // Optional: Add chest movement (if avatar has body)
+    // this.avatarController.setMorphTarget("chestInhale", breathValue * 0.05);
+  }
+
+  stopBreathing() {
+    if (this.breathingInterval) {
+      clearInterval(this.breathingInterval);
+      this.breathingInterval = null;
+    }
+
+    // Reset breathing morphs
+    this.avatarController.setMorphTarget("jawOpen", 0);
+    this.currentBreathPhase = 0;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Head Sway (Y-axis rotation)
+  // ═══════════════════════════════════════════════════════════
+
+  startHeadSway() {
+    // Smooth interpolation update
+    this.swayInterval = setInterval(() => {
+      this.updateHeadSway();
+    }, this.config.swayUpdateRate);
+
+    // Change target direction periodically
+    this.scheduleNextSwayTarget();
+  }
+
+  scheduleNextSwayTarget() {
+    setTimeout(() => {
+      // Pick new random target
+      this.currentSwayTarget = this.randomBetween(
+        -this.config.swayIntensity,
+        this.config.swayIntensity
+      );
+
+      // Schedule next change
+      this.scheduleNextSwayTarget();
+    }, this.config.swayChangeInterval);
+  }
+
+  updateHeadSway() {
+    const headBone = this.avatarController.getHeadBone();
+    if (!headBone) return;
+
+    // Don't sway during nodding
+    if (this.avatarController.microResponseController?.isNodding()) {
+      return;
+    }
+
+    // Calculate difference
+    const diff = this.currentSwayTarget - this.currentSwayValue;
+    const distance = Math.abs(diff);
+
+    // Ease-in-out interpolation (faster in middle, slower at ends)
+    // Use sigmoid-like curve for natural movement
+    let speed = 0.08; // Base speed (increased from 0.02)
+
+    if (distance > 0.01) {
+      // Ease out when close to target (smoothstep)
+      const progress = Math.min(distance / this.config.swayIntensity, 1.0);
+      const easeProgress =
+        progress < 0.5
+          ? 2 * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+      speed = 0.08 * easeProgress;
+    }
+
+    // Apply smooth interpolation with easing
+    this.currentSwayValue += diff * speed;
+
+    // Apply Y-axis rotation
+    headBone.rotation.y = this.currentSwayValue;
+  }
+
+  stopHeadSway() {
+    if (this.swayInterval) {
+      clearInterval(this.swayInterval);
+      this.swayInterval = null;
+    }
+
+    // Reset head rotation
+    const headBone = this.avatarController.getHeadBone();
+    if (headBone) {
+      headBone.rotation.y = 0;
+    }
+
+    this.currentSwayValue = 0;
+    this.currentSwayTarget = 0;
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // Helper Methods
   // ═══════════════════════════════════════════════════════════
 
@@ -287,6 +426,6 @@ export class EyeMovementController {
    */
   updateConfig(newConfig) {
     this.config = { ...this.config, ...newConfig };
-    console.log("👁️ Eye movement config updated:", this.config);
+    console.log("🧍 Idle movement config updated:", this.config);
   }
 }

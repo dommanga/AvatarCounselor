@@ -8,7 +8,7 @@ import { TTSManager } from "./tts.js";
 import { LipSyncController } from "./lipSync.js";
 import { EmotionalStateTracker } from "./emotionalState.js";
 import { MicroResponseController } from "./microResponse.js";
-import { EyeMovementController } from "./eyeMovement.js";
+import { IdleAnimationController } from "./IdleAnimation.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -33,6 +33,11 @@ document.getElementById("canvas-container").appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.6, 0);
 controls.update();
+
+// Disable user control with scene
+controls.enableRotate = false;
+controls.enableZoom = false;
+controls.enablePan = false;
 
 // Lights
 const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
@@ -66,8 +71,8 @@ let lipSyncController = null;
 // Micro Response controller
 let microResponseController = null;
 
-// Eye Movement controller
-let eyeMovementController = null;
+// Idle Animation controller
+let idleAnimationController = null;
 
 // Load avatar
 const loader = new GLTFLoader();
@@ -81,8 +86,8 @@ loader.load(
     console.log("✅ Avatar loaded successfully!");
 
     // Initialize Eye Movement
-    eyeMovementController = new EyeMovementController(avatarController);
-    eyeMovementController.start();
+    idleAnimationController = new IdleAnimationController(avatarController);
+    idleAnimationController.start();
     console.log("✅ Eye movements started!");
 
     // Initialize speech recognition after avatar loads
