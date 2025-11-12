@@ -20,7 +20,7 @@ export class MicroResponseController {
     this.customization = {
       baseIntensity: customization.baseIntensity || 0.5, // 0.0-1.0
       baseFrequency: customization.baseFrequency || 0.5, // 0.0-1.0
-      noddingProbability: 0.5, // chance of nodding
+      noddingProbability: 0.9, // chance of nodding
       ...customization,
     };
 
@@ -86,7 +86,6 @@ export class MicroResponseController {
         duration: 1.5,
         // Head nodding config
         nodding: {
-          delay: 0.15, // Start after facial expression
           count: 2, // Number of nods
           speed: 0.4, // Faster for positive
         },
@@ -108,9 +107,8 @@ export class MicroResponseController {
         duration: 1.8,
         // Head nodding config
         nodding: {
-          delay: 0.2,
           count: 2, // Fewer nods for negative
-          speed: 0.5, // Slower for empathy
+          speed: 0.6, // Slower for empathy
         },
       },
 
@@ -123,7 +121,6 @@ export class MicroResponseController {
         duration: 1.2,
         // Head nodding config
         nodding: {
-          delay: 0.15,
           count: 1,
           speed: 0.45,
         },
@@ -149,18 +146,14 @@ export class MicroResponseController {
       this.avatarController.setMorphTarget(blendshapeName, adjustedValue);
     }
 
-    // Start head nodding after delay (with probability check)
+    // Start head nodding (with probability check)
     if (
       microConfig.nodding &&
       Math.random() < this.customization.noddingProbability
     ) {
-      // baseIntensity 0.0 → delay ×2.0, baseIntensity 0.5 → delay ×1.0, baseIntensity 1.0 → delay ×0.5
-      const intensityFactor = 2.0 - this.customization.baseIntensity * 1.5;
-      const adjustedDelay = microConfig.nodding.delay * intensityFactor;
-
       setTimeout(() => {
         this._startHeadNodding(microConfig.nodding);
-      }, adjustedDelay * 1000);
+      });
     }
 
     // Auto-fade after duration
@@ -171,7 +164,7 @@ export class MicroResponseController {
 
   /**
    * Start head nodding animation
-   * @param {Object} noddingConfig - { delay, count, speed }
+   * @param {Object} noddingConfig - { count, speed }
    */
   _startHeadNodding(noddingConfig) {
     if (this._isNodding) {

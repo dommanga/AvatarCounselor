@@ -11,6 +11,7 @@ export class EmotionalStateTracker {
     // Internal rate-limit/debounce assistant value
     this._lastChunkAt = 0;
     this._minChunkGapMs = 400;
+    this._lastChunkText = "";
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -46,6 +47,10 @@ export class EmotionalStateTracker {
    */
   async analyzeChunkSentiment(chunkText, { timeoutMs = 2000 } = {}) {
     // protection
+    if (chunkText.trim() === this._lastChunkText.trim()) {
+      console.log("⏭️ Skipping duplicate chunk");
+      return null;
+    }
     const now = Date.now();
     if (now - this._lastChunkAt < this._minChunkGapMs) {
       console.log("⏭️  Skipping chunk (rate limit)");
@@ -53,13 +58,14 @@ export class EmotionalStateTracker {
     }
 
     this._lastChunkAt = now;
+    this._lastChunkText = chunkText;
 
     if (!chunkText || chunkText.trim().length < 10) {
-      return "neutral";
+      return null;
     }
 
     if (!chunkText || chunkText.trim().length < 3) {
-      return "neutral";
+      return null;
     }
 
     const ctl = new AbortController();
@@ -73,10 +79,9 @@ export class EmotionalStateTracker {
         signal: ctl.signal,
       });
       const data = await res.json();
-      return data.sentiment || "neutral";
+      return data.sentiment || null;
     } catch (e) {
-      // Fallback
-      return "neutral";
+      return null;
     } finally {
       clearTimeout(t);
     }

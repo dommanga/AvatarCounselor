@@ -145,10 +145,10 @@ function initializeSpeechRecognition() {
       }
     }
 
-    // Micro Response (Step 4 - sentiment 기반 미세 표정)
+    // Micro Response
     if (interimText && interimText.length > 10) {
       const sentiment = await stateTracker.analyzeChunkSentiment(interimText);
-      if (sentiment && sentiment !== "neutral") {
+      if (sentiment !== null) {
         console.log(`💡 Micro response trigger: ${sentiment}`);
         microResponseController.trigger(sentiment);
       }
