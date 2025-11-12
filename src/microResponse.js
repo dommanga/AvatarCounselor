@@ -94,15 +94,11 @@ export class MicroResponseController {
       negative: {
         name: "Empathetic Concern",
         blendshapes: {
-          mouthFrownLeft: { value: 0.25 },
-          mouthFrownRight: { value: 0.25 },
+          mouthFrownLeft: { value: 0.35 },
+          mouthFrownRight: { value: 0.35 },
           browInnerUp: { value: 0.3 },
-          browOuterUpLeft: { value: 0.2 },
-          browOuterUpRight: { value: 0.2 },
           eyeWideLeft: { value: 0.2 },
           eyeWideRight: { value: 0.2 },
-          mouthPressLeft: { value: 0.15 },
-          mouthPressRight: { value: 0.15 },
         },
         duration: 1.8,
         // Head nodding config
