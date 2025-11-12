@@ -78,9 +78,10 @@ export class MicroResponseController {
       positive: {
         name: "Gentle Smile",
         blendshapes: {
-          mouthSmile: { value: 0.3 },
-          eyeSquintLeft: { value: 0.15 },
-          eyeSquintRight: { value: 0.15 },
+          mouthSmileLeft: { value: 0.3 },
+          mouthSmileRight: { value: 0.3 },
+          eyeSquintLeft: { value: 0.2 },
+          eyeSquintRight: { value: 0.2 },
           browInnerUp: { value: 0.1 },
         },
         duration: 1.5,

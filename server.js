@@ -364,7 +364,7 @@ app.post("/api/tts", async (req, res) => {
     console.log(`🔊 TTS request: ${text.substring(0, 50)}... (${language})`);
 
     // Select voice based on language
-    const voice = language === "ko-KR" ? "nova" : "alloy";
+    const voice = language === "ko-KR" ? "shimmer" : "nova";
 
     // Generate speech using OpenAI TTS
     const mp3 = await openai.audio.speech.create({
