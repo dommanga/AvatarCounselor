@@ -277,8 +277,13 @@ export class IdleAnimationController {
     const jawOpen = breathValue * this.config.breathingIntensity;
     this.avatarController.setMorphTarget("jawOpen", jawOpen);
 
-    // Optional: Add chest movement (if avatar has body)
-    // this.avatarController.setMorphTarget("chestInhale", breathValue * 0.05);
+    // Chest breathing via Spine rotation
+    const spineBone = this.avatarController.getSpineBone();
+    if (spineBone) {
+      // Subtle back/forward rotation (X-axis: backward when inhaling)
+      const spineRotation = (breathValue - 0.5) * 0.02; // ±0.01 radians
+      spineBone.rotation.x = spineRotation;
+    }
   }
 
   stopBreathing() {
@@ -287,8 +292,13 @@ export class IdleAnimationController {
       this.breathingInterval = null;
     }
 
-    // Reset breathing morphs
+    // Reset breathing
     this.avatarController.setMorphTarget("jawOpen", 0);
+    const spineBone = this.avatarController.getSpineBone();
+    if (spineBone) {
+      spineBone.rotation.x = 0;
+    }
+
     this.currentBreathPhase = 0;
   }
 

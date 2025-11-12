@@ -5,6 +5,7 @@ export class AvatarController {
     this.avatar = null;
     this.headMesh = null;
     this.headBone = null;
+    this.spineBone = null;
     this.morphTargetDictionary = null;
     this.currentEmotion = "neutral";
     this.targetMorphValues = {};
@@ -31,6 +32,11 @@ export class AvatarController {
         this.headBone = node;
         console.log("✅ Head bone found!");
       }
+      // Find Spine bone
+      if (node.isBone && node.name === "Spine") {
+        this.spineBone = node;
+        console.log("✅ Spine bone found!");
+      }
     });
 
     if (!this.headMesh) {
@@ -47,12 +53,12 @@ export class AvatarController {
     this.initializeMorphValues();
   }
 
-  /**
-   * Get head bone for rotation manipulationi
-   * @returns {THREE.Bone|null}
-   */
   getHeadBone() {
     return this.headBone;
+  }
+
+  getSpineBone() {
+    return this.spineBone;
   }
 
   initializeMorphValues() {
