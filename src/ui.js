@@ -242,7 +242,6 @@ export class UIController {
                 }
                 
                 .counselor-message.interrupted .text {
-                    text-decoration: line-through;
                     color: #999;
                 }
                 

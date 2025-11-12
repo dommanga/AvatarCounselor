@@ -262,7 +262,7 @@ export class IdleAnimationController {
   startBreathing() {
     this.breathingInterval = setInterval(() => {
       this.updateBreathing();
-    }, 50); // Update every 50ms for smooth animation
+    }, 100); // Update every 50ms for smooth animation
   }
 
   updateBreathing() {
