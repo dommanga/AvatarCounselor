@@ -184,7 +184,7 @@
       <h4>🎭 Phase 2 FACS Test</h4>
       <p>Current: <span id="current-emotion" class="status">neutral</span></p>
       <p>Intensity: <span id="current-intensity" class="status">0.50</span></p>
-      <p>Final: <span id="current-final" class="status">0.70</span></p>
+      <p>Final: <span id="current-final" class="status">0.50</span></p>
     </div>
 
     <div id="canvas-container"></div>
@@ -237,15 +237,15 @@
           <div class="slider-group">
             <label>
               Final Intensity (Base × Multiplier):
-              <span class="value-display" id="final-value">0.70</span>
+              <span class="value-display" id="final-value">0.50</span>
             </label>
             <input
               type="range"
               id="final-slider"
               min="0"
-              max="1.5"
+              max="1.0"
               step="0.05"
-              value="0.7"
+              value="0.5"
               oninput="updateSliders()"
             />
             <small>baseIntensity × intensityMultiplier</small>

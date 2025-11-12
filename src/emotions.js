@@ -37,8 +37,8 @@ export const EMOTION_CONFIGS = {
     actionUnits: [6, 12], // AU6: Cheek Raiser, AU12: Lip Corner Puller
     blendshapes: {
       // === AU12: Lip Corner Puller (Primary) ===
-      mouthSmileLeft: { base: 0.5, scale: 0.3 },
-      mouthSmileRight: { base: 0.5, scale: 0.3 },
+      mouthSmileLeft: { base: 0.4, scale: 0.3 },
+      mouthSmileRight: { base: 0.4, scale: 0.3 },
       mouthDimpleLeft: { base: 0.3, scale: 0.01 },
       mouthDimpleRight: { base: 0.3, scale: 0.01 },
 
@@ -51,8 +51,8 @@ export const EMOTION_CONFIGS = {
       eyeSquintRight: { base: 0.3, scale: 0.2 },
 
       browInnerUp: { base: 0.0, scale: 0.15 },
-      mouthOpen: { base: 0.2, scale: 0.1 },
-      jawOpen: { base: 0.0, scale: 0.3 },
+      // mouthOpen: { base: 0.2, scale: 0.1 },
+      // jawOpen: { base: 0.0, scale: 0.3 },
     },
     duration: 3.5,
     reference: "Ekman & Friesen (1978) - Duchenne Smile",
@@ -69,9 +69,6 @@ export const EMOTION_CONFIGS = {
       // === AU1+AU4: Sad Eyebrows ===
       browInnerUp: { base: 0.35, scale: 0.35 },
 
-      browDownLeft: { base: 0.1, scale: 0.15 },
-      browDownRight: { base: 0.1, scale: 0.15 },
-
       // === AU15: Lip Corner Depressor ===
       mouthFrownLeft: { base: 0.55, scale: 0.3 },
       mouthFrownRight: { base: 0.55, scale: 0.3 },
@@ -79,16 +76,12 @@ export const EMOTION_CONFIGS = {
       // === Additional: Subtle eye ===
       eyeWideLeft: { base: 0.2, scale: 0.15 },
       eyeWideRight: { base: 0.2, scale: 0.15 },
-      eyeSquintLeft: { base: 0.4, scale: 0.15 },
-      eyeSquintRight: { base: 0.4, scale: 0.15 },
+      // eyeSquintLeft: { base: 0.4, scale: 0.15 },
+      // eyeSquintRight: { base: 0.4, scale: 0.15 },
 
       // === Additional: Subtle mouth ===
-      mouthOpen: { base: 0.1, scale: 0.1 },
-      mouthFunnel: { base: 0.2, scale: 0.1 },
-
-      // === Lower lip depression ===
-      mouthLowerDownLeft: { base: 0.25, scale: 0.2 },
-      mouthLowerDownRight: { base: 0.25, scale: 0.2 },
+      // mouthOpen: { base: 0.1, scale: 0.1 },
+      // mouthFunnel: { base: 0.1, scale: 0.1 },
     },
     duration: 4.0,
     reference: "Ekman & Friesen (1978)",
@@ -113,6 +106,8 @@ export const EMOTION_CONFIGS = {
       // === AU23: Lip Tightener ===
       mouthPressLeft: { base: 0.4, scale: 0.3 },
       mouthPressRight: { base: 0.4, scale: 0.3 },
+      mouthFrownLeft: { base: 0.55, scale: 0.3 },
+      mouthFrownRight: { base: 0.55, scale: 0.3 },
 
       // === Additional: Jaw tension ===
       jawForward: { base: 0.3, scale: 0.25 },
