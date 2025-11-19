@@ -75,6 +75,11 @@ let lipSyncController = null;
 // Micro Response controller
 let microResponseController = null;
 
+// Expression fluctuation interval
+let expressionInterval = null;
+let currentCounselorEmotion = null;
+let currentFinalIntensity = 0;
+
 // Idle Animation controller
 let idleAnimationController = null;
 
@@ -230,27 +235,8 @@ function initializeSpeechRecognition() {
     uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
-    // ---- Parallel execution: API calls (IMMEDIATE, no waiting) ----
-    const analysisPromise = stateTracker
-      .analyzeFinalEmotion(text)
-      .catch((e) => {
-        console.warn("⚠️ analyzeFinalEmotion failed:", e);
-        return {
-          emotions: {
-            joy: 0,
-            sadness: 0,
-            anger: 0,
-            fear: 0,
-            surprise: 0,
-            disgust: 0,
-          },
-          intensityMultiplier: 1.0,
-          dominantEmotion: "neutral",
-        };
-      });
-
-    const responsePromise = fetch(
-      "http://localhost:3000/api/generate-response",
+    const responseData = await fetch(
+      "http://localhost:3000/api/generate-response-with-emotion",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -263,26 +249,26 @@ function initializeSpeechRecognition() {
     )
       .then((r) => r.json())
       .catch((e) => {
-        console.error("❌ generate-response failed:", e);
-        return { response: "" };
+        console.error("❌ generate-response-with-emotion failed:", e);
+        return {
+          response: "",
+          counselorEmotion: {
+            dominantEmotion: "neutral",
+            intensityMultiplier: 1.0,
+          },
+        };
       });
 
-    // Wait for API responses first
-    const [analysis, resp] = await Promise.all([
-      analysisPromise,
-      responsePromise,
-    ]);
+    const counselorText = responseData.response || "";
+    const counselorEmotion = responseData.counselorEmotion || {
+      dominantEmotion: "neutral",
+      intensityMultiplier: 1.0,
+    };
 
-    const counselorText = (resp && resp.response) || "";
     if (!counselorText) {
-      console.log("⏭️  Empty counselor text, skipping.");
+      console.log("⏭️ Empty counselor text, skipping.");
       return;
     }
-
-    // TTS start
-    void speakResponse(counselorText).catch((err) =>
-      console.warn("TTS play error:", err)
-    );
 
     // UI update (can happen while micro is still fading)
     uiController.addCounselorMessage(counselorText);
@@ -292,26 +278,33 @@ function initializeSpeechRecognition() {
     await microFadeComplete;
     console.log("✅ Micro fade complete, applying Full Response");
 
-    // ===== APPLY CUSTOMIZATION TO FULL RESPONSE =====
+    // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
     const currentSettings = customizationManager.getActualSettings();
-    const dom = analysis.dominantEmotion || "neutral";
-    const emoIntensity =
-      analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
+    currentCounselorEmotion = counselorEmotion.dominantEmotion;
+    currentFinalIntensity =
+      currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
+    // const dom = analysis.dominantEmotion || "neutral";
+    // const emoIntensity =
+    //   analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
 
-    const finalIntensity =
-      currentSettings.baseIntensity *
-      Number(analysis.intensityMultiplier ?? 1.0);
+    // const finalIntensity =
+    //   currentSettings.baseIntensity *
+    //   Number(analysis.intensityMultiplier ?? 1.0);
 
     console.log(
-      `🎭 Full Response: emotion=${dom}, baseIntensity=${currentSettings.baseIntensity.toFixed(
+      `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(
         2
       )}, multiplier=${
-        analysis.intensityMultiplier
-      }, finalIntensity=${finalIntensity.toFixed(2)}`
+        counselorEmotion.intensityMultiplier
+      }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
     );
 
-    avatarController.setEmotion(dom, emoIntensity, finalIntensity);
-    // ===== END CUSTOMIZATION APPLICATION =====
+    avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
+
+    // TTS start
+    void speakResponse(counselorText).catch((err) =>
+      console.warn("TTS play error:", err)
+    );
   };
 
   speechManager.onError = (error) => {
@@ -361,6 +354,39 @@ function initializeTTS() {
     if (idleAnimationController) {
       idleAnimationController.pauseHeadSway();
     }
+
+    if (currentCounselorEmotion && currentFinalIntensity > 0) {
+      const currentSettings = customizationManager.getActualSettings();
+      const baseFrequency = currentSettings.baseFrequency;
+
+      // Clear any existing interval
+      if (expressionInterval) {
+        clearInterval(expressionInterval);
+      }
+
+      expressionInterval = setInterval(() => {
+        const shouldShowFull = Math.random() < baseFrequency;
+
+        if (shouldShowFull) {
+          // full expression (with jitter)
+          const jitter = 0.9 + Math.random() * 0.2; // 0.9 ~ 1.1
+          avatarController.setEmotion(
+            currentCounselorEmotion,
+            currentFinalIntensity * jitter
+          );
+        } else {
+          // weak expression
+          avatarController.setEmotion(
+            currentCounselorEmotion,
+            currentFinalIntensity * 0.4
+          );
+        }
+      }, 800);
+
+      console.log(
+        `🔄 Expression fluctuation started (frequency: ${baseFrequency})`
+      );
+    }
   };
 
   ttsManager.onEnd = () => {
@@ -368,9 +394,22 @@ function initializeTTS() {
     uiController.setSpeakingStatus(false);
     lipSyncController.stop();
 
+    // Expression fluctuation stop
+    if (expressionInterval) {
+      clearInterval(expressionInterval);
+      expressionInterval = null;
+      console.log("🔄 Expression fluctuation stopped");
+    }
+
     if (idleAnimationController) {
       idleAnimationController.resumeHeadSway();
     }
+
+    avatarController.fadeToNeutral(1.0);
+
+    // Reset emotion state
+    currentCounselorEmotion = null;
+    currentFinalIntensity = 0;
   };
 
   ttsManager.onError = (error) => {
@@ -378,8 +417,25 @@ function initializeTTS() {
     uiController.setSpeakingStatus(false);
     lipSyncController.stop();
 
-    if (error === "interrupted") {
-      console.log("ℹ️  TTS was interrupted by user (this is normal)");
+    // Expression fluctuation stop
+    if (expressionInterval) {
+      clearInterval(expressionInterval);
+      expressionInterval = null;
+    }
+
+    // Head sway
+    if (idleAnimationController) {
+      idleAnimationController.resumeHeadSway();
+    }
+
+    // interrupted -> fade
+    avatarController.fadeToNeutral(0.3);
+
+    if (error !== "interrupted") {
+      currentCounselorEmotion = null;
+      currentFinalIntensity = 0;
+    } else {
+      console.log("ℹ️ TTS was interrupted by user (this is normal)");
     }
   };
 

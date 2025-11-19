@@ -86,12 +86,11 @@ export class AvatarController {
   /**
    * Set emotion with FACS-based expression (Phase 2)
    * @param {string} emotion - Emotion name (joy, sadness, anger, fear, surprise, disgust, neutral)
-   * @param {number} intensity - Emotion intensity from LLM (0~1)
-   * @param {number} finalIntensity - baseIntensity × intensityMultiplier (0~1.5)
+   * @param {number} finalIntensity - baseIntensity × intensityMultiplier (0.25 ~ 2.25)
    */
-  setEmotion(emotion, intensity = 0.5, finalIntensity = 0.7) {
+  setEmotion(emotion, finalIntensity = 1.0) {
     console.log(
-      `Setting emotion: ${emotion}, intensity: ${intensity}, finalIntensity: ${finalIntensity}`
+      `Setting emotion: ${emotion}, finalIntensity: ${finalIntensity}`
     );
     this.currentEmotion = emotion;
 
@@ -106,40 +105,22 @@ export class AvatarController {
       this.targetMorphValues[key] = 0;
     }
 
-    // Phase 1 compatibility: Old format (simple key-value mapping)
-    if (typeof emotionConfig === "object" && !emotionConfig.blendshapes) {
-      console.log("Using Phase 1 emotion mapping");
-      for (let morphName in emotionConfig) {
-        this.setMorphTarget(morphName, emotionConfig[morphName]);
-      }
-      return;
-    }
-
-    // Phase 2: FACS-based emotion config
+    // FACS-based emotion config
     console.log(`Applying FACS-based emotion: ${emotionConfig.name}`);
 
     const blendshapes = emotionConfig.blendshapes || {};
-    const duration = emotionConfig.duration || 3.0;
 
     // Calculate and apply blendshape values
     for (const [blendshapeName, params] of Object.entries(blendshapes)) {
-      // Step 1: Calculate base emotion value
-      const baseValue = params.base + params.scale * intensity;
+      // base + scale * finalIntensity
+      let finalValue = params.base + params.scale * finalIntensity;
 
-      // Step 2: Apply finalIntensity (baseIntensity × multiplier)
-      let finalValue = baseValue * finalIntensity;
-
-      // Step 3: Clamp to [0, 1]
+      // Clamp to [0, 1]
       finalValue = Math.max(0, Math.min(1, finalValue));
 
       // Apply to avatar
       this.setMorphTarget(blendshapeName, finalValue);
     }
-
-    // Auto fade to neutral after duration
-    setTimeout(() => {
-      this.fadeToNeutral(duration * 0.3);
-    }, duration * 1000);
   }
 
   /**

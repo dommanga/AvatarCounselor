@@ -70,7 +70,7 @@ Sentiment:`;
 });
 
 // ═════════════════════════════════════════════════════════════════════
-// ENDPOINT 2: Full Emotion Analysis (Full Response용)
+// ENDPOINT 2(For user study analysis): Full Emotion Analysis
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/analyze-full", async (req, res) => {
   try {
@@ -193,7 +193,7 @@ CRITICAL: Return ONLY valid JSON (no markdown, no code blocks):
 });
 
 // ═════════════════════════════════════════════════════════════════════
-// ENDPOINT 3: Generate Counselor Response
+// ENDPOINT 3(Legacy): Generate Counselor Response
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/generate-response", async (req, res) => {
   try {
@@ -273,85 +273,149 @@ Response:`;
 });
 
 // ═════════════════════════════════════════════════════════════════════
-// Legacy Endpoint (Phase 1 compatibility)
+// ENDPOINT 4: Generate Counselor Response with Emotion (Integrated)
 // ═════════════════════════════════════════════════════════════════════
-app.post("/api/analyze-emotion", async (req, res) => {
+app.post("/api/generate-response-with-emotion", async (req, res) => {
   try {
-    const { transcript } = req.body;
+    const { message, conversationHistory, emotionHistory } = req.body;
 
-    if (!transcript || transcript.trim().length < 2) {
+    if (!message || message.trim().length < 2) {
       return res.status(400).json({
-        error: "Transcript is too short or empty",
+        error: "Message is required",
       });
     }
 
-    console.log("📝 [Legacy] Received transcript:", transcript);
+    console.log(
+      "💬 Generating counselor response with emotion for:",
+      message.substring(0, 50)
+    );
 
-    const prompt = `You are an empathetic AI counselor analyzing client emotions.
+    // Build conversation context
+    let conversationContext = "";
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationContext = conversationHistory
+        .slice(-10)
+        .map((h) => `${h.speaker}: ${h.text}`)
+        .join("\n");
+    }
 
-TASK: Analyze the emotional state from the client's speech and generate an appropriate empathetic response.
+    // Build emotion context
+    let emotionContext = "";
+    if (emotionHistory && emotionHistory.length > 0) {
+      const recentEmotions = emotionHistory
+        .slice(-3)
+        .map((e) => `${e.emotion} (${e.intensity.toFixed(2)})`)
+        .join(", ");
+      emotionContext = `\nUser's recent emotions: ${recentEmotions}`;
+    }
 
-CLIENT SAID: "${transcript}"
+    const prompt = `You are an empathetic AI counselor.
 
-OUTPUT FORMAT (JSON only, no markdown):
-{
-  "emotion": "joy|sadness|anger|fear|surprise|disgust|neutral",
-  "intensity": 0.0-1.0,
-  "response": "empathetic counselor response in the same language as input"
-}
+${conversationContext ? `Conversation history:\n${conversationContext}\n` : ""}
+${emotionContext}
 
-GUIDELINES:
-- Detect primary emotion from speech content and tone indicators
-- Intensity: 0.3=subtle, 0.6=moderate, 0.9=strong
+User just said: "${message}"
+
+Generate:
+1. An empathetic and supportive response (2-3 sentences)
+2. The emotion YOU (the counselor) should EXPRESS while delivering this response
+   - This is YOUR emotion showing empathy, NOT simply mirroring the user
+   - joy: warm smile when user shares good news or progress
+   - sadness: empathic concern when user expresses pain or difficulty
+   - anger: supportive validation when user expresses frustration
+   - fear: calm reassurance when user expresses worry
+   - surprise: genuine interest when user shares unexpected news
+   - neutral: calm presence for information exchange
+
+3. Intensity Multiplier (0.5 to 1.5)
+   - 0.5-0.7: Light conversation
+   - 0.8-1.0: Normal emotional exchange
+   - 1.1-1.3: Significant emotional moment
+   - 1.4-1.5: Crisis or breakthrough
+
+Guidelines for response:
 - Response should validate feelings and show understanding
 - Keep responses natural and conversational (2-3 sentences)
 - Match the language of input (Korean/English)
 
-Return ONLY the JSON object, no other text.`;
+CRITICAL: Return ONLY valid JSON (no markdown):
+{
+  "response": "your empathetic response here",
+  "counselorEmotion": {
+    "dominantEmotion": "sadness",
+    "intensityMultiplier": 1.2
+  }
+}`;
 
     const completion = await openai.chat.completions.create({
       model: COUNSELOR_MODEL,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: 300,
+      max_tokens: 400,
     });
 
-    const text = completion.choices[0].message.content;
+    let responseText = completion.choices[0].message.content.trim();
 
     // Remove markdown code blocks if present
-    const cleanText = text
+    responseText = responseText
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
       .trim();
 
-    const parsed = JSON.parse(cleanText);
+    const data = JSON.parse(responseText);
 
-    // Validate response structure
-    if (!parsed.emotion || !parsed.response) {
-      throw new Error("Invalid response structure");
+    // Validate structure
+    if (!data.response || !data.counselorEmotion) {
+      throw new Error("Invalid response structure from LLM");
     }
 
-    // Log for research data collection
-    console.log(
-      `✅ [Legacy] Emotion: ${parsed.emotion}, Intensity: ${parsed.intensity}`
+    // Validate emotion
+    const validEmotions = [
+      "joy",
+      "sadness",
+      "anger",
+      "fear",
+      "surprise",
+      "disgust",
+      "neutral",
+    ];
+    if (!validEmotions.includes(data.counselorEmotion.dominantEmotion)) {
+      data.counselorEmotion.dominantEmotion = "neutral";
+    }
+
+    // Clamp multiplier
+    data.counselorEmotion.intensityMultiplier = Math.max(
+      0.5,
+      Math.min(1.5, data.counselorEmotion.intensityMultiplier || 1.0)
     );
 
-    res.json(parsed);
+    console.log(
+      `✅ Response: "${data.response.substring(0, 30)}..." | Emotion: ${
+        data.counselorEmotion.dominantEmotion
+      }, Multiplier: ${data.counselorEmotion.intensityMultiplier}`
+    );
+
+    res.json(data);
   } catch (error) {
-    console.error("❌ [Legacy] OpenAI API Error:", error.message);
+    console.error("❌ Generate response with emotion error:", error.message);
 
     // Fallback response
+    const isKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(req.body.message);
     res.status(500).json({
-      emotion: "neutral",
-      intensity: 0.5,
-      response: "죄송합니다. 잠시 후 다시 말씀해 주세요.",
+      response: isKorean
+        ? "죄송합니다. 잠시 후 다시 말씀해 주세요."
+        : "I'm sorry, please try again in a moment.",
+      counselorEmotion: {
+        dominantEmotion: "neutral",
+        intensityMultiplier: 0.8,
+      },
       error: true,
     });
   }
 });
 
 // ═════════════════════════════════════════════════════════════════════
-// ENDPOINT 4: OpenAI TTS (Text-to-Speech)
+// ENDPOINT 5: OpenAI TTS (Text-to-Speech)
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/tts", async (req, res) => {
   try {
@@ -407,7 +471,7 @@ app.get("/health", (req, res) => {
       sentiment: "POST /api/sentiment",
       analyzeFull: "POST /api/analyze-full",
       generateResponse: "POST /api/generate-response",
-      legacy: "POST /api/analyze-emotion",
+      generateResponseWithEmotion: "POST /api/generate-response-with-emotion",
     },
   });
 });
@@ -427,7 +491,9 @@ app.listen(PORT, () => {
   console.log(`\n📋 Available endpoints:`);
   console.log(`   POST /api/sentiment           - Micro Response (chunk)`);
   console.log(`   POST /api/analyze-full        - Full Emotion Analysis`);
-  console.log(`   POST /api/generate-response   - Counselor Response`);
-  console.log(`   POST /api/analyze-emotion     - Legacy (Phase 1)`);
+  console.log(`   POST /api/generate-response   - Counselor Response(Legacy)`);
+  console.log(
+    `   POST /api/generate-response-with-emotion   - Counselor Response with emotion`
+  );
   console.log(`   GET  /health                  - Health Check\n`);
 });

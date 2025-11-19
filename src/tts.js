@@ -34,13 +34,28 @@ export class TTSManager {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, language }),
       });
+      const contentType = response.headers.get("Content-Type");
+      console.log("🔊 TTS response Content-Type:", contentType);
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("TTS API response:", errorText);
         throw new Error(`TTS API error: ${response.status}`);
+      }
+
+      if (!contentType || !contentType.includes("audio")) {
+        const text = await response.text();
+        console.error("🔊 Unexpected response:", text);
+        throw new Error("TTS response is not audio");
       }
 
       // Get audio blob
       const audioBlob = await response.blob();
+      console.log("🔊 Audio blob size:", audioBlob.size, "bytes");
+      if (audioBlob.size === 0) {
+        throw new Error("TTS returned empty audio");
+      }
+
       const audioUrl = URL.createObjectURL(audioBlob);
 
       // Create audio element
@@ -80,16 +95,18 @@ export class TTSManager {
 
   stop() {
     if (this.audio) {
+      // Check if actually playing before triggering interrupted
+      const wasPlaying = this.isSpeaking;
+
       this.audio.pause();
       this.audio.currentTime = 0;
       this.isSpeaking = false;
+      this.audio = null;
 
-      // Trigger interrupted error
-      if (this.onError) {
+      // Only trigger interrupted if it was actually playing
+      if (wasPlaying && this.onError) {
         this.onError("interrupted");
       }
-
-      this.audio = null;
     }
   }
 

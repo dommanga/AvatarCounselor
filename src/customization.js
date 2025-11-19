@@ -89,11 +89,12 @@ export class CustomizationManager {
   }
 
   /**
-   * Get actual intensity for avatar application (0.0-2.0)
+   * Get actual intensity for avatar application (0.5-1.5)
    * @returns {number} Actual intensity multiplier
    */
   getActualIntensity() {
-    return this.settings.baseIntensity * 2.0;
+    // 0.0 → 0.5, 0.5 → 1.0, 1.0 → 1.5
+    return 0.5 + this.settings.baseIntensity;
   }
 
   /**
