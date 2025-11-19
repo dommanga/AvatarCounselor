@@ -33,24 +33,24 @@ export const EMOTION_CONFIGS = {
   // ═══════════════════════════════════════════════════════════════════
   joy: {
     name: "Joy",
-    description: "Duchenne smile - genuine happiness",
+    description: "Warm empathic smile - genuine care for client's good news",
     actionUnits: [6, 12], // AU6: Cheek Raiser, AU12: Lip Corner Puller
     blendshapes: {
       // === AU12: Lip Corner Puller (Primary) ===
-      mouthSmileLeft: { base: 0.4, scale: 0.3 },
-      mouthSmileRight: { base: 0.4, scale: 0.3 },
-      mouthDimpleLeft: { base: 0.3, scale: 0.01 },
-      mouthDimpleRight: { base: 0.3, scale: 0.01 },
+      mouthSmileLeft: { base: 0.3, scale: 0.25 },
+      mouthSmileRight: { base: 0.3, scale: 0.25 },
+      mouthDimpleLeft: { base: 0.2, scale: 0.01 },
+      mouthDimpleRight: { base: 0.2, scale: 0.01 },
 
       // === AU6: Cheek Raiser (Orbicularis Oculi) ===
-      cheekSquintLeft: { base: 0.5, scale: 0.3 },
-      cheekSquintRight: { base: 0.5, scale: 0.3 },
+      cheekSquintLeft: { base: 0.4, scale: 0.25 },
+      cheekSquintRight: { base: 0.4, scale: 0.25 },
 
       // === AU7: Lid Tightener (Associated with genuine smile) ===
-      eyeSquintLeft: { base: 0.3, scale: 0.2 },
-      eyeSquintRight: { base: 0.3, scale: 0.2 },
+      eyeSquintLeft: { base: 0.25, scale: 0.15 },
+      eyeSquintRight: { base: 0.25, scale: 0.15 },
 
-      browInnerUp: { base: 0.0, scale: 0.15 },
+      browInnerUp: { base: 0.05, scale: 0.1 },
       // mouthOpen: { base: 0.2, scale: 0.1 },
       // jawOpen: { base: 0.0, scale: 0.3 },
     },
@@ -63,21 +63,21 @@ export const EMOTION_CONFIGS = {
   // ═══════════════════════════════════════════════════════════════════
   sadness: {
     name: "Sadness",
-    description: "Inner brow raised, lip corners down",
+    description: "Empathic concern - understanding client's pain",
     actionUnits: [1, 4, 15], // AU1+4: Inner Brow Raiser, AU15: Lip Corner Depressor
     blendshapes: {
       // === AU1+AU4: Sad Eyebrows ===
-      browInnerUp: { base: 0.35, scale: 0.35 },
+      browInnerUp: { base: 0.4, scale: 0.25 },
 
       // === AU15: Lip Corner Depressor ===
-      mouthFrownLeft: { base: 0.55, scale: 0.3 },
-      mouthFrownRight: { base: 0.55, scale: 0.3 },
+      mouthFrownLeft: { base: 0.3, scale: 0.2 },
+      mouthFrownRight: { base: 0.3, scale: 0.2 },
 
       // === Additional: Subtle eye ===
-      eyeWideLeft: { base: 0.2, scale: 0.15 },
-      eyeWideRight: { base: 0.2, scale: 0.15 },
-      // eyeSquintLeft: { base: 0.4, scale: 0.15 },
-      // eyeSquintRight: { base: 0.4, scale: 0.15 },
+      eyeWideLeft: { base: 0.15, scale: 0.1 },
+      eyeWideRight: { base: 0.15, scale: 0.1 },
+      eyeSquintLeft: { base: 0.15, scale: 0.1 },
+      eyeSquintRight: { base: 0.15, scale: 0.1 },
 
       // === Additional: Subtle mouth ===
       // mouthOpen: { base: 0.1, scale: 0.1 },
@@ -92,29 +92,28 @@ export const EMOTION_CONFIGS = {
   // ═══════════════════════════════════════════════════════════════════
   anger: {
     name: "Anger",
-    description: "Lowered brows, tightened eyelids, pressed lips",
+    description: "Supportive validation - understanding client's frustration",
     actionUnits: [4, 5, 7, 23], // AU4: Brow Lowerer, AU5: Upper Lid Raiser, AU7: Lid Tightener, AU23: Lip Tightener
     blendshapes: {
       // === AU4: Brow Lowerer (Corrugator Supercilii) ===
-      browDownLeft: { base: 0.65, scale: 0.35 },
-      browDownRight: { base: 0.65, scale: 0.35 },
+      browDownLeft: { base: 0.2, scale: 0.15 },
+      browDownRight: { base: 0.2, scale: 0.15 },
 
       // === AU5+AU7: Eye Tension ===
-      eyeSquintLeft: { base: 0.45, scale: 0.3 },
-      eyeSquintRight: { base: 0.45, scale: 0.3 },
+      eyeSquintLeft: { base: 0.2, scale: 0.15 },
+      eyeSquintRight: { base: 0.2, scale: 0.15 },
 
       // === AU23: Lip Tightener ===
-      mouthPressLeft: { base: 0.4, scale: 0.3 },
-      mouthPressRight: { base: 0.4, scale: 0.3 },
-      mouthFrownLeft: { base: 0.55, scale: 0.3 },
-      mouthFrownRight: { base: 0.55, scale: 0.3 },
+      mouthPressLeft: { base: 0.2, scale: 0.15 },
+      mouthPressRight: { base: 0.2, scale: 0.15 },
+      mouthFrownLeft: { base: 0.2, scale: 0.15 },
+      mouthFrownRight: { base: 0.2, scale: 0.15 },
+
+      // mouthFrownLeft: { base: 0.55, scale: 0.3 },
+      // mouthFrownRight: { base: 0.55, scale: 0.3 },
 
       // === Additional: Jaw tension ===
-      jawForward: { base: 0.3, scale: 0.25 },
-
-      // === Nose wrinkle (optional, less common) ===
-      noseSneerLeft: { base: 0.25, scale: 0.2 },
-      noseSneerRight: { base: 0.25, scale: 0.2 },
+      // jawForward: { base: 0.3, scale: 0.25 },
     },
     duration: 3.8,
     reference: "Ekman & Friesen (1978)",
@@ -125,25 +124,24 @@ export const EMOTION_CONFIGS = {
   // ═══════════════════════════════════════════════════════════════════
   fear: {
     name: "Fear",
-    description:
-      "Raised and drawn together eyebrows, wide eyes, lips stretched",
+    description: "Calm reassurance - acknowledging client's worry",
     actionUnits: [1, 2, 4, 5, 20], // AU1+2+4: Complex brow pattern, AU5: Upper Lid Raiser, AU20: Lip Stretch
     blendshapes: {
       // === AU1+AU2: Raised Eyebrows ===
-      browInnerUp: { base: 0.7, scale: 0.35 },
-      browOuterUpLeft: { base: 0.55, scale: 0.3 },
-      browOuterUpRight: { base: 0.55, scale: 0.3 },
+      browInnerUp: { base: 0.35, scale: 0.2 },
+      browOuterUpLeft: { base: 0.2, scale: 0.15 },
+      browOuterUpRight: { base: 0.2, scale: 0.15 },
 
       // === AU5: Wide Eyes (Upper Lid Raiser) ===
-      eyeWideLeft: { base: 0.55, scale: 0.35 },
-      eyeWideRight: { base: 0.55, scale: 0.35 },
+      eyeWideLeft: { base: 0.15, scale: 0.1 },
+      eyeWideRight: { base: 0.15, scale: 0.1 },
 
       // === AU20: Lip Stretch ===
-      mouthStretchLeft: { base: 0.35, scale: 0.25 },
-      mouthStretchRight: { base: 0.35, scale: 0.25 },
+      // mouthStretchLeft: { base: 0.35, scale: 0.25 },
+      // mouthStretchRight: { base: 0.35, scale: 0.25 },
 
       // === Additional: Slight jaw drop ===
-      jawOpen: { base: 0.2, scale: 0.15 },
+      // jawOpen: { base: 0.2, scale: 0.15 },
     },
     duration: 3.5,
     reference: "Ekman & Friesen (1978)",
@@ -154,24 +152,21 @@ export const EMOTION_CONFIGS = {
   // ═══════════════════════════════════════════════════════════════════
   surprise: {
     name: "Surprise",
-    description: "Raised eyebrows, wide eyes, jaw drop",
+    description: "Genuine interest - engaged with client's unexpected news",
     actionUnits: [1, 2, 5, 26], // AU1+2: Brow Raisers, AU5: Upper Lid Raiser, AU26: Jaw Drop
     blendshapes: {
       // === AU1+AU2: Strongly Raised Eyebrows ===
-      browInnerUp: { base: 0.85, scale: 0.25 },
-      browOuterUpLeft: { base: 0.75, scale: 0.25 },
-      browOuterUpRight: { base: 0.75, scale: 0.25 },
+      browInnerUp: { base: 0.5, scale: 0.2 },
+      browOuterUpLeft: { base: 0.4, scale: 0.2 },
+      browOuterUpRight: { base: 0.4, scale: 0.2 },
 
       // === AU5: Very Wide Eyes ===
-      eyeWideLeft: { base: 0.7, scale: 0.3 },
-      eyeWideRight: { base: 0.7, scale: 0.3 },
+      eyeWideLeft: { base: 0.3, scale: 0.2 },
+      eyeWideRight: { base: 0.3, scale: 0.2 },
 
       // === AU26: Jaw Drop ===
-      jawOpen: { base: 0.35, scale: 0.25 },
-      mouthOpen: { base: 0.45, scale: 0.3 },
-
-      // === Additional: Mouth shape ===
-      mouthFunnel: { base: 0.1, scale: 0.2 },
+      jawOpen: { base: 0.15, scale: 0.1 },
+      mouthOpen: { base: 0.2, scale: 0.15 },
     },
     duration: 2.5, // Surprise is typically brief
     reference: "Ekman & Friesen (1978)",
@@ -182,27 +177,31 @@ export const EMOTION_CONFIGS = {
   // ═══════════════════════════════════════════════════════════════════
   disgust: {
     name: "Disgust",
-    description: "Nose wrinkled, upper lip raised, lip corners down",
+    description:
+      "Thoughtful concern - acknowledging difficult or unfair situations",
     actionUnits: [9, 15, 16], // AU9: Nose Wrinkler, AU15: Lip Corner Depressor, AU16: Lower Lip Depressor
     blendshapes: {
       // === AU9: Nose Wrinkler (Levator Labii Superioris Alaeque Nasi) ===
-      noseSneerLeft: { base: 0.6, scale: 0.35 },
-      noseSneerRight: { base: 0.6, scale: 0.35 },
+      noseSneerLeft: { base: 0.15, scale: 0.1 },
+      noseSneerRight: { base: 0.15, scale: 0.1 },
 
-      // === AU15: Lip Corner Depressor ===
-      mouthFrownLeft: { base: 0.4, scale: 0.3 },
-      mouthFrownRight: { base: 0.4, scale: 0.3 },
+      // // === AU15: Lip Corner Depressor ===
+      mouthFrownLeft: { base: 0.2, scale: 0.15 },
+      mouthFrownRight: { base: 0.2, scale: 0.15 },
 
-      // === AU16: Lower Lip Depressor ===
-      mouthLowerDownLeft: { base: 0.35, scale: 0.25 },
-      mouthLowerDownRight: { base: 0.35, scale: 0.25 },
+      // // === AU16: Lower Lip Depressor ===
+      // mouthLowerDownLeft: { base: 0.35, scale: 0.25 },
+      // mouthLowerDownRight: { base: 0.35, scale: 0.25 },
 
-      // === Additional: Upper lip raiser ===
-      mouthShrugUpper: { base: 0.4, scale: 0.25 },
+      // // === Additional: Upper lip raiser ===
+      // mouthShrugUpper: { base: 0.4, scale: 0.25 },
 
       // === Brow component (optional) ===
-      browDownLeft: { base: 0.3, scale: 0.2 },
-      browDownRight: { base: 0.3, scale: 0.2 },
+      browDownLeft: { base: 0.2, scale: 0.15 },
+      browDownRight: { base: 0.2, scale: 0.15 },
+
+      eyeSquintLeft: { base: 0.15, scale: 0.1 },
+      eyeSquintRight: { base: 0.15, scale: 0.1 },
     },
     duration: 3.0,
     reference: "Ekman & Friesen (1978)",

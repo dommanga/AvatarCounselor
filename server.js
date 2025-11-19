@@ -325,6 +325,7 @@ Generate:
    - anger: supportive validation when user expresses frustration
    - fear: calm reassurance when user expresses worry
    - surprise: genuine interest when user shares unexpected news
+   - disgust: acknowledging difficult or unfair situations
    - neutral: calm presence for information exchange
 
 3. Intensity Multiplier (0.5 to 1.5)
