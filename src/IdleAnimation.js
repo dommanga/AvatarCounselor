@@ -34,6 +34,7 @@ export class IdleAnimationController {
     this.swayInterval = null;
     this.currentSwayTarget = 0;
     this.currentSwayValue = 0;
+    this.swayPaused = false;
 
     // Configuration
     this.config = {
@@ -316,6 +317,44 @@ export class IdleAnimationController {
     this.scheduleNextSwayTarget();
   }
 
+  pauseHeadSway() {
+    this.swayPaused = true;
+    console.log("🧍 Head sway pausing (returning to center)");
+
+    const headBone = this.avatarController.getHeadBone();
+    if (!headBone) return;
+
+    const initialY = headBone.rotation.y;
+    if (Math.abs(initialY) < 0.001) return;
+
+    const steps = 12;
+    const stepDuration = 70; // fast
+    let currentStep = 0;
+
+    const returnInterval = setInterval(() => {
+      currentStep++;
+      const progress = currentStep / steps;
+
+      // Ease-out
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+
+      headBone.rotation.y = initialY * (1 - easeOut);
+      this.currentSwayValue = headBone.rotation.y;
+
+      if (currentStep >= steps) {
+        clearInterval(returnInterval);
+        headBone.rotation.y = 0;
+        this.currentSwayValue = 0;
+        console.log("🧍 Head sway paused at center");
+      }
+    }, stepDuration);
+  }
+
+  resumeHeadSway() {
+    this.swayPaused = false;
+    console.log("🧍 Head sway resumed");
+  }
+
   scheduleNextSwayTarget() {
     setTimeout(() => {
       // Pick new random target
@@ -332,6 +371,8 @@ export class IdleAnimationController {
   updateHeadSway() {
     const headBone = this.avatarController.getHeadBone();
     if (!headBone) return;
+
+    if (this.swayPaused) return;
 
     // Don't sway during nodding
     if (this.avatarController.microResponseController?.isNodding()) {

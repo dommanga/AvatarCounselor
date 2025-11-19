@@ -34,6 +34,11 @@ export class MicroResponseController {
     // Head nodding state
     this._noddingInterval = null;
     this._isNodding = false;
+
+    // Track active intervals for cleanup
+    this._activeIntervals = new Set();
+
+    this._autoFadeTimeout = null;
   }
 
   /**
@@ -154,7 +159,7 @@ export class MicroResponseController {
     }
 
     // Auto-fade after duration
-    setTimeout(() => {
+    this._autoFadeTimeout = setTimeout(() => {
       this._fadeToNeutral(microConfig.duration * 0.6);
     }, microConfig.duration * 1000);
   }
@@ -234,6 +239,9 @@ export class MicroResponseController {
         }
       }
     }, speed * 100); // Speed multiplier (smaller = faster)
+
+    // Track this interval
+    this._activeIntervals.add(this._noddingInterval);
   }
 
   /**
@@ -273,6 +281,7 @@ export class MicroResponseController {
       // Fade complete
       if (currentStep >= steps) {
         clearInterval(fadeInterval);
+        this._activeIntervals.delete(fadeInterval);
 
         // Finally, 0 value
         for (const blendshapeName of Object.keys(
@@ -285,40 +294,134 @@ export class MicroResponseController {
         this._currentMicroResponse = null;
       }
     }, stepDuration);
+
+    this._activeIntervals.add(fadeInterval);
   }
 
   /**
-   * Stop any active micro response immediately
+   * Stop any active micro response with smooth fadeout
+   * Returns a Promise that resolves when all fadeouts are complete
+   * @param {number} fadeDuration - Fade duration in seconds (default: 0.3s)
+   * @returns {Promise} Resolves when stop is complete
    */
-  stop() {
-    if (!this._currentMicroResponse) return;
+  stop(fadeDuration = 0.3) {
+    return new Promise((resolve) => {
+      // Cancel auto-fade timeout
+      if (this._autoFadeTimeout) {
+        clearTimeout(this._autoFadeTimeout);
+        this._autoFadeTimeout = null;
+      }
 
-    console.log("ℹ️ Stopping micro response");
+      // If nothing active, resolve immediately
+      if (!this._currentMicroResponse && !this._isNodding) {
+        resolve();
+        return;
+      }
 
-    // Stop head nodding
-    if (this._noddingInterval) {
-      clearInterval(this._noddingInterval);
-      this._noddingInterval = null;
-    }
+      console.log(`ℹ️ Stopping micro response with ${fadeDuration}s fade`);
 
-    // Reset head rotation
-    const headBone = this.avatarController.getHeadBone();
-    if (headBone) {
-      headBone.rotation.x = 0;
-      headBone.rotation.y = 0;
-    }
+      // Clear all active intervals immediately
+      for (const interval of this._activeIntervals) {
+        clearInterval(interval);
+      }
+      this._activeIntervals.clear();
 
-    this._isNodding = false;
+      // Stop head nodding interval
+      if (this._noddingInterval) {
+        clearInterval(this._noddingInterval);
+        this._noddingInterval = null;
+      }
 
-    // Immediate reset of facial expressions
-    for (const blendshapeName of Object.keys(
-      this._currentMicroResponse.blendshapes
-    )) {
-      this.avatarController.setMorphTarget(blendshapeName, 0);
-    }
+      // Track completion of both fadeouts
+      const fadePromises = [];
 
-    this._isActive = false;
-    this._currentMicroResponse = null;
+      // Smooth fadeout for head rotation
+      const headBone = this.avatarController.getHeadBone();
+      if (headBone && this._isNodding) {
+        const headFadePromise = new Promise((resolveHead) => {
+          const initialRotationX = headBone.rotation.x;
+          const initialRotationY = headBone.rotation.y;
+
+          const steps = 10;
+          const stepDuration = (fadeDuration * 1000) / steps;
+          let currentStep = 0;
+
+          const rotationFadeInterval = setInterval(() => {
+            currentStep++;
+            const progress = currentStep / steps; // 0 → 1
+
+            headBone.rotation.x = initialRotationX * (1 - progress);
+
+            if (currentStep >= steps) {
+              clearInterval(rotationFadeInterval);
+              headBone.rotation.x = 0;
+              resolveHead();
+            }
+          }, stepDuration);
+        });
+        fadePromises.push(headFadePromise);
+      }
+
+      this._isNodding = false;
+
+      // Smooth fadeout for facial expressions
+      if (this._currentMicroResponse) {
+        const faceFadePromise = new Promise((resolveFace) => {
+          const steps = 15;
+          const stepDuration = (fadeDuration * 1000) / steps;
+          let currentStep = 0;
+
+          const initialValues = {};
+          for (const [blendshapeName, params] of Object.entries(
+            this._currentMicroResponse.blendshapes
+          )) {
+            initialValues[blendshapeName] =
+              params.value * this.customization.baseIntensity;
+          }
+
+          const fadeInterval = setInterval(() => {
+            currentStep++;
+            const progress = currentStep / steps; // 0 → 1
+
+            for (const [blendshapeName, initialValue] of Object.entries(
+              initialValues
+            )) {
+              const targetValue = initialValue * (1 - progress);
+              this.avatarController.setMorphTarget(blendshapeName, targetValue);
+            }
+
+            // Fade complete
+            if (currentStep >= steps) {
+              clearInterval(fadeInterval);
+
+              // Final reset to 0
+              for (const blendshapeName of Object.keys(
+                this._currentMicroResponse.blendshapes
+              )) {
+                this.avatarController.setMorphTarget(blendshapeName, 0);
+              }
+
+              this._isActive = false;
+              this._currentMicroResponse = null;
+              resolveFace();
+            }
+          }, stepDuration);
+        });
+        fadePromises.push(faceFadePromise);
+      }
+
+      // Resolve when all fadeouts complete
+      if (fadePromises.length > 0) {
+        Promise.all(fadePromises).then(() => {
+          console.log("✅ Micro response stop complete");
+          resolve();
+        });
+      } else {
+        this._isActive = false;
+        this._currentMicroResponse = null;
+        resolve();
+      }
+    });
   }
 
   /**

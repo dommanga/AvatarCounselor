@@ -194,6 +194,10 @@ function initializeSpeechRecognition() {
           uiController.markLastCounselorMessageAsInterrupted();
         }
       }
+
+      if (idleAnimationController) {
+        idleAnimationController.pauseHeadSway();
+      }
     }
 
     // Micro Response
@@ -214,16 +218,19 @@ function initializeSpeechRecognition() {
 
     console.log("📝 Final transcript:", text);
 
-    // Micro → Full transition
-    if (microResponseController?.isActive()) {
-      console.log("🔄 Switching from Micro to Full response");
-      microResponseController.stop();
+    let microFadeComplete = Promise.resolve();
+
+    if (
+      microResponseController?.isActive() ||
+      microResponseController?.isNodding()
+    ) {
+      microFadeComplete = microResponseController.stop();
     }
 
     uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
-    // ---- Parallel execution start ----
+    // ---- Parallel execution: API calls (IMMEDIATE, no waiting) ----
     const analysisPromise = stateTracker
       .analyzeFinalEmotion(text)
       .catch((e) => {
@@ -260,7 +267,7 @@ function initializeSpeechRecognition() {
         return { response: "" };
       });
 
-    // Promise
+    // Wait for API responses first
     const [analysis, resp] = await Promise.all([
       analysisPromise,
       responsePromise,
@@ -272,9 +279,18 @@ function initializeSpeechRecognition() {
       return;
     }
 
-    // UI update
+    // TTS start
+    void speakResponse(counselorText).catch((err) =>
+      console.warn("TTS play error:", err)
+    );
+
+    // UI update (can happen while micro is still fading)
     uiController.addCounselorMessage(counselorText);
     stateTracker.addToConversation("counselor", counselorText);
+
+    // NOW wait for micro fade to complete
+    await microFadeComplete;
+    console.log("✅ Micro fade complete, applying Full Response");
 
     // ===== APPLY CUSTOMIZATION TO FULL RESPONSE =====
     const currentSettings = customizationManager.getActualSettings();
@@ -282,7 +298,6 @@ function initializeSpeechRecognition() {
     const emoIntensity =
       analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
 
-    // Apply: actualIntensity (0.0-2.0) × intensityMultiplier (0.5-1.5)
     const finalIntensity =
       currentSettings.baseIntensity *
       Number(analysis.intensityMultiplier ?? 1.0);
@@ -296,11 +311,7 @@ function initializeSpeechRecognition() {
     );
 
     avatarController.setEmotion(dom, emoIntensity, finalIntensity);
-
-    // TTS start - no await
-    void speakResponse(counselorText).catch((err) =>
-      console.warn("TTS play error:", err)
-    );
+    // ===== END CUSTOMIZATION APPLICATION =====
   };
 
   speechManager.onError = (error) => {
@@ -346,12 +357,20 @@ function initializeTTS() {
     console.log("🔊 TTS started");
     uiController.setSpeakingStatus(true);
     lipSyncController.start();
+
+    if (idleAnimationController) {
+      idleAnimationController.pauseHeadSway();
+    }
   };
 
   ttsManager.onEnd = () => {
     console.log("🔇 TTS ended");
     uiController.setSpeakingStatus(false);
     lipSyncController.stop();
+
+    if (idleAnimationController) {
+      idleAnimationController.resumeHeadSway();
+    }
   };
 
   ttsManager.onError = (error) => {
