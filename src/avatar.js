@@ -89,9 +89,9 @@ export class AvatarController {
    * @param {number} finalIntensity - baseIntensity × intensityMultiplier (0.25 ~ 2.25)
    */
   setEmotion(emotion, finalIntensity = 1.0) {
-    console.log(
-      `Setting emotion: ${emotion}, finalIntensity: ${finalIntensity}`
-    );
+    // console.log(
+    //   `Setting emotion: ${emotion}, finalIntensity: ${finalIntensity}`
+    // );
     this.currentEmotion = emotion;
 
     const emotionConfig = EMOTION_CONFIGS[emotion];
@@ -106,7 +106,7 @@ export class AvatarController {
     }
 
     // FACS-based emotion config
-    console.log(`Applying FACS-based emotion: ${emotionConfig.name}`);
+    // console.log(`Applying FACS-based emotion: ${emotionConfig.name}`);
 
     const blendshapes = emotionConfig.blendshapes || {};
 

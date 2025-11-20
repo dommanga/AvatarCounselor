@@ -299,8 +299,6 @@ function initializeSpeechRecognition() {
       }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
     );
 
-    avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
-
     // TTS start
     void speakResponse(counselorText).catch((err) =>
       console.warn("TTS play error:", err)
@@ -361,10 +359,20 @@ function initializeTTS() {
         clearInterval(expressionInterval);
       }
 
-      // Sine wave based natural fluctuation
+      // Sine wave based natural fluctuation with fade-in
       let time = 0;
+      let fadeInProgress = 0; // 0 → 1 over fade-in duration
+      const fadeInDuration = 1.0; // 1 second fade-in
+      const fadeInSteps = (fadeInDuration * 1000) / 100; // number of steps
+
       expressionInterval = setInterval(() => {
         time += 0.1; // Smooth progression
+
+        // Fade-in: gradually increase from 0 to 1
+        if (fadeInProgress < 1) {
+          fadeInProgress += 1 / fadeInSteps;
+          fadeInProgress = Math.min(1, fadeInProgress);
+        }
 
         // Sine wave: oscillates between -1 and 1
         const sineValue = Math.sin(time);
@@ -372,14 +380,14 @@ function initializeTTS() {
         // Map to subtle variation range (e.g., 0.9 ~ 1.1)
         const variation = 1.0 + sineValue * 0.1; // ±10% variation
 
-        // Apply variation to intensity
+        // Apply variation with fade-in multiplier
         avatarController.setEmotion(
           currentCounselorEmotion,
-          currentFinalIntensity * variation
+          currentFinalIntensity * variation * fadeInProgress
         );
       }, 100); // 10fps for smooth animation
 
-      console.log(`🔄 Natural expression fluctuation started (sine wave)`);
+      console.log(`🔄 Natural expression fluctuation started (sine wave with fade-in)`);
     }
   };
 

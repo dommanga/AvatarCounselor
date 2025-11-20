@@ -63,12 +63,6 @@ export class TTSManager {
       this.audio.volume = this.volume;
 
       // Set up event handlers
-      this.audio.onplay = () => {
-        this.isSpeaking = true;
-        if (this.onStart) this.onStart();
-        console.log("🔊 TTS playback started");
-      };
-
       this.audio.onended = () => {
         this.isSpeaking = false;
         URL.revokeObjectURL(audioUrl); // Clean up
@@ -82,6 +76,11 @@ export class TTSManager {
         console.error("❌ TTS playback error:", event);
         if (this.onError) this.onError("playback-error");
       };
+
+      // Start callbacks BEFORE playing (more reliable timing)
+      this.isSpeaking = true;
+      if (this.onStart) this.onStart();
+      console.log("🔊 TTS playback starting");
 
       // Play audio
       await this.audio.play();
