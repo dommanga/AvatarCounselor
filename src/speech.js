@@ -32,11 +32,12 @@ export class SpeechRecognitionManager {
     // Final transcript debouncing
     this._finalDebounceTimer = null;
     this._pendingFinalTranscript = "";
+    this._accumulatedTranscript = ""; // Accumulate multiple final transcripts
 
     // Debounce configuration
     this.config = {
-      shortPhraseDelay: 800,
-      longPhraseDelay: 1800,
+      shortPhraseDelay: 2000, // Increased to prevent premature sending
+      longPhraseDelay: 2500,
       shortPhraseThreshold: 5, // short - long criteria
     };
 
@@ -63,35 +64,40 @@ export class SpeechRecognitionManager {
 
       // When Final, debounce processing
       if (hasFinal) {
+        // Add to accumulated transcript
+        this._accumulatedTranscript = (this._accumulatedTranscript + " " + this._pendingFinalTranscript).trim();
+
         if (this._finalDebounceTimer) {
           clearTimeout(this._finalDebounceTimer);
         }
 
-        const wordCount = this._pendingFinalTranscript.split(/\s+/).length;
+        const wordCount = this._accumulatedTranscript.split(/\s+/).length;
         const delay =
           wordCount <= this.config.shortPhraseThreshold
             ? this.config.shortPhraseDelay
             : this.config.longPhraseDelay;
 
-        console.log(`⏱️  Final debounce: ${delay}ms (${wordCount} words)`);
+        console.log(`⏱️  Final debounce: ${delay}ms (${wordCount} words, accumulated: "${this._accumulatedTranscript}")`);
 
         this._finalDebounceTimer = setTimeout(() => {
-          if (this.onFinalTranscript && this._pendingFinalTranscript) {
+          if (this.onFinalTranscript && this._accumulatedTranscript) {
             console.log(
-              "✅ Processing final transcript:",
-              this._pendingFinalTranscript
+              "✅ Processing accumulated transcript:",
+              this._accumulatedTranscript
             );
-            this.onFinalTranscript(this._pendingFinalTranscript);
+            this.onFinalTranscript(this._accumulatedTranscript);
+            this._accumulatedTranscript = "";
             this._pendingFinalTranscript = "";
           }
         }, delay);
       }
 
-      // user keep speaking
+      // user keep speaking - cancel timer but keep accumulated transcript
       if (this.interimTranscript && this._pendingFinalTranscript) {
-        console.log("⏭️  Speech continuing, canceling pending final");
+        console.log("⏭️  Speech continuing, canceling debounce timer (keeping accumulated)");
         clearTimeout(this._finalDebounceTimer);
         this._pendingFinalTranscript = "";
+        // Note: _accumulatedTranscript is kept for the next final transcript
       }
 
       // Update callback
@@ -164,13 +170,15 @@ export class SpeechRecognitionManager {
       return;
     }
 
-    // If exist Pending final -> immediate processing
-    if (this._pendingFinalTranscript && this._finalDebounceTimer) {
+    // If exist accumulated or pending final -> immediate processing
+    if ((this._accumulatedTranscript || this._pendingFinalTranscript) && this._finalDebounceTimer) {
       clearTimeout(this._finalDebounceTimer);
-      console.log("⏹️  Stop triggered, processing pending final immediately");
-      if (this.onFinalTranscript) {
-        this.onFinalTranscript(this._pendingFinalTranscript);
+      const finalText = (this._accumulatedTranscript + " " + this._pendingFinalTranscript).trim();
+      console.log("⏹️  Stop triggered, processing accumulated transcript immediately:", finalText);
+      if (this.onFinalTranscript && finalText) {
+        this.onFinalTranscript(finalText);
       }
+      this._accumulatedTranscript = "";
       this._pendingFinalTranscript = "";
     }
 
@@ -194,12 +202,13 @@ export class SpeechRecognitionManager {
     this.transcript = "";
     this.interimTranscript = "";
 
-    // Initialize pending final
+    // Initialize pending final and accumulated transcript
     if (this._finalDebounceTimer) {
       clearTimeout(this._finalDebounceTimer);
       this._finalDebounceTimer = null;
     }
     this._pendingFinalTranscript = "";
+    this._accumulatedTranscript = "";
   }
 
   setLanguage(lang) {
