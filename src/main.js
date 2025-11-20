@@ -79,7 +79,6 @@ let microResponseController = null;
 let expressionInterval = null;
 let currentCounselorEmotion = null;
 let currentFinalIntensity = 0;
-let currentCounselorText = "";
 
 // Idle Animation controller
 let idleAnimationController = null;
@@ -262,11 +261,11 @@ function initializeSpeechRecognition() {
       return;
     }
 
-    // Store for conversation history (but don't show UI yet)
+    // Store for conversation history
     stateTracker.addToConversation("counselor", counselorText);
 
-    // Store counselor text for display when TTS starts
-    currentCounselorText = counselorText;
+    // Show UI immediately (better UX - don't wait for TTS)
+    uiController.addCounselorMessage(counselorText);
 
     // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
     const currentSettings = customizationManager.getActualSettings();
@@ -337,11 +336,6 @@ function initializeTTS() {
   ttsManager.onStart = async () => {
     console.log("🔊 TTS started");
 
-    // Show counselor text in UI (synchronized with TTS)
-    if (currentCounselorText) {
-      uiController.addCounselorMessage(currentCounselorText);
-    }
-
     uiController.setSpeakingStatus(true);
     lipSyncController.start();
 
@@ -349,18 +343,14 @@ function initializeTTS() {
       idleAnimationController.pauseHeadSway();
     }
 
-    // Wait for micro response to fade out before starting full response
-    let microFadeComplete = Promise.resolve();
-
+    // Stop micro response immediately (no fade to prevent neutral flash)
     if (
       microResponseController?.isActive() ||
       microResponseController?.isNodding()
     ) {
-      microFadeComplete = microResponseController.stop();
+      microResponseController.stopImmediate(); // Instant stop without fade
     }
-
-    await microFadeComplete;
-    console.log("✅ Micro fade complete, starting Full Response");
+    console.log("✅ Micro stopped, starting Full Response");
 
     if (currentCounselorEmotion && currentFinalIntensity > 0) {
       // Clear any existing interval
@@ -423,7 +413,6 @@ function initializeTTS() {
     // Reset emotion state
     currentCounselorEmotion = null;
     currentFinalIntensity = 0;
-    currentCounselorText = "";
   };
 
   ttsManager.onError = (error) => {
@@ -448,7 +437,6 @@ function initializeTTS() {
     if (error !== "interrupted") {
       currentCounselorEmotion = null;
       currentFinalIntensity = 0;
-      currentCounselorText = "";
     } else {
       console.log("ℹ️ TTS was interrupted by user (this is normal)");
     }

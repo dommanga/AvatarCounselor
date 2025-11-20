@@ -299,6 +299,39 @@ export class MicroResponseController {
   }
 
   /**
+   * Stop immediately without fade (for instant transition to full response)
+   */
+  stopImmediate() {
+    // Cancel auto-fade timeout
+    if (this._autoFadeTimeout) {
+      clearTimeout(this._autoFadeTimeout);
+      this._autoFadeTimeout = null;
+    }
+
+    // Clear all active intervals
+    for (const interval of this._activeIntervals) {
+      clearInterval(interval);
+    }
+    this._activeIntervals.clear();
+
+    // Stop head nodding interval (but let rotation naturally return to 0 via IdleAnimation)
+    if (this._noddingInterval) {
+      clearInterval(this._noddingInterval);
+      this._noddingInterval = null;
+    }
+    this._isNodding = false;
+
+    // Mark as inactive but DON'T reset blendshapes to 0
+    // Full response will smoothly overwrite them via avatar's interpolation
+    if (this._currentMicroResponse) {
+      this._isActive = false;
+      this._currentMicroResponse = null;
+    }
+
+    console.log("⚡ Micro response stopped immediately (blendshapes preserved for smooth transition)");
+  }
+
+  /**
    * Stop any active micro response with smooth fadeout
    * Returns a Promise that resolves when all fadeouts are complete
    * @param {number} fadeDuration - Fade duration in seconds (default: 0.3s)
