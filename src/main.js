@@ -356,36 +356,30 @@ function initializeTTS() {
     }
 
     if (currentCounselorEmotion && currentFinalIntensity > 0) {
-      const currentSettings = customizationManager.getActualSettings();
-      const baseFrequency = currentSettings.baseFrequency;
-
       // Clear any existing interval
       if (expressionInterval) {
         clearInterval(expressionInterval);
       }
 
+      // Sine wave based natural fluctuation
+      let time = 0;
       expressionInterval = setInterval(() => {
-        const shouldShowFull = Math.random() < baseFrequency;
+        time += 0.1; // Smooth progression
 
-        if (shouldShowFull) {
-          // full expression (with jitter)
-          const jitter = 0.9 + Math.random() * 0.2; // 0.9 ~ 1.1
-          avatarController.setEmotion(
-            currentCounselorEmotion,
-            currentFinalIntensity * jitter
-          );
-        } else {
-          // weak expression
-          avatarController.setEmotion(
-            currentCounselorEmotion,
-            currentFinalIntensity * 0.4
-          );
-        }
-      }, 800);
+        // Sine wave: oscillates between -1 and 1
+        const sineValue = Math.sin(time);
 
-      console.log(
-        `🔄 Expression fluctuation started (frequency: ${baseFrequency})`
-      );
+        // Map to subtle variation range (e.g., 0.9 ~ 1.1)
+        const variation = 1.0 + sineValue * 0.1; // ±10% variation
+
+        // Apply variation to intensity
+        avatarController.setEmotion(
+          currentCounselorEmotion,
+          currentFinalIntensity * variation
+        );
+      }, 100); // 10fps for smooth animation
+
+      console.log(`🔄 Natural expression fluctuation started (sine wave)`);
     }
   };
 
