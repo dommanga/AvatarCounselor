@@ -79,6 +79,7 @@ let microResponseController = null;
 let expressionInterval = null;
 let currentCounselorEmotion = null;
 let currentFinalIntensity = 0;
+let currentCounselorText = "";
 
 // Idle Animation controller
 let idleAnimationController = null;
@@ -223,15 +224,6 @@ function initializeSpeechRecognition() {
 
     console.log("📝 Final transcript:", text);
 
-    let microFadeComplete = Promise.resolve();
-
-    if (
-      microResponseController?.isActive() ||
-      microResponseController?.isNodding()
-    ) {
-      microFadeComplete = microResponseController.stop();
-    }
-
     uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
@@ -270,13 +262,11 @@ function initializeSpeechRecognition() {
       return;
     }
 
-    // UI update (can happen while micro is still fading)
-    uiController.addCounselorMessage(counselorText);
+    // Store for conversation history (but don't show UI yet)
     stateTracker.addToConversation("counselor", counselorText);
 
-    // NOW wait for micro fade to complete
-    await microFadeComplete;
-    console.log("✅ Micro fade complete, applying Full Response");
+    // Store counselor text for display when TTS starts
+    currentCounselorText = counselorText;
 
     // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
     const currentSettings = customizationManager.getActualSettings();
@@ -344,14 +334,33 @@ function initializeTTS() {
   lipSyncController = new LipSyncController(avatarController);
 
   // Setup TTS callbacks
-  ttsManager.onStart = () => {
+  ttsManager.onStart = async () => {
     console.log("🔊 TTS started");
+
+    // Show counselor text in UI (synchronized with TTS)
+    if (currentCounselorText) {
+      uiController.addCounselorMessage(currentCounselorText);
+    }
+
     uiController.setSpeakingStatus(true);
     lipSyncController.start();
 
     if (idleAnimationController) {
       idleAnimationController.pauseHeadSway();
     }
+
+    // Wait for micro response to fade out before starting full response
+    let microFadeComplete = Promise.resolve();
+
+    if (
+      microResponseController?.isActive() ||
+      microResponseController?.isNodding()
+    ) {
+      microFadeComplete = microResponseController.stop();
+    }
+
+    await microFadeComplete;
+    console.log("✅ Micro fade complete, starting Full Response");
 
     if (currentCounselorEmotion && currentFinalIntensity > 0) {
       // Clear any existing interval
@@ -387,7 +396,9 @@ function initializeTTS() {
         );
       }, 100); // 10fps for smooth animation
 
-      console.log(`🔄 Natural expression fluctuation started (sine wave with fade-in)`);
+      console.log(
+        `🔄 Natural expression fluctuation started (sine wave with fade-in)`
+      );
     }
   };
 
@@ -412,6 +423,7 @@ function initializeTTS() {
     // Reset emotion state
     currentCounselorEmotion = null;
     currentFinalIntensity = 0;
+    currentCounselorText = "";
   };
 
   ttsManager.onError = (error) => {
@@ -436,6 +448,7 @@ function initializeTTS() {
     if (error !== "interrupted") {
       currentCounselorEmotion = null;
       currentFinalIntensity = 0;
+      currentCounselorText = "";
     } else {
       console.log("ℹ️ TTS was interrupted by user (this is normal)");
     }
