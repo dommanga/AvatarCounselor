@@ -6,6 +6,7 @@ export class TTSManager {
   constructor(apiBase = "http://localhost:3000") {
     this.apiBase = apiBase;
     this.audio = null;
+    this.currentAudioUrl = null; // Track current blob URL for cleanup
     this.isSpeaking = false;
     this.volume = 1.0;
 
@@ -57,30 +58,37 @@ export class TTSManager {
       }
 
       const audioUrl = URL.createObjectURL(audioBlob);
+      this.currentAudioUrl = audioUrl; // Store for cleanup
+      console.log("🔊 Audio URL created:", audioUrl);
 
       // Create audio element
       this.audio = new Audio(audioUrl);
       this.audio.volume = this.volume;
+      console.log("🔊 Audio element created successfully");
 
       // Set up event handlers
       this.audio.onended = () => {
         this.isSpeaking = false;
-        URL.revokeObjectURL(audioUrl); // Clean up
+        this.cleanupAudio();
         if (this.onEnd) this.onEnd();
         console.log("🔇 TTS playback ended");
       };
 
       this.audio.onerror = (event) => {
         this.isSpeaking = false;
-        URL.revokeObjectURL(audioUrl);
+        this.cleanupAudio();
         console.error("❌ TTS playback error:", event);
         if (this.onError) this.onError("playback-error");
       };
 
       // Start callbacks BEFORE playing (more reliable timing)
       this.isSpeaking = true;
-      if (this.onStart) this.onStart();
       console.log("🔊 TTS playback starting");
+
+      // Wait for onStart callback to complete (if it's async)
+      if (this.onStart) {
+        await this.onStart();
+      }
 
       // Play audio
       await this.audio.play();
@@ -89,6 +97,14 @@ export class TTSManager {
       this.isSpeaking = false;
       if (this.onError) this.onError(error.message);
       throw error;
+    }
+  }
+
+  cleanupAudio() {
+    if (this.currentAudioUrl) {
+      URL.revokeObjectURL(this.currentAudioUrl);
+      this.currentAudioUrl = null;
+      console.log("🧹 Audio URL cleaned up");
     }
   }
 
@@ -101,6 +117,7 @@ export class TTSManager {
       this.audio.currentTime = 0;
       this.isSpeaking = false;
       this.audio = null;
+      this.cleanupAudio();
 
       // Only trigger interrupted if it was actually playing
       if (wasPlaying && this.onError) {
