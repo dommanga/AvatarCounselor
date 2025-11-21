@@ -103,7 +103,18 @@ export class AvatarController {
     // Reset all morph targets to zero first (except eye blink - managed by IdleAnimation)
     for (let key in this.targetMorphValues) {
       // Preserve eye blink values set by IdleAnimation
-      if (key === "eyeBlinkLeft" || key === "eyeBlinkRight") {
+      if (
+        key === "eyeBlinkLeft" ||
+        key === "eyeBlinkRight" ||
+        key === "eyeLookUpLeft" ||
+        key === "eyeLookUpRight" ||
+        key === "eyeLookDownLeft" ||
+        key === "eyeLookDownRight" ||
+        key === "eyeLookOutLeft" ||
+        key === "eyeLookOutRight" ||
+        key === "eyeLookInLeft" ||
+        key === "eyeLookInRight"
+      ) {
         continue;
       }
       this.targetMorphValues[key] = 0;

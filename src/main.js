@@ -291,13 +291,6 @@ function initializeSpeechRecognition() {
     currentCounselorEmotion = counselorEmotion.dominantEmotion;
     currentFinalIntensity =
       currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
-    // const dom = analysis.dominantEmotion || "neutral";
-    // const emoIntensity =
-    //   analysis.emotions?.[dom] != null ? Number(analysis.emotions[dom]) : 0.5;
-
-    // const finalIntensity =
-    //   currentSettings.baseIntensity *
-    //   Number(analysis.intensityMultiplier ?? 1.0);
 
     console.log(
       `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(
@@ -314,6 +307,8 @@ function initializeSpeechRecognition() {
     void speakResponse(counselorText).catch((err) =>
       console.warn("TTS play error:", err)
     );
+
+    avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
   };
 
   speechManager.onError = (error) => {
@@ -472,7 +467,7 @@ function initializeTTS() {
 
       // Sine wave based natural fluctuation with fade-in
       let time = 0;
-      let fadeInProgress = 0; // 0 → 1 over fade-in duration
+      let fadeInProgress = 1; // 0 → 1 over fade-in duration
       const fadeInDuration = 1.0; // 1 second fade-in
       const fadeInSteps = (fadeInDuration * 1000) / 100; // number of steps
 

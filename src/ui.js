@@ -141,6 +141,7 @@ export class UIController {
                     width: 380px;
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                     z-index: 1000;
+                    transition: opacity 0.3s ease;
                 }
                 
                 .speech-control-panel {
@@ -466,8 +467,9 @@ export class UIController {
                 /* Status Indicator */
                 .status-indicator {
                     position: fixed;
-                    bottom: 30px;
-                    right: 30px;
+                    top: 30px;
+                    left: 50%;
+                    transform: translateX(-50%);
                     background: rgba(255, 255, 255, 0.95);
                     border-radius: 24px;
                     padding: 12px 20px;
@@ -477,7 +479,7 @@ export class UIController {
                     gap: 12px;
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                     z-index: 1000;
-                    transition: all 0.3s ease;
+                    transition: opacity 0.3s ease, all 0.3s ease;
                 }
 
                 .status-dot {
@@ -709,8 +711,13 @@ export class UIController {
 
   setSpeakingStatus(isSpeaking) {
     if (isSpeaking) {
-      this.setStatus("speaking", "Speaking...");
+      // Hide status indicator during speaking to focus on avatar expression
+      this.statusIndicator.style.opacity = "0";
+      this.statusIndicator.style.pointerEvents = "none";
     } else {
+      // Show status indicator again after speaking
+      this.statusIndicator.style.opacity = "1";
+      this.statusIndicator.style.pointerEvents = "auto";
       this.setStatus("ready", "Ready");
     }
   }
