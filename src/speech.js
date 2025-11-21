@@ -41,6 +41,9 @@ export class SpeechRecognitionManager {
       shortPhraseThreshold: 5, // short - long criteria
     };
 
+    // Guard against duplicate start() calls
+    this._isStarting = false;
+
     this.setupEventHandlers();
   }
 
@@ -65,7 +68,11 @@ export class SpeechRecognitionManager {
       // When Final, debounce processing
       if (hasFinal) {
         // Add to accumulated transcript
-        this._accumulatedTranscript = (this._accumulatedTranscript + " " + this._pendingFinalTranscript).trim();
+        this._accumulatedTranscript = (
+          this._accumulatedTranscript +
+          " " +
+          this._pendingFinalTranscript
+        ).trim();
 
         if (this._finalDebounceTimer) {
           clearTimeout(this._finalDebounceTimer);
@@ -77,7 +84,9 @@ export class SpeechRecognitionManager {
             ? this.config.shortPhraseDelay
             : this.config.longPhraseDelay;
 
-        console.log(`⏱️  Final debounce: ${delay}ms (${wordCount} words, accumulated: "${this._accumulatedTranscript}")`);
+        console.log(
+          `⏱️  Final debounce: ${delay}ms (${wordCount} words, accumulated: "${this._accumulatedTranscript}")`
+        );
 
         this._finalDebounceTimer = setTimeout(() => {
           if (this.onFinalTranscript && this._accumulatedTranscript) {
@@ -94,7 +103,9 @@ export class SpeechRecognitionManager {
 
       // user keep speaking - cancel timer but keep accumulated transcript
       if (this.interimTranscript && this._pendingFinalTranscript) {
-        console.log("⏭️  Speech continuing, canceling debounce timer (keeping accumulated)");
+        console.log(
+          "⏭️  Speech continuing, canceling debounce timer (keeping accumulated)"
+        );
         clearTimeout(this._finalDebounceTimer);
         this._pendingFinalTranscript = "";
         // Note: _accumulatedTranscript is kept for the next final transcript
@@ -108,32 +119,46 @@ export class SpeechRecognitionManager {
 
     // Handle errors
     this.recognition.onerror = (event) => {
+      // Ignore 'no-speech' - it's a normal situation (user is silent)
+      // No need to log or trigger callbacks for this
+      if (event.error === "no-speech") {
+        return; // Silently continue, let onend handle auto-restart
+      }
+
+      // Log other actual errors
       console.error("Speech recognition error:", event.error);
 
       if (this.onError) {
         this.onError(event.error);
       }
 
-      // Auto-restart on certain errors
-      if (event.error === "no-speech" || event.error === "audio-capture") {
-        setTimeout(() => {
-          if (this.isListening) {
-            this.start();
-          }
-        }, 1000);
-      }
+      // Don't manually restart here - let onend handle it to avoid duplicate start() calls
+      // (onend will automatically restart if isListening is still true)
     };
 
     // Handle end of recognition
     this.recognition.onend = () => {
+      // Reset starting flag
+      this._isStarting = false;
+
       // Auto-restart if still supposed to be listening
       if (this.isListening) {
-        this.recognition.start();
+        try {
+          this.recognition.start();
+        } catch (error) {
+          // Ignore "already started" errors
+          if (error.message && error.message.includes("already")) {
+            console.log("⏭️ Speech recognition already starting, skipping restart");
+          } else {
+            console.error("Failed to restart recognition:", error);
+          }
+        }
       }
     };
 
     // Handle start
     this.recognition.onstart = () => {
+      this._isStarting = false;
       console.log("Speech recognition started");
       if (this.onStatusChange) {
         this.onStatusChange(true);
@@ -152,7 +177,14 @@ export class SpeechRecognitionManager {
       return false;
     }
 
+    // Prevent duplicate start() calls
+    if (this._isStarting) {
+      console.log("⏭️ Speech recognition already starting, skipping");
+      return false;
+    }
+
     try {
+      this._isStarting = true;
       this.isListening = true;
       this.transcript = "";
       this.interimTranscript = "";
@@ -161,28 +193,44 @@ export class SpeechRecognitionManager {
     } catch (error) {
       console.error("Failed to start recognition:", error);
       this.isListening = false;
+      this._isStarting = false;
       return false;
     }
   }
 
-  stop() {
+  stop(processTranscript = true) {
     if (!this.isListening) {
       return;
     }
 
     // If exist accumulated or pending final -> immediate processing
-    if ((this._accumulatedTranscript || this._pendingFinalTranscript) && this._finalDebounceTimer) {
+    // But only if processTranscript is true (avoid triggering during TTS)
+    if (this._finalDebounceTimer && processTranscript) {
       clearTimeout(this._finalDebounceTimer);
-      const finalText = (this._accumulatedTranscript + " " + this._pendingFinalTranscript).trim();
-      console.log("⏹️  Stop triggered, processing accumulated transcript immediately:", finalText);
+
+      // Use accumulated transcript (which already includes pending final)
+      // Don't add _pendingFinalTranscript again to avoid duplication
+      const finalText = this._accumulatedTranscript.trim();
+
+      console.log(
+        "⏹️  Stop triggered, processing accumulated transcript immediately:",
+        finalText
+      );
       if (this.onFinalTranscript && finalText) {
         this.onFinalTranscript(finalText);
       }
       this._accumulatedTranscript = "";
       this._pendingFinalTranscript = "";
+    } else if (this._finalDebounceTimer) {
+      // Just clear the timer without processing
+      clearTimeout(this._finalDebounceTimer);
+      this._accumulatedTranscript = "";
+      this._pendingFinalTranscript = "";
+      console.log("⏹️  Stop triggered, clearing pending transcript (no processing)");
     }
 
     this.isListening = false;
+    this._isStarting = false;
     this.recognition.stop();
 
     if (this.onStatusChange) {

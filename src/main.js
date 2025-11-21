@@ -83,6 +83,9 @@ let currentFinalIntensity = 0;
 // Idle Animation controller
 let idleAnimationController = null;
 
+// Processing flag to prevent duplicate requests
+let isProcessingResponse = false;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -221,8 +224,23 @@ function initializeSpeechRecognition() {
       return;
     }
 
-    console.log("📝 Final transcript:", text);
+    // Prevent duplicate processing
+    if (isProcessingResponse) {
+      console.log("⏭️ Already processing a response, skipping duplicate");
+      return;
+    }
 
+    console.log("📝 Final transcript:", text);
+    isProcessingResponse = true;
+
+    // Stop speech recognition immediately after user finishes speaking
+    if (speechManager && speechManager.isListening) {
+      console.log("🎤 Stopping speech recognition (waiting for response)");
+      speechManager.stop(false); // Don't process transcript (we're already processing this one)
+    }
+
+    // Disable mic button during response generation and TTS
+    uiController.disableMicButton();
     uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
@@ -336,6 +354,12 @@ function initializeTTS() {
   ttsManager.onStart = async () => {
     console.log("🔊 TTS started");
 
+    // Ensure speech recognition is stopped (should already be stopped from onFinalTranscript)
+    if (speechManager && speechManager.isListening) {
+      console.log("⚠️ Speech recognition still active, stopping now");
+      speechManager.stop(false); // Don't process transcript during TTS
+    }
+
     uiController.setSpeakingStatus(true);
     lipSyncController.start();
 
@@ -395,6 +419,7 @@ function initializeTTS() {
   ttsManager.onEnd = () => {
     console.log("🔇 TTS ended");
     uiController.setSpeakingStatus(false);
+    uiController.enableMicButton();
     lipSyncController.stop();
 
     // Expression fluctuation stop
@@ -413,11 +438,21 @@ function initializeTTS() {
     // Reset emotion state
     currentCounselorEmotion = null;
     currentFinalIntensity = 0;
+
+    // Reset processing flag
+    isProcessingResponse = false;
+
+    // Restart speech recognition after TTS ends
+    if (speechManager && !speechManager.isListening) {
+      console.log("🎤 Resuming speech recognition after TTS");
+      speechManager.start();
+    }
   };
 
   ttsManager.onError = (error) => {
     console.error("❌ TTS error:", error);
     uiController.setSpeakingStatus(false);
+    uiController.enableMicButton();
     lipSyncController.stop();
 
     // Expression fluctuation stop
@@ -439,6 +474,15 @@ function initializeTTS() {
       currentFinalIntensity = 0;
     } else {
       console.log("ℹ️ TTS was interrupted by user (this is normal)");
+    }
+
+    // Reset processing flag
+    isProcessingResponse = false;
+
+    // Restart speech recognition after TTS error
+    if (speechManager && !speechManager.isListening) {
+      console.log("🎤 Resuming speech recognition after TTS error");
+      speechManager.start();
     }
   };
 

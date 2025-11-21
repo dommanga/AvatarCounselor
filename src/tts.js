@@ -19,8 +19,21 @@ export class TTSManager {
   }
 
   async speak(text, language = "ko-KR") {
-    // Stop any ongoing speech
-    this.stop();
+    // DEBUG: Check for duplicate/concurrent calls
+    console.log(`🔍 [DEBUG] speak() called - isSpeaking: ${this.isSpeaking}, currentAudioUrl: ${this.currentAudioUrl}`);
+
+    // Clean up previous audio without triggering callbacks
+    if (this.audio) {
+      console.log(`🔍 [DEBUG] Cleaning up previous audio element`);
+      this.audio.pause();
+      this.audio.onended = null;
+      this.audio.onerror = null;
+      this.audio = null;
+    }
+
+    // Clean up previous blob URL
+    this.cleanupAudio();
+    this.isSpeaking = false;
 
     if (!text || text.trim().length === 0) {
       return;
@@ -58,8 +71,9 @@ export class TTSManager {
       }
 
       const audioUrl = URL.createObjectURL(audioBlob);
+      console.log(`🔍 [DEBUG] Before setting currentAudioUrl: ${this.currentAudioUrl}`);
       this.currentAudioUrl = audioUrl; // Store for cleanup
-      console.log("🔊 Audio URL created:", audioUrl);
+      console.log(`🔍 [DEBUG] After setting currentAudioUrl: ${this.currentAudioUrl}`);
 
       // Create audio element
       this.audio = new Audio(audioUrl);
@@ -75,6 +89,7 @@ export class TTSManager {
       };
 
       this.audio.onerror = (event) => {
+        console.log(`🔍 [DEBUG] audio.onerror triggered - isSpeaking: ${this.isSpeaking}, currentAudioUrl: ${this.currentAudioUrl}`);
         this.isSpeaking = false;
         this.cleanupAudio();
         console.error("❌ TTS playback error:", event);
@@ -101,6 +116,7 @@ export class TTSManager {
   }
 
   cleanupAudio() {
+    console.log(`🔍 [DEBUG] cleanupAudio() called - currentAudioUrl: ${this.currentAudioUrl}`);
     if (this.currentAudioUrl) {
       URL.revokeObjectURL(this.currentAudioUrl);
       this.currentAudioUrl = null;
@@ -109,6 +125,7 @@ export class TTSManager {
   }
 
   stop() {
+    console.log(`🔍 [DEBUG] stop() called - isSpeaking: ${this.isSpeaking}, audio exists: ${!!this.audio}`);
     if (this.audio) {
       // Check if actually playing before triggering interrupted
       const wasPlaying = this.isSpeaking;
@@ -121,6 +138,7 @@ export class TTSManager {
 
       // Only trigger interrupted if it was actually playing
       if (wasPlaying && this.onError) {
+        console.log(`🔍 [DEBUG] Triggering interrupted callback`);
         this.onError("interrupted");
       }
     }
