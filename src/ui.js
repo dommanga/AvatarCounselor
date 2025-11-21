@@ -54,10 +54,10 @@ export class UIController {
                 <div class="speech-control-panel">
                     <button id="mic-button" class="mic-button" title="Start/Stop Recording">
                         <span class="mic-icon">🎤</span>
-                        <span class="status-text">Start Recording</span>
+                        <span class="status-text">Start Conversation</span>
                     </button>
-                    <button id="clear-history-button" class="clear-button" title="Clear Conversation">
-                        Clear
+                    <button id="new-session-button" class="new-session-button" title="Start New Session">
+                        New Session
                     </button>
                     <select id="language-select" class="language-select">
                         <option value="ko-KR">한국어</option>
@@ -76,11 +76,11 @@ export class UIController {
                     <div class="panel-header">Conversation History</div>
                     <div id="conversation-history" class="conversation-history"></div>
                 </div>
-                
-                <div id="tts-status" class="tts-status" style="display: none;">
-                    <span class="tts-icon">🔊</span>
-                    <span class="tts-text">Speaking...</span>
-                    <button id="stop-tts-button" class="stop-tts-button" title="Stop Speaking">Stop</button>
+
+                <!-- Status Indicator (bottom right) -->
+                <div id="status-indicator" class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span class="status-label">Ready</span>
                 </div>
             `;
 
@@ -88,14 +88,15 @@ export class UIController {
 
     // Get references
     this.micButton = document.getElementById("mic-button");
-    this.clearButton = document.getElementById("clear-history-button");
+    this.newSessionButton = document.getElementById("new-session-button");
     this.languageSelect = document.getElementById("language-select");
     this.currentTranscript = document.getElementById("current-transcript");
     this.conversationHistoryEl = document.getElementById(
       "conversation-history"
     );
-    this.ttsStatus = document.getElementById("tts-status");
-    this.stopTTSButton = document.getElementById("stop-tts-button");
+    this.statusIndicator = document.getElementById("status-indicator");
+    this.statusDot = this.statusIndicator.querySelector(".status-dot");
+    this.statusLabel = this.statusIndicator.querySelector(".status-label");
 
     // Customization UI references
     this.settingsToggle = document.getElementById("settings-toggle");
@@ -180,7 +181,6 @@ export class UIController {
                 
                 .mic-button.listening {
                     background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                    animation: pulse 1.5s infinite;
                 }
                 
                 @keyframes pulse {
@@ -201,7 +201,23 @@ export class UIController {
                 .clear-button:hover {
                     background: #e0e0e0;
                 }
-                
+
+                .new-session-button {
+                    background: #ff9800;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 12px 20px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+
+                .new-session-button:hover {
+                    background: #f57c00;
+                }
+
                 .language-select {
                     background: white;
                     border: 1px solid #ddd;
@@ -446,45 +462,77 @@ export class UIController {
                 .counselor-message.interrupted .text {
                     color: #999;
                 }
-                
-                .tts-status {
-                    background: rgba(76, 175, 80, 0.95);
-                    border-radius: 12px;
-                    padding: 12px 15px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+                /* Status Indicator */
+                .status-indicator {
+                    position: fixed;
+                    bottom: 30px;
+                    right: 30px;
+                    background: rgba(255, 255, 255, 0.95);
+                    border-radius: 24px;
+                    padding: 12px 20px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
                     display: flex;
                     align-items: center;
-                    gap: 10px;
-                    animation: pulse 1.5s infinite;
+                    gap: 12px;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    z-index: 1000;
+                    transition: all 0.3s ease;
                 }
-                
-                .tts-icon {
-                    font-size: 18px;
+
+                .status-dot {
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                    background: #999;
+                    transition: background 0.3s ease;
                 }
-                
-                .tts-text {
-                    flex: 1;
-                    color: white;
-                    font-weight: 600;
+
+                .status-indicator.listening .status-dot {
+                    background: #2196f3;
+                    animation: pulse-dot 1.5s infinite;
+                }
+
+                .status-indicator.thinking .status-dot {
+                    background: #ff9800;
+                    animation: pulse-dot 1.5s infinite;
+                }
+
+                .status-indicator.speaking .status-dot {
+                    background: #4caf50;
+                    animation: pulse-dot 1.5s infinite;
+                }
+
+                .status-label {
                     font-size: 14px;
-                }
-                
-                .stop-tts-button {
-                    background: white;
-                    color: #4caf50;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 6px 12px;
-                    font-size: 12px;
                     font-weight: 600;
-                    cursor: pointer;
-                    transition: background 0.2s;
+                    color: #333;
+                    user-select: none;
                 }
-                
-                .stop-tts-button:hover {
-                    background: #f5f5f5;
+
+                .status-indicator.listening .status-label {
+                    color: #2196f3;
                 }
-                
+
+                .status-indicator.thinking .status-label {
+                    color: #ff9800;
+                }
+
+                .status-indicator.speaking .status-label {
+                    color: #4caf50;
+                }
+
+                @keyframes pulse-dot {
+                    0%, 100% {
+                        transform: scale(1);
+                        opacity: 1;
+                    }
+                    50% {
+                        transform: scale(1.2);
+                        opacity: 0.7;
+                    }
+                }
+
                 .conversation-history::-webkit-scrollbar,
                 .current-transcript::-webkit-scrollbar {
                     width: 6px;
@@ -542,12 +590,23 @@ export class UIController {
   setListeningStatus(isListening) {
     if (isListening) {
       this.micButton.classList.add("listening");
-      this.micButton.querySelector(".status-text").textContent = "Recording...";
+      this.micButton.querySelector(".status-text").textContent =
+        "Stop Conversation";
+      this.setStatus("listening", "Listening...");
     } else {
       this.micButton.classList.remove("listening");
       this.micButton.querySelector(".status-text").textContent =
-        "Start Recording";
+        "Start Conversation";
+      // Don't change status here - it might be thinking/speaking
     }
+  }
+
+  // Set mic button to "Restart Conversation" state
+  setRestartState() {
+    this.micButton.classList.remove("listening");
+    this.micButton.querySelector(".status-text").textContent =
+      "Restart Conversation";
+    this.setStatus("ready", "Stopped");
   }
 
   escapeHtml(text) {
@@ -595,5 +654,64 @@ export class UIController {
   updateFrequencyValue(value) {
     this.frequencyValue.textContent = value.toFixed(1);
     this.frequencySlider.value = Math.round(value * 100);
+  }
+
+  // Start new session (clear everything)
+  startNewSession() {
+    this.conversationHistory = [];
+    this.conversationHistoryEl.innerHTML = "";
+    this.currentTranscript.innerHTML = '<span class="interim"></span>';
+    this.setStatus("ready", "Ready");
+    this.micButton.classList.remove("listening");
+    this.micButton.querySelector(".status-text").textContent =
+      "Start Conversation";
+  }
+
+  // Disable/Enable microphone button
+  disableMicButton() {
+    if (this.micButton) {
+      this.micButton.disabled = true;
+      this.micButton.style.opacity = "0.5";
+      this.micButton.style.cursor = "not-allowed";
+      this.micButton.style.transform = "translateY(0)"; // Keep button pressed down
+      this.micButton.style.pointerEvents = "none"; // Disable all pointer events
+    }
+  }
+
+  enableMicButton() {
+    if (this.micButton) {
+      this.micButton.disabled = false;
+      this.micButton.style.opacity = "1";
+      this.micButton.style.cursor = "pointer";
+      this.micButton.style.transform = ""; // Remove transform, allow hover animation
+      this.micButton.style.pointerEvents = "auto"; // Re-enable pointer events
+    }
+  }
+
+  // Status indicator control
+  setStatus(status, label) {
+    // Remove all status classes
+    this.statusIndicator.classList.remove("listening", "thinking", "speaking");
+
+    // Add new status class (if not 'ready')
+    if (status !== "ready") {
+      this.statusIndicator.classList.add(status);
+    }
+
+    // Update label
+    this.statusLabel.textContent = label;
+  }
+
+  // Convenience methods for common status changes
+  setThinkingStatus() {
+    this.setStatus("thinking", "Thinking...");
+  }
+
+  setSpeakingStatus(isSpeaking) {
+    if (isSpeaking) {
+      this.setStatus("speaking", "Speaking...");
+    } else {
+      this.setStatus("ready", "Ready");
+    }
   }
 }

@@ -86,6 +86,9 @@ let idleAnimationController = null;
 // Processing flag to prevent duplicate requests
 let isProcessingResponse = false;
 
+// Current counselor text (to show in UI when TTS starts)
+let currentCounselorText = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -241,6 +244,7 @@ function initializeSpeechRecognition() {
 
     // Disable mic button during response generation and TTS
     uiController.disableMicButton();
+    uiController.setThinkingStatus();
     uiController.addToHistory(text);
     stateTracker.addToConversation("user", text);
 
@@ -282,9 +286,6 @@ function initializeSpeechRecognition() {
     // Store for conversation history
     stateTracker.addToConversation("counselor", counselorText);
 
-    // Show UI immediately (better UX - don't wait for TTS)
-    uiController.addCounselorMessage(counselorText);
-
     // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
     const currentSettings = customizationManager.getActualSettings();
     currentCounselorEmotion = counselorEmotion.dominantEmotion;
@@ -306,6 +307,9 @@ function initializeSpeechRecognition() {
       }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
     );
 
+    // Store counselor text to show when TTS starts
+    currentCounselorText = counselorText;
+
     // TTS start
     void speakResponse(counselorText).catch((err) =>
       console.warn("TTS play error:", err)
@@ -320,17 +324,96 @@ function initializeSpeechRecognition() {
   };
 
   speechManager.onStatusChange = (isListening) => {
-    uiController.setListeningStatus(isListening);
+    // Only update UI when starting listening, not when stopping
+    // (stopping is handled manually by button clicks)
+    if (isListening) {
+      uiController.setListeningStatus(true);
+    }
   };
 
   // Connect UI buttons
   uiController.micButton.addEventListener("click", () => {
-    speechManager.toggle();
+    const buttonText =
+      uiController.micButton.querySelector(".status-text").textContent;
+
+    if (buttonText === "Stop Conversation") {
+      // Stop everything
+      speechManager.stop(false);
+
+      // Stop TTS if playing
+      if (ttsManager && ttsManager.isSpeaking) {
+        ttsManager.stop();
+      }
+
+      // Stop micro response
+      if (
+        microResponseController?.isActive() ||
+        microResponseController?.isNodding()
+      ) {
+        microResponseController.stopImmediate();
+      }
+
+      // Clear expression interval
+      if (expressionInterval) {
+        clearInterval(expressionInterval);
+        expressionInterval = null;
+      }
+
+      // Fade to neutral
+      avatarController.fadeToNeutral(0.5);
+
+      // Reset idle animation
+      if (idleAnimationController) {
+        idleAnimationController.resumeHeadSway();
+      }
+
+      // Reset processing flag
+      isProcessingResponse = false;
+
+      // Set UI to restart state
+      uiController.setRestartState();
+    } else {
+      // Start or restart
+      speechManager.start();
+      uiController.setStatus("ready", "Ready");
+    }
   });
 
-  uiController.clearButton.addEventListener("click", () => {
-    uiController.clearHistory();
+  uiController.newSessionButton.addEventListener("click", () => {
+    // Stop everything first
+    speechManager.stop(false);
+
+    if (ttsManager && ttsManager.isSpeaking) {
+      ttsManager.stop();
+    }
+
+    if (
+      microResponseController?.isActive() ||
+      microResponseController?.isNodding()
+    ) {
+      microResponseController.stopImmediate();
+    }
+
+    if (expressionInterval) {
+      clearInterval(expressionInterval);
+      expressionInterval = null;
+    }
+
+    avatarController.fadeToNeutral(0.5);
+
+    if (idleAnimationController) {
+      idleAnimationController.resumeHeadSway();
+    }
+
+    isProcessingResponse = false;
+
+    // Clear all histories
+    uiController.startNewSession();
     speechManager.clearTranscript();
+    stateTracker.conversationHistory = [];
+    stateTracker.emotionHistory = [];
+
+    console.log("🆕 New session started");
   });
 
   uiController.languageSelect.addEventListener("change", (e) => {
@@ -353,6 +436,11 @@ function initializeTTS() {
   // Setup TTS callbacks
   ttsManager.onStart = async () => {
     console.log("🔊 TTS started");
+
+    // Show counselor message in UI (synced with TTS start)
+    if (currentCounselorText) {
+      uiController.addCounselorMessage(currentCounselorText);
+    }
 
     // Ensure speech recognition is stopped (should already be stopped from onFinalTranscript)
     if (speechManager && speechManager.isListening) {
@@ -438,6 +526,7 @@ function initializeTTS() {
     // Reset emotion state
     currentCounselorEmotion = null;
     currentFinalIntensity = 0;
+    currentCounselorText = null;
 
     // Reset processing flag
     isProcessingResponse = false;
@@ -472,6 +561,7 @@ function initializeTTS() {
     if (error !== "interrupted") {
       currentCounselorEmotion = null;
       currentFinalIntensity = 0;
+      currentCounselorText = null;
     } else {
       console.log("ℹ️ TTS was interrupted by user (this is normal)");
     }
@@ -485,13 +575,6 @@ function initializeTTS() {
       speechManager.start();
     }
   };
-
-  // Connect stop TTS button
-  if (uiController.stopTTSButton) {
-    uiController.stopTTSButton.addEventListener("click", () => {
-      ttsManager.stop();
-    });
-  }
 
   console.log("✅ TTS initialized!");
 }
