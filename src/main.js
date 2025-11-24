@@ -6,7 +6,7 @@ import { SpeechRecognitionManager } from "./speech.js";
 import { UIController } from "./ui.js";
 import { TTSManager } from "./tts.js";
 import { LipSyncController } from "./lipSync.js";
-import { EmotionalStateTracker } from "./emotionalState.js";
+import { APIManager } from "./APIManager.js";
 import { MicroResponseController } from "./microResponse.js";
 import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
@@ -60,8 +60,10 @@ scene.add(ground);
 // Initialize customization manager
 const customizationManager = new CustomizationManager();
 
-// Initialize emotion analyzer
-const stateTracker = new EmotionalStateTracker();
+// Initialize api manager
+const apiManager = new APIManager();
+
+let conversationHistory = []; // [{ speaker: 'user'|'counselor', text, timestamp }]
 
 // Avatar and Speech Recognition managers
 const avatarController = new AvatarController();
@@ -213,7 +215,7 @@ function initializeSpeechRecognition() {
 
     // Micro Response
     if (interimText && interimText.length > 10) {
-      const sentiment = await stateTracker.analyzeChunkSentiment(interimText);
+      const sentiment = await apiManager.analyzeSentiment(interimText);
       if (sentiment !== null) {
         console.log(`💡 Micro response trigger: ${sentiment}`);
         microResponseController.trigger(sentiment);
@@ -246,31 +248,12 @@ function initializeSpeechRecognition() {
     uiController.disableMicButton();
     uiController.setThinkingStatus();
     uiController.addToHistory(text);
-    stateTracker.addToConversation("user", text);
+    addToConversation("user", text);
 
-    const responseData = await fetch(
-      "http://localhost:3000/api/generate-response-with-emotion",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          conversationHistory: stateTracker.conversationHistory,
-          emotionHistory: stateTracker.emotionHistory,
-        }),
-      }
-    )
-      .then((r) => r.json())
-      .catch((e) => {
-        console.error("❌ generate-response-with-emotion failed:", e);
-        return {
-          response: "",
-          counselorEmotion: {
-            dominantEmotion: "neutral",
-            intensityMultiplier: 1.0,
-          },
-        };
-      });
+    const responseData = await apiManager.generateCounselorResponse(
+      text,
+      conversationHistory
+    );
 
     const counselorText = responseData.response || "";
     const counselorEmotion = responseData.counselorEmotion || {
@@ -280,11 +263,13 @@ function initializeSpeechRecognition() {
 
     if (!counselorText) {
       console.log("⏭️ Empty counselor text, skipping.");
+      isProcessingResponse = false;
+      uiController.enableMicButton();
       return;
     }
 
     // Store for conversation history
-    stateTracker.addToConversation("counselor", counselorText);
+    addToConversation("counselor", counselorText);
 
     // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
     const currentSettings = customizationManager.getActualSettings();
@@ -405,8 +390,7 @@ function initializeSpeechRecognition() {
     // Clear all histories
     uiController.startNewSession();
     speechManager.clearTranscript();
-    stateTracker.conversationHistory = [];
-    stateTracker.emotionHistory = [];
+    conversationHistory = [];
 
     console.log("🆕 New session started");
   });
@@ -423,7 +407,7 @@ function initializeTTS() {
   console.log("🔊 Initializing TTS...");
 
   // Create TTS manager
-  ttsManager = new TTSManager();
+  ttsManager = new TTSManager(apiManager);
 
   // Create Lip Sync controller
   lipSyncController = new LipSyncController(avatarController);
@@ -572,6 +556,12 @@ function initializeTTS() {
   };
 
   console.log("✅ TTS initialized!");
+}
+
+function addToConversation(speaker, text) {
+  if (!text || !text.trim()) return;
+  conversationHistory.push({ speaker, text, timestamp: Date.now() });
+  if (conversationHistory.length > 10) conversationHistory.shift();
 }
 
 // Speak counselor response with TTS
