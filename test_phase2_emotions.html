@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Phase 2 FACS Emotion Test</title>
+    <title>Customization Parameter Test</title>
     <style>
       body {
         margin: 0;
@@ -23,19 +23,21 @@
         bottom: 0;
         left: 0;
         right: 0;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.9);
         padding: 20px;
         box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+        max-height: 40vh;
+        overflow-y: auto;
       }
 
       .control-section {
-        max-width: 1200px;
+        max-width: 1400px;
         margin: 0 auto;
       }
 
-      .emotion-buttons {
+      .test-scenarios {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 10px;
         margin-bottom: 20px;
       }
@@ -44,7 +46,7 @@
         padding: 12px 20px;
         border: none;
         border-radius: 8px;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.3s ease;
@@ -57,30 +59,40 @@
         box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
       }
 
-      .btn-joy {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
+      button:active {
+        transform: translateY(0);
       }
-      .btn-sadness {
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-        color: white;
-      }
-      .btn-anger {
-        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-        color: white;
-      }
-      .btn-fear {
+
+      .btn-intensity-low {
         background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
         color: #333;
       }
-      .btn-surprise {
+
+      .btn-intensity-medium {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+      }
+
+      .btn-intensity-high {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        color: white;
+      }
+
+      .btn-frequency-low {
         background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
         color: #333;
       }
-      .btn-disgust {
-        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+
+      .btn-frequency-high {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         color: white;
       }
+
+      .btn-combined {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
       .btn-neutral {
         background: linear-gradient(135deg, #e0e0e0 0%, #b0b0b0 100%);
         color: #333;
@@ -133,40 +145,95 @@
         border-radius: 4px;
         margin-left: 10px;
         font-weight: 600;
+        min-width: 50px;
+        text-align: center;
       }
 
       h3 {
         margin-top: 0;
+        margin-bottom: 15px;
         font-size: 16px;
         color: #ffd700;
         text-transform: uppercase;
         letter-spacing: 1px;
       }
 
+      h4 {
+        margin: 15px 0 10px 0;
+        font-size: 14px;
+        color: #a0aec0;
+        font-weight: 500;
+      }
+
       #info {
         position: fixed;
         top: 20px;
         left: 20px;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 15px 20px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 20px;
         border-radius: 8px;
-        font-size: 14px;
-        max-width: 300px;
+        font-size: 13px;
+        max-width: 350px;
+        border: 2px solid rgba(255, 215, 0, 0.3);
       }
 
       #info h4 {
-        margin: 0 0 10px 0;
+        margin: 0 0 15px 0;
         color: #ffd700;
+        font-size: 16px;
       }
 
       #info p {
-        margin: 5px 0;
-        line-height: 1.5;
+        margin: 8px 0;
+        line-height: 1.6;
       }
 
       .status {
         color: #4ade80;
         font-weight: 600;
+      }
+
+      .warning {
+        color: #fbbf24;
+        font-weight: 600;
+      }
+
+      .divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.2);
+        margin: 15px 0;
+      }
+
+      .emotion-select {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 8px;
+        margin-bottom: 15px;
+      }
+
+      .emotion-select button {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      small {
+        display: block;
+        margin-top: 5px;
+        opacity: 0.8;
+        font-size: 11px;
+      }
+
+      .test-prompt {
+        background: rgba(255, 215, 0, 0.1);
+        padding: 10px;
+        border-radius: 6px;
+        margin-top: 10px;
+        border-left: 3px solid #ffd700;
+      }
+
+      .test-prompt p {
+        margin: 5px 0;
+        font-size: 12px;
       }
     </style>
 
@@ -181,74 +248,180 @@
   </head>
   <body>
     <div id="info">
-      <h4>🎭 Phase 2 FACS Test</h4>
-      <p>Current: <span id="current-emotion" class="status">neutral</span></p>
-      <p>Intensity: <span id="current-intensity" class="status">0.50</span></p>
-      <p>Final: <span id="current-final" class="status">0.50</span></p>
+      <h4>🎯 Customization Test</h4>
+      <p><strong>Current Settings:</strong></p>
+      <p>
+        Base Intensity: <span id="current-intensity" class="status">0.75</span>
+      </p>
+      <p>
+        Base Frequency: <span id="current-frequency" class="status">0.50</span>
+      </p>
+      <div class="divider"></div>
+      <p><strong>Active Emotion:</strong></p>
+      <p>Type: <span id="current-emotion" class="status">neutral</span></p>
+      <p>
+        Multiplier: <span id="current-multiplier" class="status">1.00</span>
+      </p>
+      <p>Final: <span id="current-final" class="warning">1.00</span></p>
+      <div class="divider"></div>
+      <div class="test-prompt" id="test-instructions">
+        <p><strong>💡 Instructions:</strong></p>
+        <p>1. Select a test scenario</p>
+        <p>2. Choose emotion to test</p>
+        <p>3. Observe naturalness</p>
+      </div>
     </div>
 
     <div id="canvas-container"></div>
 
     <div id="controls">
       <div class="control-section">
-        <h3>🎭 Test Emotions (FACS-based)</h3>
-        <div class="emotion-buttons">
-          <button class="btn-joy" onclick="testEmotion('joy')">
-            😊 Joy<br /><small>(AU6, AU12)</small>
+        <h3>🎯 Quick Test Scenarios</h3>
+        <div class="test-scenarios">
+          <button
+            class="btn-intensity-low"
+            onclick="applyScenario('intensity-verylow')"
+          >
+            Intensity: Very Low<br /><small>0.3 (Minimal)</small>
           </button>
-          <button class="btn-sadness" onclick="testEmotion('sadness')">
-            😢 Sadness<br /><small>(AU1, AU4, AU15)</small>
+          <button
+            class="btn-intensity-low"
+            onclick="applyScenario('intensity-low')"
+          >
+            Intensity: Low<br /><small>0.5 (Subtle)</small>
           </button>
-          <button class="btn-anger" onclick="testEmotion('anger')">
-            😠 Anger<br /><small>(AU4, AU5, AU7, AU23)</small>
+          <button
+            class="btn-intensity-medium"
+            onclick="applyScenario('intensity-medium')"
+          >
+            Intensity: Medium<br /><small>1.0 (Default)</small>
           </button>
-          <button class="btn-fear" onclick="testEmotion('fear')">
-            😨 Fear<br /><small>(AU1, AU2, AU5, AU20)</small>
+          <button
+            class="btn-intensity-high"
+            onclick="applyScenario('intensity-high')"
+          >
+            Intensity: High<br /><small>1.5 (Strong)</small>
           </button>
-          <button class="btn-surprise" onclick="testEmotion('surprise')">
-            😲 Surprise<br /><small>(AU1, AU2, AU5, AU26)</small>
+          <button
+            class="btn-intensity-high"
+            onclick="applyScenario('intensity-veryhigh')"
+          >
+            Intensity: Very High<br /><small>1.2 (Maximum)</small>
           </button>
-          <button class="btn-disgust" onclick="testEmotion('disgust')">
-            🤢 Disgust<br /><small>(AU9, AU15, AU16)</small>
+          <button
+            class="btn-frequency-low"
+            onclick="applyScenario('frequency-verylow')"
+          >
+            Frequency: Very Low<br /><small>0.2 (Rare)</small>
           </button>
-          <button class="btn-neutral" onclick="testEmotion('neutral')">
-            😐 Neutral<br /><small>(Baseline)</small>
+          <button
+            class="btn-frequency-low"
+            onclick="applyScenario('frequency-low')"
+          >
+            Frequency: Low<br /><small>0.4 (Occasional)</small>
           </button>
+          <button
+            class="btn-frequency-high"
+            onclick="applyScenario('frequency-high')"
+          >
+            Frequency: High<br /><small>0.8 (Frequent)</small>
+          </button>
+          <button
+            class="btn-frequency-high"
+            onclick="applyScenario('frequency-veryhigh')"
+          >
+            Frequency: Very High<br /><small>1.0 (Maximum)</small>
+          </button>
+          <button class="btn-combined" onclick="applyScenario('minimal')">
+            Combined: Minimal<br /><small>0.2 / 0.2</small>
+          </button>
+          <button class="btn-combined" onclick="applyScenario('maximal')">
+            Combined: Maximal<br /><small>1.2 / 1.0 / 1.15</small>
+          </button>
+          <button class="btn-neutral" onclick="resetToDefault()">
+            Reset Default<br /><small>1.0 / 0.5</small>
+          </button>
+        </div>
+
+        <h4>🎭 Select Emotion to Test</h4>
+        <div class="emotion-select">
+          <button onclick="testEmotion('joy')">😊 Joy</button>
+          <button onclick="testEmotion('sadness')">😢 Sadness</button>
+          <button onclick="testEmotion('anger')">😠 Anger</button>
+          <button onclick="testEmotion('fear')">😨 Fear</button>
+          <button onclick="testEmotion('surprise')">😲 Surprise</button>
+          <button onclick="testEmotion('disgust')">🤢 Disgust</button>
+          <button onclick="testEmotion('neutral')">😐 Neutral</button>
         </div>
 
         <div class="sliders">
           <div class="slider-group">
             <label>
-              Emotion Intensity (LLM):
-              <span class="value-display" id="intensity-value">0.50</span>
+              Base Intensity (Customization):
+              <span class="value-display" id="base-intensity-value">1.00</span>
             </label>
             <input
               type="range"
-              id="intensity-slider"
-              min="0"
-              max="1"
-              step="0.05"
-              value="0.5"
-              oninput="updateSliders()"
+              id="base-intensity-slider"
+              min="30"
+              max="120"
+              step="5"
+              value="75"
+              oninput="updateCustomization()"
             />
-            <small>LLM이 분석한 감정의 강도</small>
+            <small>User's customization setting (0.3 - 1.2)</small>
           </div>
 
           <div class="slider-group">
             <label>
-              Final Intensity (Base × Multiplier):
-              <span class="value-display" id="final-value">0.50</span>
+              Base Frequency (Customization):
+              <span class="value-display" id="base-frequency-value">0.50</span>
             </label>
             <input
               type="range"
-              id="final-slider"
+              id="base-frequency-slider"
               min="0"
-              max="1.0"
-              step="0.05"
-              value="0.5"
-              oninput="updateSliders()"
+              max="100"
+              step="5"
+              value="50"
+              oninput="updateCustomization()"
             />
-            <small>baseIntensity × intensityMultiplier</small>
+            <small>Micro-response frequency (0.0 - 1.0)</small>
+          </div>
+
+          <div class="slider-group">
+            <label>
+              Intensity Multiplier (LLM):
+              <span class="value-display" id="multiplier-value">1.00</span>
+            </label>
+            <input
+              type="range"
+              id="multiplier-slider"
+              min="85"
+              max="115"
+              step="5"
+              value="100"
+              oninput="updateMultiplier()"
+            />
+            <small>LLM's context-based multiplier (0.85 - 1.15)</small>
+          </div>
+
+          <div class="slider-group">
+            <label>
+              Final Intensity (Result):
+              <span class="value-display" id="final-intensity-value">1.00</span>
+            </label>
+            <input
+              type="range"
+              id="final-intensity-slider"
+              min="0"
+              max="138"
+              step="1"
+              value="75"
+              disabled
+              style="opacity: 0.5; cursor: not-allowed"
+            />
+            <small>Base × Multiplier (0.255 - 1.38)</small>
           </div>
         </div>
       </div>
@@ -261,7 +434,7 @@
       import { AvatarController } from "./src/avatar.js";
       import { EMOTION_CONFIGS } from "./src/emotions.js";
 
-      // Make EMOTION_CONFIGS available globally for console debugging
+      // Make available globally
       window.EMOTION_CONFIGS = EMOTION_CONFIGS;
 
       // Scene setup
@@ -300,14 +473,19 @@
       directionalLight.castShadow = true;
       scene.add(directionalLight);
 
-      // Rim light for better visual
       const rimLight = new THREE.DirectionalLight(0x667eea, 0.5);
       rimLight.position.set(-5, 3, -5);
       scene.add(rimLight);
 
       // Avatar Controller
       const avatarController = new AvatarController();
-      window.avatarController = avatarController; // For console debugging
+      window.avatarController = avatarController;
+
+      // Current state
+      let currentEmotion = "neutral";
+      let baseIntensity = 1.0;
+      let baseFrequency = 0.5;
+      let intensityMultiplier = 1.0;
 
       // Load Avatar
       const loader = new GLTFLoader();
@@ -317,16 +495,10 @@
           const avatar = gltf.scene;
           scene.add(avatar);
           avatarController.init(avatar);
-          console.log("✅ Avatar loaded! Ready to test FACS emotions.");
-          console.log("💡 Available emotions:", Object.keys(EMOTION_CONFIGS));
-
-          // Log available blendshapes
-          if (avatarController.morphTargetDictionary) {
-            console.log(
-              "💡 Available blendshapes:",
-              Object.keys(avatarController.morphTargetDictionary).sort()
-            );
-          }
+          console.log(
+            "✅ Avatar loaded! Ready to test customization parameters."
+          );
+          console.log("💡 Try different intensity/frequency combinations");
         },
         (progress) => {
           console.log(
@@ -339,42 +511,223 @@
         }
       );
 
-      // Test function (exposed globally)
-      window.testEmotion = function (emotion) {
-        const intensity = parseFloat(
-          document.getElementById("intensity-slider").value
-        );
-        const finalIntensity = parseFloat(
-          document.getElementById("final-slider").value
-        );
+      // Calculate and apply emotion
+      function applyCurrentEmotion() {
+        let rawFinal = baseIntensity * intensityMultiplier;
+        const finalIntensity = Math.max(0, rawFinal);
 
-        console.log(`\n🎭 Testing ${emotion.toUpperCase()}`);
-        console.log(`   Intensity: ${intensity}`);
-        console.log(`   Final: ${finalIntensity}`);
+        console.log(`\n🎭 Applying Emotion:`);
+        console.log(`   Type: ${currentEmotion}`);
+        console.log(`   Base Intensity: ${baseIntensity.toFixed(2)}`);
+        console.log(`   Multiplier: ${intensityMultiplier.toFixed(2)}`);
+        console.log(`   Final Intensity: ${finalIntensity.toFixed(2)}`);
+        console.log(`   Base Frequency: ${baseFrequency.toFixed(2)}`);
 
-        avatarController.setEmotion(emotion, intensity, finalIntensity);
+        avatarController.setEmotion(currentEmotion, finalIntensity);
 
         // Update UI
-        document.getElementById("current-emotion").textContent = emotion;
+        document.getElementById("current-emotion").textContent = currentEmotion;
         document.getElementById("current-intensity").textContent =
-          intensity.toFixed(2);
+          baseIntensity.toFixed(2);
+        document.getElementById("current-frequency").textContent =
+          baseFrequency.toFixed(2);
+        document.getElementById("current-multiplier").textContent =
+          intensityMultiplier.toFixed(2);
         document.getElementById("current-final").textContent =
           finalIntensity.toFixed(2);
+        document.getElementById("final-intensity-value").textContent =
+          finalIntensity.toFixed(2);
+
+        // Update final slider position
+        document.getElementById("final-intensity-slider").value = Math.round(
+          finalIntensity * 100
+        );
+
+        // Color code final intensity
+        const finalSpan = document.getElementById("current-final");
+        if (finalIntensity < 0.5) {
+          finalSpan.style.color = "#60a5fa"; // blue
+        } else if (finalIntensity < 1.2) {
+          finalSpan.style.color = "#4ade80"; // green
+        } else if (finalIntensity < 1.8) {
+          finalSpan.style.color = "#fbbf24"; // yellow
+        } else {
+          finalSpan.style.color = "#f87171"; // red
+        }
+      }
+
+      // Test specific emotion
+      window.testEmotion = function (emotion) {
+        currentEmotion = emotion;
+        applyCurrentEmotion();
       };
 
-      // Update slider displays
-      window.updateSliders = function () {
-        const intensity = parseFloat(
-          document.getElementById("intensity-slider").value
+      // Update customization parameters
+      window.updateCustomization = function () {
+        baseIntensity =
+          parseFloat(document.getElementById("base-intensity-slider").value) /
+          100; // 30-120 → 0.3-1.2
+        baseFrequency =
+          parseFloat(document.getElementById("base-frequency-slider").value) /
+          100; // 0-100 → 0.0-1.0
+
+        document.getElementById("base-intensity-value").textContent =
+          baseIntensity.toFixed(2);
+        document.getElementById("base-frequency-value").textContent =
+          baseFrequency.toFixed(2);
+
+        applyCurrentEmotion();
+      };
+
+      // Update multiplier
+      window.updateMultiplier = function () {
+        intensityMultiplier =
+          parseFloat(document.getElementById("multiplier-slider").value) / 100;
+
+        document.getElementById("multiplier-value").textContent =
+          intensityMultiplier.toFixed(2);
+
+        applyCurrentEmotion();
+      };
+
+      // Apply test scenario
+      window.applyScenario = function (scenario) {
+        const scenarios = {
+          "intensity-verylow": {
+            intensity: 0.3,
+            frequency: 0.5,
+            multiplier: 1.0,
+            desc: "Very Low Intensity (0.3)",
+          },
+          "intensity-low": {
+            intensity: 0.5,
+            frequency: 0.5,
+            multiplier: 1.0,
+            desc: "Low Intensity (0.5)",
+          },
+          "intensity-medium": {
+            intensity: 0.75,
+            frequency: 0.5,
+            multiplier: 1.0,
+            desc: "Medium Intensity (0.75)",
+          },
+          "intensity-high": {
+            intensity: 1.0,
+            frequency: 0.5,
+            multiplier: 1.0,
+            desc: "High Intensity (1.0)",
+          },
+          "intensity-veryhigh": {
+            intensity: 1.2,
+            frequency: 0.5,
+            multiplier: 1.0,
+            desc: "Very High Intensity (1.2)",
+          },
+          "frequency-verylow": {
+            intensity: 0.75,
+            frequency: 0.2,
+            multiplier: 1.0,
+            desc: "Very Low Frequency (0.2)",
+          },
+          "frequency-low": {
+            intensity: 0.75,
+            frequency: 0.4,
+            multiplier: 1.0,
+            desc: "Low Frequency (0.4)",
+          },
+          "frequency-high": {
+            intensity: 0.75,
+            frequency: 0.8,
+            multiplier: 1.0,
+            desc: "High Frequency (0.8)",
+          },
+          "frequency-veryhigh": {
+            intensity: 0.75,
+            frequency: 1.0,
+            multiplier: 1.0,
+            desc: "Very High Frequency (1.0)",
+          },
+          minimal: {
+            intensity: 0.3,
+            frequency: 0.2,
+            multiplier: 0.85,
+            desc: "Minimal (0.3 / 0.2 / 0.85)",
+          },
+          maximal: {
+            intensity: 1.2,
+            frequency: 1.0,
+            multiplier: 1.15,
+            desc: "Maximal (1.2 / 1.0 / 1.15)",
+          },
+        };
+
+        const config = scenarios[scenario];
+        if (!config) return;
+
+        console.log(`\n🎯 Applying Scenario: ${config.desc}`);
+
+        // Set sliders
+        document.getElementById("base-intensity-slider").value = Math.round(
+          config.intensity * 100
         );
-        const finalIntensity = parseFloat(
-          document.getElementById("final-slider").value
+        document.getElementById("base-frequency-slider").value = Math.round(
+          config.frequency * 100
+        );
+        document.getElementById("multiplier-slider").value = Math.round(
+          config.multiplier * 100
         );
 
-        document.getElementById("intensity-value").textContent =
-          intensity.toFixed(2);
-        document.getElementById("final-value").textContent =
-          finalIntensity.toFixed(2);
+        // Update values
+        baseIntensity = config.intensity;
+        baseFrequency = config.frequency;
+        intensityMultiplier = config.multiplier;
+
+        // Update displays
+        document.getElementById("base-intensity-value").textContent =
+          baseIntensity.toFixed(2);
+        document.getElementById("base-frequency-value").textContent =
+          baseFrequency.toFixed(2);
+        document.getElementById("multiplier-value").textContent =
+          intensityMultiplier.toFixed(2);
+
+        // Update instructions
+        const instructions = document.getElementById("test-instructions");
+        instructions.innerHTML = `
+          <p><strong>🎯 Testing: ${config.desc}</strong></p>
+          <p>1. Click emotions to test</p>
+          <p>2. Check if expression is natural</p>
+          <p>3. Note any issues</p>
+        `;
+
+        applyCurrentEmotion();
+      };
+
+      // Reset to default
+      window.resetToDefault = function () {
+        console.log("\n🔄 Reset to Default Settings");
+
+        document.getElementById("base-intensity-slider").value = 75;
+        document.getElementById("base-frequency-slider").value = 50;
+        document.getElementById("multiplier-slider").value = 100;
+
+        baseIntensity = 0.75;
+        baseFrequency = 0.5;
+        intensityMultiplier = 1.0;
+
+        document.getElementById("base-intensity-value").textContent = "0.75";
+        document.getElementById("base-frequency-value").textContent = "0.50";
+        document.getElementById("multiplier-value").textContent = "1.00";
+
+        const instructions = document.getElementById("test-instructions");
+        instructions.innerHTML = `
+          <p><strong>💡 Instructions:</strong></p>
+          <p>1. Select a test scenario</p>
+          <p>2. Choose emotion to test</p>
+          <p>3. Observe naturalness</p>
+        `;
+
+        currentEmotion = "neutral";
+        applyCurrentEmotion();
       };
 
       // Animation loop
@@ -394,8 +747,9 @@
         renderer.setSize(container.clientWidth, container.clientHeight);
       });
 
-      console.log("🎭 Phase 2 FACS Test loaded!");
-      console.log('💡 Try: testEmotion("joy", 0.8, 1.0) in console');
+      console.log("🎯 Customization Parameter Test loaded!");
+      console.log("💡 Click scenario buttons to test different configurations");
+      console.log("💡 Or use sliders for manual control");
     </script>
   </body>
 </html>

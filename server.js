@@ -118,13 +118,13 @@ Generate:
    - Default to neutral for greetings, introductions, or opening statements
    - Willingness to talk/share ≠ emotional distress (use neutral, not sadness)
    - Only use strong emotions when user explicitly describes difficult feelings or situations
-   - If uncertain between neutral and emotional, choose neutral with lower multiplier (0.5-0.7)
+   - If uncertain between neutral and emotional, choose emotional with lower multiplier (0.85-0.90)
 
-3. Intensity Multiplier (0.5 to 1.5)
-   - 0.5-0.7: Light conversation
-   - 0.8-1.0: Normal emotional exchange
-   - 1.1-1.3: Significant emotional moment
-   - 1.4-1.5: Crisis or breakthrough
+3. Intensity Multiplier (0.85 to 1.15)
+   - 0.85-0.90: Light conversation, attenuate slightly
+   - 0.95-1.00: Normal emotional expression
+   - 1.05-1.10: Significant emotional moment
+   - 1.15: Strong emotional peak
 
 Guidelines for response:
 - Response should validate feelings and show understanding
@@ -136,7 +136,7 @@ CRITICAL: Return ONLY valid JSON (no markdown):
   "response": "your empathetic response here",
   "counselorEmotion": {
     "dominantEmotion": "sadness",
-    "intensityMultiplier": 1.2
+    "intensityMultiplier": 0.95
   }
 }`;
 

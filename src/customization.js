@@ -1,16 +1,3 @@
-/**
- * CustomizationManager
- *
- * Purpose: Manage user customization settings for avatar responses
- * - Base Intensity: Expression strength (0.0-1.0)
- * - Base Frequency: Micro response frequency (0.0-1.0)
- *
- * Features:
- * - Real-time updates
- * - localStorage persistence
- * - Event-driven notifications to other modules
- */
-
 export class CustomizationManager {
   constructor() {
     // Default values (normalized 0.0-1.0)
@@ -89,12 +76,13 @@ export class CustomizationManager {
   }
 
   /**
-   * Get actual intensity for avatar application (0.5-1.5)
+   * Get actual intensity for avatar application
    * @returns {number} Actual intensity multiplier
    */
   getActualIntensity() {
-    // 0.0 → 0.5, 0.5 → 1.0, 1.0 → 1.5
-    return 0.5 + this.settings.baseIntensity;
+    // UI slider (0.0-1.0) → Actual (0.3-1.2)
+    // 0.0 → 0.3, 0.5 → 0.75, 1.0 → 1.2
+    return 0.3 + this.settings.baseIntensity * 0.9;
   }
 
   /**

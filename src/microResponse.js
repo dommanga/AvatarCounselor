@@ -18,7 +18,7 @@ export class MicroResponseController {
 
     // Customization settings
     this.customization = {
-      baseIntensity: customization.baseIntensity || 0.5, // 0.0-1.0
+      baseIntensity: customization.baseIntensity || 0.75, // 0.3-1.2
       baseFrequency: customization.baseFrequency || 0.5, // 0.0-1.0
       noddingProbability: 0.9, // chance of nodding
       ...customization,
@@ -328,7 +328,9 @@ export class MicroResponseController {
       this._currentMicroResponse = null;
     }
 
-    console.log("⚡ Micro response stopped immediately (blendshapes preserved for smooth transition)");
+    console.log(
+      "⚡ Micro response stopped immediately (blendshapes preserved for smooth transition)"
+    );
   }
 
   /**

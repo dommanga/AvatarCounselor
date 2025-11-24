@@ -142,9 +142,9 @@ function initializeSpeechRecognition() {
   initializeTTS();
 
   // Initialize Micro Response controller with current settings
-  const currentSettings = customizationManager.getSettings();
+  const currentSettings = customizationManager.getActualSettings();
   microResponseController = new MicroResponseController(avatarController, {
-    baseIntensity: currentSettings.baseIntensity, // 0.0-2.0
+    baseIntensity: currentSettings.baseIntensity, // 0.3-1.2
     baseFrequency: currentSettings.baseFrequency, // 0.0-1.0
   });
   console.log("✅ Micro response controller initialized!");
@@ -274,8 +274,9 @@ function initializeSpeechRecognition() {
     // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
     const currentSettings = customizationManager.getActualSettings();
     currentCounselorEmotion = counselorEmotion.dominantEmotion;
-    currentFinalIntensity =
+    let rawFinal =
       currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
+    currentFinalIntensity = Math.max(0, rawFinal);
 
     console.log(
       `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(

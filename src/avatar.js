@@ -86,7 +86,7 @@ export class AvatarController {
   /**
    * Set emotion with FACS-based expression (Phase 2)
    * @param {string} emotion - Emotion name (joy, sadness, anger, fear, surprise, disgust, neutral)
-   * @param {number} finalIntensity - baseIntensity × intensityMultiplier (0.25 ~ 2.25)
+   * @param {number} finalIntensity - baseIntensity × intensityMultiplier (0.255 ~ 1.38)
    */
   setEmotion(emotion, finalIntensity = 1.0) {
     // console.log(
@@ -126,9 +126,8 @@ export class AvatarController {
     const blendshapes = emotionConfig.blendshapes || {};
 
     // Calculate and apply blendshape values
-    for (const [blendshapeName, params] of Object.entries(blendshapes)) {
-      // base + scale * finalIntensity
-      let finalValue = params.base + params.scale * finalIntensity;
+    for (const [blendshapeName, value] of Object.entries(blendshapes)) {
+      let finalValue = value * finalIntensity;
 
       // Clamp to [0, 1]
       finalValue = Math.max(0, Math.min(1, finalValue));
@@ -150,9 +149,14 @@ export class AvatarController {
     const stepDuration = (fadeDuration * 1000) / steps;
     let currentStep = 0;
 
-    // Store initial values
+    // Store initial values (exclude eyeBlink)
     const initialValues = {};
     for (let morphName in this.targetMorphValues) {
+      // Skip eyeBlink morphs
+      if (morphName.includes("eyeBlink") || morphName.includes("Eye_Blink")) {
+        continue;
+      }
+
       if (this.targetMorphValues[morphName] > 0) {
         initialValues[morphName] = this.targetMorphValues[morphName];
       }
@@ -162,7 +166,7 @@ export class AvatarController {
       currentStep++;
       const progress = currentStep / steps; // 0 → 1
 
-      // Gradually reduce each blendshape to 0
+      // Gradually reduce each blendshape to 0 (except eyeBlink)
       for (const [morphName, initialValue] of Object.entries(initialValues)) {
         const targetValue = initialValue * (1 - progress);
         this.targetMorphValues[morphName] = targetValue;
@@ -172,8 +176,11 @@ export class AvatarController {
       if (currentStep >= steps) {
         clearInterval(fadeInterval);
 
-        // Final reset to 0
+        // Final reset to 0 (except eyeBlink)
         for (let key in this.targetMorphValues) {
+          if (key.includes("eyeBlink") || key.includes("Eye_Blink")) {
+            continue; // Keep eyeBlink values
+          }
           this.targetMorphValues[key] = 0;
         }
       }
