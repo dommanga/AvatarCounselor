@@ -30,12 +30,12 @@ This project implements an **AI Avatar Counselor** system that generates real-ti
                  │         │        └─→ Micro Response
                  │         │             • Head nod
                  │         │             • Eyebrow raise
-                 │         │             • Slight smile
+                 │         │             • Slight emotional expression
                  │         │             (0.5-0.8s duration)
                  │
                  └─── Final Transcript (Complete Turn)
                           │
-                          ├─→ Emotion Analysis (LLM)
+                          ├─→ Emotion Analysis (GPT-4)
                           │    • 6 Basic Emotions (FACS)
                           │    • Intensity Multiplier
                           │
@@ -70,37 +70,47 @@ This project implements an **AI Avatar Counselor** system that generates real-ti
 #### Full Response (Empathic Expression)
 
 - **Purpose**: Clear empathetic expression during counselor turns
-- **Duration**: 3-5 seconds
+- **Duration**: During counselor turns
 - **Triggers**: Turn completion + FACS-based emotion analysis
-- **Expressions**: 6 basic emotions (joy, sadness, anger, fear, surprise, disgust)
+- **Expressions**: 6 basic emotions (joy, sadness, anger, fear, surprise, disgust) + neutral
 - **Modulation**: `finalIntensity = baseIntensity × intensityMultiplier`
 
-### 2. Emotional State Tracking
-
-- **Real-time Monitoring**: Tracks user emotional states throughout conversation
-- **History Management**: Maintains recent 3-5 emotional states
-- **Trend Analysis**: Identifies dominant emotional trends
-
-### 3. Counselor State Calculation
+### 2. Counselor State Calculation
 
 #### Base Values (User Settings)
 
-- `baseIntensity` (0.0-1.0): Strength of facial expressions and gestures
-- `baseFrequency` (0.0-1.0): Frequency of Micro Response
+- `baseIntensity` (0.3-1.2): Expression strength (5 discrete levels)
+
+  - 0.3: Very Subtle
+  - 0.5: Subtle
+  - 0.75: Moderate (default)
+  - 1.0: Expressive
+  - 1.2: Very Expressive
+
+- `baseFrequency` (0.2-1.0): Micro Response frequency (5 discrete levels)
+
+  - 0.2: Minimal
+  - 0.4: Occasional
+  - 0.6: Moderate (default)
+  - 0.8: Frequent
+  - 1.0: Very Frequent
 
 #### Context Multiplier (Dynamic)
 
-- `intensityMultiplier` (0.5-1.5): LLM evaluates emotional significance
-  - 0.5-0.7: Casual conversation (attenuate)
-  - 0.8-1.0: Normal emotional expression
-  - 1.1-1.5: Crisis moment (amplify)
+- `intensityMultiplier` (0.85-1.15): LLM evaluates emotional significance
+  - 0.85-0.90: Light conversation (attenuate slightly)
+  - 0.95-1.00: Normal emotional expression
+  - 1.05-1.10: Significant emotional moment
+  - 1.15: Strong emotional peak
 
 #### Final Calculation
 
-- **Micro Response**: Base values used directly
+- **Micro Response**: Uses base values directly
 - **Full Response**: `finalIntensity = baseIntensity × intensityMultiplier`
+  - Range: 0.255 (0.3 × 0.85) ~ 1.38 (1.2 × 1.15)
+  - Lower bound clamped at 0
 
-### 4. FACS-based Emotion Mapping
+### 3. FACS-based Emotion Mapping
 
 Based on Ekman & Friesen (1978) Facial Action Coding System:
 
@@ -113,14 +123,29 @@ Based on Ekman & Friesen (1978) Facial Action Coding System:
 | Surprise | AU1, AU2, AU5  | browInnerUp, eyeWide, jawOpen |
 | Disgust  | AU9, AU15      | noseSneer, mouthFrown         |
 
-### 5. Customization System
++) Add additional blenshape activation for natural facial expression
 
-Users can adjust two parameters via sliders:
+### 4. Customization System
 
-1. **Base Intensity**: Expression strength (applies to both Micro and Full)
-2. **Base Frequency**: Micro Response frequency (Full Response always triggered)
+Users can adjust avatar behavior through a **5-level button interface**:
 
-Settings saved in `localStorage` for persistence across sessions.
+1. **Expression Intensity** (0.3-1.2)
+
+   - Controls strength of both Micro and Full responses
+   - Visual feedback with numbered indicators (1-5)
+   - Default: Level 3 (Moderate, 0.75)
+
+2. **Response Frequency** (0.2-1.0)
+   - Controls how often Micro Responses trigger
+   - Full Responses always triggered (not affected)
+   - Default: Level 3 (Moderate, 0.6)
+
+**Implementation Details**:
+
+- Settings stored in `localStorage` for persistence
+- Real-time updates without page reload
+- Reset to defaults available
+- Button-based UI (replaced sliders for clearer UX)
 
 ---
 
@@ -157,7 +182,7 @@ Settings saved in `localStorage` for persistence across sessions.
 
 **Deliverables**: Working prototype with basic facial expressions
 
-### 🔄 Phase 2: Core System Implementation (Current)
+### ✅ Phase 2: Core System Implementation (Completed)
 
 **Objectives**: Implement full system design from interim report
 
@@ -165,74 +190,93 @@ Settings saved in `localStorage` for persistence across sessions.
 
 - [x] Research FACS Action Units for 6 basic emotions
 - [x] Map Action Units to ARKit blendshapes
-- [x] Implement `EMOTION_CONFIGS` in `emotions.js`
-- [x] Test and calibrate with Ready Player Me avatar
-- [x] Validate naturalness of expressions
+- [x] Implement `EMOTION_CONFIGS` with base/scale parameters
+- [x] Refactored to direct value multiplication (simplified)
+- [x] Test and calibrate expressions at multiple intensities
+- [x] Validate naturalness across 0.3-1.2 range
 
 #### Phase 2-2: Emotional State Tracking System
 
-- [x] Implement `EmotionalStateTracker` class
-  - [x] Real-time sentiment analysis (interim)
-  - [x] Full emotion analysis (final)
-  - [x] Emotion history management (3-5 states)
-  - [x] Dominant trend calculation
-- [x] Integrate with LLM APIs
-- [x] Add debouncing for interim analysis
+- [x] Implement `APIManager` class (refactored from EmotionalStateTracker)
+  - [x] Sentiment analysis for interim transcripts
+  - [x] Full emotion analysis for final transcripts
+  - [x] Counselor response generation with emotion
+  - [x] TTS generation integration
+- [x] Conversation history management (10 messages)
+- [x] Rate limiting and debouncing (400ms minimum gap)
 
 #### Phase 2-3: Dual Expression System
 
 **Micro Response:**
 
 - [x] Implement `MicroResponseController` class
-- [x] Sentiment-based expression triggers
-- [x] Head nod, eyebrow, smile animations
-- [x] 0.5-0.8s duration control
-- [x] Apply `baseIntensity` and `baseFrequency`
+- [x] Sentiment-based expression triggers (positive/negative/neutral)
+- [x] Head nodding with probabilistic triggering (90% chance)
+- [x] Asymmetric nod pattern (-2° to 8°, smoothstep interpolation)
+- [x] Variable nod speed based on sentiment
+- [x] Smooth fade-out when interrupted
+- [x] Apply user-customized intensity and frequency
 
 **Full Response:**
 
-- [x] Update `AvatarController.setEmotion()` method
-- [x] Implement Context Multiplier application
-- [x] FACS-based expression generation
-- [x] 3-5s duration with smooth transitions
-- [ ] Integrate with TTS timing
+- [x] Update `AvatarController.setEmotion()` for simplified calculation
+- [x] Context Multiplier (0.85-1.15) integration
+- [x] FACS-based expression with natural variation (sine wave ±10%)
+- [x] Fade-in animation (1 second) for smooth onset
+- [x] Expression fluctuation during TTS playback
+- [x] Graceful fade-to-neutral on completion
 
-**Additional**
+**Idle Animations:**
 
-- [ ] Natural facial movement and expression
+- [x] `IdleAnimationController` for natural behaviors
+- [x] Realistic eye blink (3-5s intervals, 150ms duration)
+- [x] Eye look-around movements (8 directions, weighted center)
+- [x] Subtle head sway (0.5° amplitude, 3s period)
+- [x] Pause during active expressions
 
 #### Phase 2-4: Customization System
 
-- [ ] Implement user settings management
-- [ ] Create UI sliders (Base Intensity/Frequency)
-- [ ] LocalStorage integration
-- [ ] Real-time parameter updates
-- [ ] Default value configuration
+- [x] 5-level button interface (replaced sliders)
+- [x] Visual indicators with numbered circles
+- [x] Real-time parameter updates
+- [x] LocalStorage persistence
+- [x] Reset to defaults functionality
+- [x] Collapsible settings panel
 
 #### Phase 2-5: Backend API Development
 
-- [x] `POST /api/sentiment` (Chunk analysis)
-- [x] `POST /api/analyze-full` (Full emotion + multiplier)
-- [x] `POST /api/generate-response` (Counselor response)
-- [x] Implement conversation history management
-- [x] Error handling & rate limiting
+- [x] `POST /api/sentiment` (Chunk sentiment analysis)
+- [x] `POST /api/generate-response-with-emotion` (Unified endpoint)
+- [x] `POST /api/tts` (OpenAI TTS with language detection)
+- [x] Conversation context management
+- [x] Error handling with fallback responses
 
 #### Phase 2-6: Integration & Testing
 
-- [ ] Integrate all modules in `main.js`
-- [ ] End-to-end flow testing
-- [ ] Latency optimization (<1s for Micro)
-- [ ] Expression naturalness validation
-- [ ] Conversation quality testing
+- [x] Full system integration in `main.js`
+- [x] End-to-end conversation flow
+- [x] TTS interruption handling
+- [x] Expression conflict resolution (Micro → Full transition)
+- [x] Status indicator UI (Listening/Thinking/Speaking)
+- [x] Conversation history with interrupted message marking
+- [x] Enhanced lip sync (syllable-based, with pauses)
+- [x] Multi-language support (Korean/English)
+
+**Key Improvements**:
+
+- Simplified intensity calculation (removed base+scale, direct multiplication)
+- User-centric range design (0.3-1.2 for intensity, 0.2-1.0 for frequency)
+- Natural expression timing (fade-in, fluctuation, fade-out)
+- Robust error handling and state management
 
 **Deliverables**:
 
 - Fully functional system with Dual Expression
-- FACS-based facial expressions
-- Customizable user parameters
+- FACS-based facial expressions with proven naturalness
+- User-customizable parameters (5 levels each)
 - Production-ready codebase
 
-### 🎯 Phase 3: User Study & Evaluation (Planned)
+### 🎯 Phase 3: User Study & Evaluation (Current)
 
 **Objectives**: Experimental validation of system effectiveness
 
@@ -324,21 +368,21 @@ AvatarCounselor/
 ├── index.html                 # Main entry point
 ├── src/
 │   ├── main.js               # Core integration & orchestration
-│   ├── avatar.js             # AvatarController (72 blendshapes)
+│   ├── avatar.js             # AvatarController (72 blendshapes, FACS-based)
 │   ├── speech.js             # SpeechRecognitionManager (Web Speech API)
-│   ├── emotions.js           # FACS-based emotion configs
-│   ├── emotionalState.js     # EmotionalStateTracker (NEW - Phase 2)
-│   ├── microResponse.js      # MicroResponseController (NEW - Phase 2)
-│   ├── customization.js      # CustomizationManager (NEW - Phase 2)
-│   ├── ui.js                 # UI management
-│   ├── api.js                # Backend API communication
-│   ├── tts.js                # TTS manager (OpenAI TTS)
-│   └── lipSync.js            # Amplitude-based lip sync
+│   ├── emotions.js           # FACS emotion configs (Ekman & Friesen)
+│   ├── APIManager.js         # Backend API communication (Phase 2)
+│   ├── microResponse.js      # MicroResponseController with head nodding
+│   ├── IdleAnimation.js      # Natural idle behaviors (blink, sway, look)
+│   ├── customization.js      # Settings manager (0.3-1.2 range)
+│   ├── ui.js                 # UI with 5-level button interface
+│   ├── tts.js                # OpenAI TTS integration
+│   └── lipSync.js            # Enhanced syllable-based lip sync
 ├── assets/
-│   └── avatar_torso.glb      # Ready Player Me avatar
-├── server.js                 # Express API server
+│   └── avatar_torso.glb      # Ready Player Me avatar (ARKit blendshapes)
+├── server.js                 # Express API (GPT-4, OpenAI TTS)
 ├── package.json
-├── .env                      # API keys (not in repo)
+├── .env                      # API keys (OPENAI_API_KEY)
 ├── .gitignore
 └── README.md
 ```
@@ -359,4 +403,4 @@ AvatarCounselor/
 
 ---
 
-**Last Updated**: Nov 10, 2025
+**Last Updated**: Nov 24, 2025
