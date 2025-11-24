@@ -1,9 +1,16 @@
+/**
+ * CustomizationManager
+ *
+ * Actual ranges:
+ * - baseIntensity: 0.3-1.2 (stored and used directly)
+ * - baseFrequency: 0.2-1.0
+ */
 export class CustomizationManager {
   constructor() {
-    // Default values (normalized 0.0-1.0)
+    // Default values (actual values, not normalized)
     this.settings = {
-      baseIntensity: 0.5,
-      baseFrequency: 0.5,
+      baseIntensity: 0.75,
+      baseFrequency: 0.6,
     };
 
     // Load from localStorage if exists
@@ -22,8 +29,8 @@ export class CustomizationManager {
       if (saved) {
         const parsed = JSON.parse(saved);
         this.settings = {
-          baseIntensity: this.clamp(parsed.baseIntensity ?? 0.5, 0, 1),
-          baseFrequency: this.clamp(parsed.baseFrequency ?? 0.5, 0, 1),
+          baseIntensity: this.clamp(parsed.baseIntensity ?? 0.75, 0.3, 1.2),
+          baseFrequency: this.clamp(parsed.baseFrequency ?? 0.6, 0, 1),
         };
         console.log("✅ Loaded customization settings:", this.settings);
       }
@@ -49,10 +56,10 @@ export class CustomizationManager {
 
   /**
    * Update base intensity
-   * @param {number} value - 0.0 to 1.0
+   * @param {number} value - 0.3 to 1.2 (actual value)
    */
   setBaseIntensity(value) {
-    const clamped = this.clamp(value, 0, 1);
+    const clamped = this.clamp(value, 0.3, 1.2);
     if (this.settings.baseIntensity !== clamped) {
       this.settings.baseIntensity = clamped;
       this.saveSettings();
@@ -63,7 +70,7 @@ export class CustomizationManager {
 
   /**
    * Update base frequency
-   * @param {number} value - 0.0 to 1.0
+   * @param {number} value - 0.2 to 1.0
    */
   setBaseFrequency(value) {
     const clamped = this.clamp(value, 0, 1);
@@ -76,30 +83,10 @@ export class CustomizationManager {
   }
 
   /**
-   * Get actual intensity for avatar application
-   * @returns {number} Actual intensity multiplier
-   */
-  getActualIntensity() {
-    // UI slider (0.0-1.0) → Actual (0.3-1.2)
-    // 0.0 → 0.3, 0.5 → 0.75, 1.0 → 1.2
-    return 0.3 + this.settings.baseIntensity * 0.9;
-  }
-
-  /**
-   * Get normalized settings for UI (0.0-1.0)
+   * Get settings (no conversion needed)
    */
   getSettings() {
     return { ...this.settings };
-  }
-
-  /**
-   * Get settings with actual intensity for application
-   */
-  getActualSettings() {
-    return {
-      baseIntensity: this.getActualIntensity(),
-      baseFrequency: this.settings.baseFrequency,
-    };
   }
 
   /**
@@ -149,8 +136,8 @@ export class CustomizationManager {
    */
   resetToDefaults() {
     this.settings = {
-      baseIntensity: 0.5,
-      baseFrequency: 0.5,
+      baseIntensity: 0.75,
+      baseFrequency: 0.6,
     };
     this.saveSettings();
     this.notifyListeners("reset", null);

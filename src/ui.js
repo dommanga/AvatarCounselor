@@ -7,44 +7,78 @@ export class UIController {
   }
 
   setupUI() {
-    // ✅ NEW: Create customization panel (LEFT side, separate container)
     const customizationUI = document.createElement("div");
     customizationUI.id = "customization-ui";
     customizationUI.innerHTML = `
-                <div class="customization-panel">
-                    <div class="panel-header">
-                        <span>⚙️ Expression Settings</span>
-                        <button id="settings-toggle" class="settings-toggle" title="Show/Hide Settings">▲</button>
-                    </div>
-                    <div id="settings-content" class="settings-content" style="display: block;">
-                        <div class="setting-item">
-                            <label for="intensity-slider">
-                                <div class="setting-label">Intensity</div>
-                                <div class="setting-description">Expression strength (affects both Micro & Full responses)</div>
-                            </label>
-                            <div class="slider-container">
-                                <input type="range" id="intensity-slider" min="0" max="100" value="50" step="10" />
-                                <span id="intensity-value" class="slider-value">0.50</span>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <label for="frequency-slider">
-                                <div class="setting-label">Frequency</div>
-                                <div class="setting-description">Micro response rate (listening signals only)</div>
-                            </label>
-                            <div class="slider-container">
-                                <input type="range" id="frequency-slider" min="0" max="100" value="50" step="10" />
-                                <span id="frequency-value" class="slider-value">0.50</span>
-                            </div>
-                        </div>
-                        
-                        <button id="reset-settings" class="reset-button" title="Reset to defaults">
-                            🔄 Reset to Defaults
-                        </button>
-                    </div>
-                </div>
-            `;
+        <div class="customization-panel">
+            <div class="panel-header">
+                <span>⚙️ Expression Settings</span>
+                <button id="settings-toggle" class="settings-toggle" title="Show/Hide Settings">▲</button>
+            </div>
+            <div id="settings-content" class="settings-content" style="display: block;">
+                
+            <!-- Intensity Setting -->
+            <div class="setting-group">
+            <div class="setting-label">Expression Intensity</div>
+            <div class="setting-description">How strongly the counselor shows emotions and reactions</div>
+            <div class="level-buttons" id="intensity-levels">
+                <button class="level-btn" data-value="0.3" data-level="1">
+                <span class="level-indicator">1</span>
+                <span class="level-name">Very Subtle</span>
+                </button>
+                <button class="level-btn" data-value="0.5" data-level="2">
+                <span class="level-indicator">2</span>
+                <span class="level-name">Subtle</span>
+                </button>
+                <button class="level-btn active" data-value="0.75" data-level="3">
+                <span class="level-indicator">3</span>
+                <span class="level-name">Moderate</span>
+                </button>
+                <button class="level-btn" data-value="1.0" data-level="4">
+                <span class="level-indicator">4</span>
+                <span class="level-name">Expressive</span>
+                </button>
+                <button class="level-btn" data-value="1.2" data-level="5">
+                <span class="level-indicator">5</span>
+                <span class="level-name">Very Expressive</span>
+                </button>
+            </div>
+            </div>
+            
+            <!-- Frequency Setting -->
+            <div class="setting-group">
+            <div class="setting-label">Response Frequency</div>
+            <div class="setting-description">How often the counselor shows reactions while listening</div>
+            <div class="level-buttons" id="frequency-levels">
+                <button class="level-btn" data-value="0.2" data-level="1">
+                <span class="level-indicator">1</span>
+                <span class="level-name">Minimal</span>
+                </button>
+                <button class="level-btn" data-value="0.4" data-level="2">
+                <span class="level-indicator">2</span>
+                <span class="level-name">Occasional</span>
+                </button>
+                <button class="level-btn active" data-value="0.6" data-level="3">
+                <span class="level-indicator">3</span>
+                <span class="level-name">Moderate</span>
+                </button>
+                <button class="level-btn" data-value="0.8" data-level="4">
+                <span class="level-indicator">4</span>
+                <span class="level-name">Frequent</span>
+                </button>
+                <button class="level-btn" data-value="1.0" data-level="5">
+                <span class="level-indicator">5</span>
+                <span class="level-name">Very Frequent</span>
+                </button>
+            </div>
+            </div>
+            
+            <button id="reset-settings" class="reset-button" title="Reset to defaults">
+            🔄 Reset to Defaults
+            </button>
+        </div>
+        </div>
+    `;
 
     document.body.appendChild(customizationUI);
 
@@ -101,11 +135,16 @@ export class UIController {
     // Customization UI references
     this.settingsToggle = document.getElementById("settings-toggle");
     this.settingsContent = document.getElementById("settings-content");
-    this.intensitySlider = document.getElementById("intensity-slider");
-    this.intensityValue = document.getElementById("intensity-value");
-    this.frequencySlider = document.getElementById("frequency-slider");
-    this.frequencyValue = document.getElementById("frequency-value");
+    this.intensityLevels = document.getElementById("intensity-levels");
+    this.frequencyLevels = document.getElementById("frequency-levels");
     this.resetButton = document.getElementById("reset-settings");
+
+    // Current values (stored internally)
+    this.currentIntensity = 0.75;
+    this.currentFrequency = 0.6;
+
+    // Setup level button listeners
+    this.setupLevelButtons();
 
     // Setup settings toggle
     this.settingsToggle.addEventListener("click", () => {
@@ -114,6 +153,70 @@ export class UIController {
 
     // Add styles
     this.addStyles();
+  }
+
+  setupLevelButtons() {
+    // Intensity buttons
+    this.intensityLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const value = parseFloat(btn.dataset.value);
+        this.setIntensityLevel(value);
+
+        // Trigger customization manager update (will be called from main.js)
+        if (this.onIntensityChange) {
+          this.onIntensityChange(value);
+        }
+      });
+    });
+
+    // Frequency buttons
+    this.frequencyLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const value = parseFloat(btn.dataset.value);
+        this.setFrequencyLevel(value);
+
+        // Trigger customization manager update
+        if (this.onFrequencyChange) {
+          this.onFrequencyChange(value);
+        }
+      });
+    });
+  }
+
+  setIntensityLevel(value) {
+    this.currentIntensity = value;
+
+    // Update active button
+    this.intensityLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.classList.remove("active");
+      if (parseFloat(btn.dataset.value) === value) {
+        btn.classList.add("active");
+      }
+    });
+
+    console.log(`⚙️ Intensity level set to: ${value.toFixed(2)}`);
+  }
+
+  setFrequencyLevel(value) {
+    this.currentFrequency = value;
+
+    // Update active button
+    this.frequencyLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.classList.remove("active");
+      if (parseFloat(btn.dataset.value) === value) {
+        btn.classList.add("active");
+      }
+    });
+
+    console.log(`⚙️ Frequency level set to: ${value.toFixed(2)}`);
+  }
+
+  getIntensityLevel() {
+    return this.currentIntensity;
+  }
+
+  getFrequencyLevel() {
+    return this.currentFrequency;
   }
 
   toggleSettings() {
@@ -125,433 +228,554 @@ export class UIController {
   addStyles() {
     const style = document.createElement("style");
     style.textContent = `
-                #customization-ui {
-                    position: fixed;
-                    left: 20px;
-                    top: 20px;
-                    width: 320px;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    z-index: 1000;
-                }
+        #customization-ui {
+            position: fixed;
+            left: 20px;
+            top: 20px;
+            width: 420px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: 1000;
+        }
 
-                #speech-ui {
-                    position: fixed;
-                    right: 20px;
-                    top: 20px;
-                    width: 380px;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    z-index: 1000;
-                    transition: opacity 0.3s ease;
-                }
-                
-                .speech-control-panel {
-                    background: rgba(255, 255, 255, 0.95);
-                    border-radius: 12px;
-                    padding: 15px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 15px;
-                }
-                
-                .mic-button {
-                    flex: 1;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 12px 20px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 8px;
-                    transition: transform 0.2s, box-shadow 0.2s;
-                }
-                
-                .mic-button:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
-                }
-                
-                .mic-button:active {
-                    transform: translateY(0);
-                }
-                
-                .mic-button.listening {
-                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                }
-                
-                @keyframes pulse {
-                    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 87, 108, 0.7); }
-                    50% { box-shadow: 0 0 0 10px rgba(245, 87, 108, 0); }
-                }
-                
-                .clear-button {
-                    background: #f5f5f5;
-                    border: 1px solid #ddd;
-                    border-radius: 8px;
-                    padding: 12px 16px;
-                    font-size: 14px;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                }
-                
-                .clear-button:hover {
-                    background: #e0e0e0;
-                }
+        #speech-ui {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            width: 380px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: 1000;
+            transition: opacity 0.3s ease;
+        }
+        
+        .speech-control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .mic-button {
+            flex: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .mic-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .mic-button:active {
+            transform: translateY(0);
+        }
+        
+        .mic-button.listening {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 87, 108, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(245, 87, 108, 0); }
+        }
+        
+        .clear-button {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .clear-button:hover {
+            background: #e0e0e0;
+        }
 
-                .new-session-button {
-                    background: #ff9800;
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 12px 20px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                }
+        .new-session-button {
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
 
-                .new-session-button:hover {
-                    background: #f57c00;
-                }
+        .new-session-button:hover {
+            background: #f57c00;
+        }
 
-                .language-select {
-                    background: white;
-                    border: 1px solid #ddd;
-                    border-radius: 8px;
-                    padding: 12px;
-                    font-size: 14px;
-                    cursor: pointer;
-                }
-                
-                /* Customization Panel */
-                .customization-panel {
-                    background: rgba(255, 255, 255, 0.95);
-                    border-radius: 12px;
-                    padding: 15px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                    margin-bottom: 15px;
-                }
-                
-                .customization-panel .panel-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    font-weight: 600;
-                    font-size: 14px;
-                    color: #333;
-                    margin-bottom: 0;
-                    padding-bottom: 8px;
-                    border-bottom: 2px solid #667eea;
-                    cursor: pointer;
-                }
-                
-                .settings-toggle {
-                    background: none;
-                    border: none;
-                    font-size: 14px;
-                    cursor: pointer;
-                    padding: 4px 8px;
-                    color: #667eea;
-                    transition: transform 0.2s;
-                }
-                
-                .settings-toggle:hover {
-                    transform: scale(1.1);
-                }
-                
-                .settings-content {
-                    margin-top: 15px;
-                    display: none;
-                }
-                
-                .setting-item {
-                    margin-bottom: 20px;
-                }
-                
-                .setting-item:last-of-type {
-                    margin-bottom: 15px;
-                }
-                
-                .setting-label {
-                    display: block;
-                    font-weight: 600;
-                    font-size: 13px;
-                    color: #333;
-                    margin-bottom: 4px;
-                }
-                
-                .setting-description {
-                    display: block;
-                    font-size: 11px;
-                    color: #666;
-                    margin-bottom: 8px;
-                }
-                
-                .slider-container {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                }
-                
-                .slider-container input[type="range"] {
-                    flex: 1;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: #e0e0e0;
-                    outline: none;
-                    -webkit-appearance: none;
-                }
-                
-                .slider-container input[type="range"]::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 18px;
-                    height: 18px;
-                    border-radius: 50%;
-                    background: #667eea;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                }
-                
-                .slider-container input[type="range"]::-webkit-slider-thumb:hover {
-                    background: #764ba2;
-                }
-                
-                .slider-container input[type="range"]::-moz-range-thumb {
-                    width: 18px;
-                    height: 18px;
-                    border-radius: 50%;
-                    background: #667eea;
-                    cursor: pointer;
-                    border: none;
-                    transition: background 0.2s;
-                }
-                
-                .slider-container input[type="range"]::-moz-range-thumb:hover {
-                    background: #764ba2;
-                }
-                
-                .slider-value {
-                    min-width: 40px;
-                    text-align: right;
-                    font-weight: 600;
-                    font-size: 13px;
-                    color: #667eea;
-                }
-                
-                .reset-button {
-                    width: 100%;
-                    background: #f5f5f5;
-                    border: 1px solid #ddd;
-                    border-radius: 8px;
-                    padding: 10px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                    color: #666;
-                }
-                
-                .reset-button:hover {
-                    background: #e0e0e0;
-                    color: #333;
-                }
-                
-                .transcript-panel, .conversation-panel {
-                    background: rgba(255, 255, 255, 0.95);
-                    border-radius: 12px;
-                    padding: 15px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                    margin-bottom: 15px;
-                }
-                
-                .panel-header {
-                    font-weight: 600;
-                    font-size: 14px;
-                    color: #333;
-                    margin-bottom: 10px;
-                    padding-bottom: 8px;
-                    border-bottom: 2px solid #667eea;
-                }
-                
-                .current-transcript {
-                    min-height: 60px;
-                    max-height: 120px;
-                    overflow-y: auto;
-                    font-size: 15px;
-                    line-height: 1.6;
-                    color: #333;
-                }
-                
-                .current-transcript .final {
-                    color: #000;
-                }
-                
-                .current-transcript .interim {
-                    color: #999;
-                    font-style: italic;
-                }
-                
-                .conversation-history {
-                    max-height: 300px;
-                    overflow-y: auto;
-                    font-size: 14px;
-                }
-                
-                .conversation-entry {
-                    margin-bottom: 12px;
-                    padding: 10px;
-                    border-radius: 8px;
-                    background: #f8f9fa;
-                    border-left: 3px solid #667eea;
-                }
-                
-                .conversation-entry .timestamp {
-                    font-size: 11px;
-                    color: #999;
-                    margin-bottom: 4px;
-                }
-                
-                .conversation-entry .text {
-                    color: #333;
-                    line-height: 1.5;
-                }
-                
-                .counselor-message {
-                    margin-bottom: 12px;
-                    padding: 12px;
-                    border-radius: 8px;
-                    background: #e3f2fd;
-                    border-left: 3px solid #2196f3;
-                }
-    
-                .counselor-message .label {
-                    font-weight: 600;
-                    font-size: 13px;
-                    color: #1976d2;
-                    display: block;
-                    margin-bottom: 6px;
-                }
-    
-                .counselor-message .text {
-                    color: #333;
-                    line-height: 1.6;
-                    font-size: 14px;
-                }
-                
-                .counselor-message.interrupted {
-                    background: #f5f5f5;
-                    border-left: 3px solid #999;
-                    opacity: 0.6;
-                }
-                
-                .counselor-message.interrupted .label {
-                    color: #999;
-                }
-                
-                .counselor-message.interrupted .label::after {
-                    content: " (interrupted)";
-                    font-size: 11px;
-                    font-weight: normal;
-                }
-                
-                .counselor-message.interrupted .text {
-                    color: #999;
-                }
+        .language-select {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        /* Customization Panel */
+        .customization-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+        }
+        
+        .customization-panel .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #667eea;
+            cursor: pointer;
+        }
+        
+        .settings-toggle {
+            background: none;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px 8px;
+            color: #667eea;
+            transition: transform 0.2s;
+        }
+        
+        .settings-toggle:hover {
+            transform: scale(1.1);
+        }
+        
+        .settings-content {
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .setting-item {
+            margin-bottom: 20px;
+        }
+        
+        .setting-item:last-of-type {
+            margin-bottom: 15px;
+        }
+        
+        .setting-label {
+            display: block;
+            font-weight: 600;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .setting-description {
+            display: block;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .slider-container input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .slider-container input[type="range"]::-webkit-slider-thumb:hover {
+            background: #764ba2;
+        }
+        
+        .slider-container input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+        }
+        
+        .slider-container input[type="range"]::-moz-range-thumb:hover {
+            background: #764ba2;
+        }
+        
+        .slider-value {
+            min-width: 40px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 13px;
+            color: #667eea;
+        }
+        
+        .reset-button {
+            width: 100%;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: #666;
+        }
+        
+        .reset-button:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .transcript-panel, .conversation-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+        }
+        
+        .panel-header {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .current-transcript {
+            min-height: 60px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        .current-transcript .final {
+            color: #000;
+        }
+        
+        .current-transcript .interim {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .conversation-history {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 14px;
+        }
+        
+        .conversation-entry {
+            margin-bottom: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            border-left: 3px solid #667eea;
+        }
+        
+        .conversation-entry .timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+        
+        .conversation-entry .text {
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        .counselor-message {
+            margin-bottom: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #e3f2fd;
+            border-left: 3px solid #2196f3;
+        }
 
-                /* Status Indicator */
-                .status-indicator {
-                    position: fixed;
-                    top: 30px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: rgba(255, 255, 255, 0.95);
-                    border-radius: 24px;
-                    padding: 12px 20px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    z-index: 1000;
-                    transition: opacity 0.3s ease, all 0.3s ease;
-                }
+        .counselor-message .label {
+            font-weight: 600;
+            font-size: 13px;
+            color: #1976d2;
+            display: block;
+            margin-bottom: 6px;
+        }
 
-                .status-dot {
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                    background: #999;
-                    transition: background 0.3s ease;
-                }
+        .counselor-message .text {
+            color: #333;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        .counselor-message.interrupted {
+            background: #f5f5f5;
+            border-left: 3px solid #999;
+            opacity: 0.6;
+        }
+        
+        .counselor-message.interrupted .label {
+            color: #999;
+        }
+        
+        .counselor-message.interrupted .label::after {
+            content: " (interrupted)";
+            font-size: 11px;
+            font-weight: normal;
+        }
+        
+        .counselor-message.interrupted .text {
+            color: #999;
+        }
 
-                .status-indicator.listening .status-dot {
-                    background: #2196f3;
-                    animation: pulse-dot 1.5s infinite;
-                }
+        /* Status Indicator */
+        .status-indicator {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            padding: 12px 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: 1000;
+            transition: opacity 0.3s ease, all 0.3s ease;
+        }
 
-                .status-indicator.thinking .status-dot {
-                    background: #ff9800;
-                    animation: pulse-dot 1.5s infinite;
-                }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #999;
+            transition: background 0.3s ease;
+        }
 
-                .status-indicator.speaking .status-dot {
-                    background: #4caf50;
-                    animation: pulse-dot 1.5s infinite;
-                }
+        .status-indicator.listening .status-dot {
+            background: #2196f3;
+            animation: pulse-dot 1.5s infinite;
+        }
 
-                .status-label {
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #333;
-                    user-select: none;
-                }
+        .status-indicator.thinking .status-dot {
+            background: #ff9800;
+            animation: pulse-dot 1.5s infinite;
+        }
 
-                .status-indicator.listening .status-label {
-                    color: #2196f3;
-                }
+        .status-indicator.speaking .status-dot {
+            background: #4caf50;
+            animation: pulse-dot 1.5s infinite;
+        }
 
-                .status-indicator.thinking .status-label {
-                    color: #ff9800;
-                }
+        .status-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            user-select: none;
+        }
 
-                .status-indicator.speaking .status-label {
-                    color: #4caf50;
-                }
+        .status-indicator.listening .status-label {
+            color: #2196f3;
+        }
 
-                @keyframes pulse-dot {
-                    0%, 100% {
-                        transform: scale(1);
-                        opacity: 1;
-                    }
-                    50% {
-                        transform: scale(1.2);
-                        opacity: 0.7;
-                    }
-                }
+        .status-indicator.thinking .status-label {
+            color: #ff9800;
+        }
 
-                .conversation-history::-webkit-scrollbar,
-                .current-transcript::-webkit-scrollbar {
-                    width: 6px;
-                }
-                
-                .conversation-history::-webkit-scrollbar-track,
-                .current-transcript::-webkit-scrollbar-track {
-                    background: #f1f1f1;
-                    border-radius: 3px;
-                }
-                
-                .conversation-history::-webkit-scrollbar-thumb,
-                .current-transcript::-webkit-scrollbar-thumb {
-                    background: #888;
-                    border-radius: 3px;
-                }
-            `;
+        .status-indicator.speaking .status-label {
+            color: #4caf50;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+        }
+
+        .conversation-history::-webkit-scrollbar,
+        .current-transcript::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .conversation-history::-webkit-scrollbar-track,
+        .current-transcript::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .conversation-history::-webkit-scrollbar-thumb,
+        .current-transcript::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+
+        /* Setting Groups */
+        .setting-group {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .setting-group:last-of-type {
+            border-bottom: none;
+            margin-bottom: 15px;
+        }
+        
+        .setting-label {
+            display: block;
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .setting-description {
+            display: block;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        
+        /* Level Buttons */
+        .level-buttons {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;  /* 6px → 8px */
+        }
+        
+        .level-btn {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 8px 6px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;  /* 4px → 6px */
+            color: #666;
+            min-height: 70px;
+            position: relative;
+        }
+        
+        .level-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+        }
+        
+        .level-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .level-indicator {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: #999;
+            transition: all 0.2s ease;
+        }
+        
+        .level-btn.active .level-indicator {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        }
+        
+        .level-btn:hover .level-indicator {
+            background: #667eea;
+            color: white;
+        }
+        
+        .level-name {
+            text-align: center;
+            line-height: 1.3;
+            font-size: 10.5px
+            white-space: normal;
+            word-break: keep-all;
+            hyphens: none;
+        }
+        
+        .reset-button {
+            width: 100%;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .reset-button:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+    `;
     document.head.appendChild(style);
   }
 
@@ -645,17 +869,6 @@ export class UIController {
     if (this.ttsStatus) {
       this.ttsStatus.style.display = isSpeaking ? "flex" : "none";
     }
-  }
-
-  // Customization UI helpers
-  updateIntensityValue(value) {
-    this.intensityValue.textContent = value.toFixed(1);
-    this.intensitySlider.value = Math.round(value * 100);
-  }
-
-  updateFrequencyValue(value) {
-    this.frequencyValue.textContent = value.toFixed(1);
-    this.frequencySlider.value = Math.round(value * 100);
   }
 
   // Start new session (clear everything)

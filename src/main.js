@@ -142,45 +142,38 @@ function initializeSpeechRecognition() {
   initializeTTS();
 
   // Initialize Micro Response controller with current settings
-  const currentSettings = customizationManager.getActualSettings();
+  const currentSettings = customizationManager.getSettings();
   microResponseController = new MicroResponseController(avatarController, {
     baseIntensity: currentSettings.baseIntensity, // 0.3-1.2
-    baseFrequency: currentSettings.baseFrequency, // 0.0-1.0
+    baseFrequency: currentSettings.baseFrequency, // 0.2-1.0
   });
   console.log("✅ Micro response controller initialized!");
 
   // ===== CUSTOMIZATION UI SETUP =====
 
   // Initialize UI with current settings
-  uiController.updateIntensityValue(currentSettings.baseIntensity);
-  uiController.updateFrequencyValue(currentSettings.baseFrequency);
+  uiController.setIntensityLevel(currentSettings.baseIntensity);
+  uiController.setFrequencyLevel(currentSettings.baseFrequency);
 
-  // Connect intensity slider
-  uiController.intensitySlider.addEventListener("input", (e) => {
-    const value = parseInt(e.target.value) / 100;
+  uiController.onIntensityChange = (value) => {
     customizationManager.setBaseIntensity(value);
-    uiController.updateIntensityValue(value);
-  });
+  };
 
-  // Connect frequency slider
-  uiController.frequencySlider.addEventListener("input", (e) => {
-    const value = parseInt(e.target.value) / 100;
+  uiController.onFrequencyChange = (value) => {
     customizationManager.setBaseFrequency(value);
-    uiController.updateFrequencyValue(value);
-  });
+  };
 
-  // Connect reset button
   uiController.resetButton.addEventListener("click", () => {
     customizationManager.resetToDefaults();
     const settings = customizationManager.getSettings();
-    uiController.updateIntensityValue(settings.baseIntensity);
-    uiController.updateFrequencyValue(settings.baseFrequency);
+    uiController.setIntensityLevel(settings.baseIntensity);
+    uiController.setFrequencyLevel(settings.baseFrequency);
   });
 
   // Listen to customization changes and update micro response controller
   customizationManager.addListener((settingName, newValue) => {
     if (microResponseController) {
-      const updatedSettings = customizationManager.getActualSettings();
+      const updatedSettings = customizationManager.getSettings();
       microResponseController.updateCustomization(updatedSettings);
       console.log(
         `🔄 Updated MicroResponse: ${settingName} = ${updatedSettings.baseIntensity.toFixed(
@@ -272,7 +265,7 @@ function initializeSpeechRecognition() {
     addToConversation("counselor", counselorText);
 
     // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
-    const currentSettings = customizationManager.getActualSettings();
+    const currentSettings = customizationManager.getSettings();
     currentCounselorEmotion = counselorEmotion.dominantEmotion;
     let rawFinal =
       currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
