@@ -291,20 +291,6 @@ export class UIController {
             0%, 100% { box-shadow: 0 0 0 0 rgba(245, 87, 108, 0.7); }
             50% { box-shadow: 0 0 0 10px rgba(245, 87, 108, 0); }
         }
-        
-        .clear-button {
-            background: #f5f5f5;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 12px 16px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        .clear-button:hover {
-            background: #e0e0e0;
-        }
 
         .new-session-button {
             background: #ff9800;

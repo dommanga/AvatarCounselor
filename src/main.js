@@ -543,7 +543,10 @@ function initializeTTS() {
     isProcessingResponse = false;
 
     // Restart speech recognition after TTS error
-    if (speechManager && !speechManager.isListening) {
+    // BUT NOT if interrupted (interrupted means user manually stopped via New Session button)
+    if (error === "interrupted") {
+      console.log("ℹ️ TTS interrupted");
+    } else if (speechManager && !speechManager.isListening) {
       console.log("🎤 Resuming speech recognition after TTS error");
       speechManager.start();
     }
