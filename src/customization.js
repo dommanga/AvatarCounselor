@@ -64,7 +64,6 @@ export class CustomizationManager {
       this.settings.baseIntensity = clamped;
       this.saveSettings();
       this.notifyListeners("baseIntensity", clamped);
-      console.log(`⚙️ Base Intensity updated: ${clamped.toFixed(2)}`);
     }
   }
 
@@ -78,7 +77,6 @@ export class CustomizationManager {
       this.settings.baseFrequency = clamped;
       this.saveSettings();
       this.notifyListeners("baseFrequency", clamped);
-      console.log(`⚙️ Base Frequency updated: ${clamped.toFixed(2)}`);
     }
   }
 

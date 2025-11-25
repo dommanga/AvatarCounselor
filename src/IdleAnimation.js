@@ -319,7 +319,7 @@ export class IdleAnimationController {
 
   pauseHeadSway() {
     this.swayPaused = true;
-    console.log("🧍 Head sway pausing (returning to center)");
+    // console.log("🧍 Head sway pausing (returning to center)");
 
     const headBone = this.avatarController.getHeadBone();
     if (!headBone) return;
@@ -345,14 +345,13 @@ export class IdleAnimationController {
         clearInterval(returnInterval);
         headBone.rotation.y = 0;
         this.currentSwayValue = 0;
-        console.log("🧍 Head sway paused at center");
       }
     }, stepDuration);
   }
 
   resumeHeadSway() {
     this.swayPaused = false;
-    console.log("🧍 Head sway resumed");
+    // console.log("🧍 Head sway resumed");
   }
 
   scheduleNextSwayTarget() {

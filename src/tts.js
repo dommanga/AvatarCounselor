@@ -15,15 +15,12 @@ export class TTSManager {
     this.onEnd = null;
     this.onError = null;
 
-    console.log("🔊 TTSManager initialized (OpenAI TTS)");
+    console.log("🔊 TTSManager initialized");
   }
 
   async speak(text, language = "ko-KR") {
-    console.log(`🔍 [DEBUG] speak() called - isSpeaking: ${this.isSpeaking}`);
-
     // Clean up previous audio
     if (this.audio) {
-      console.log(`🔍 [DEBUG] Cleaning up previous audio element`);
       this.audio.pause();
       this.audio.onended = null;
       this.audio.onerror = null;
@@ -38,14 +35,13 @@ export class TTSManager {
     }
 
     try {
-      console.log(`🔊 Requesting TTS: ${text.substring(0, 50)}...`);
+      console.log(`🔊 Requesting TTS`);
 
       // Use APIManager instead of direct fetch
       const audioBuffer = await this.apiManager.generateTTS(text, language);
 
       // Convert ArrayBuffer to Blob
       const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
-      console.log("🔊 Audio blob size:", audioBlob.size, "bytes");
 
       if (audioBlob.size === 0) {
         throw new Error("TTS returned empty audio");
@@ -68,7 +64,6 @@ export class TTSManager {
       };
 
       this.audio.onerror = (event) => {
-        console.log(`🔍 [DEBUG] audio.onerror triggered`);
         this.isSpeaking = false;
         this.cleanupAudio();
         console.error("❌ TTS playback error:", event);
@@ -94,7 +89,6 @@ export class TTSManager {
   }
 
   cleanupAudio() {
-    console.log(`🔍 [DEBUG] cleanupAudio() called`);
     if (this.currentAudioUrl) {
       URL.revokeObjectURL(this.currentAudioUrl);
       this.currentAudioUrl = null;
@@ -103,7 +97,6 @@ export class TTSManager {
   }
 
   stop() {
-    console.log(`🔍 [DEBUG] stop() called - isSpeaking: ${this.isSpeaking}`);
     if (this.audio) {
       const wasPlaying = this.isSpeaking;
 
@@ -114,7 +107,6 @@ export class TTSManager {
       this.cleanupAudio();
 
       if (wasPlaying && this.onError) {
-        console.log(`🔍 [DEBUG] Triggering interrupted callback`);
         this.onError("interrupted");
       }
     }

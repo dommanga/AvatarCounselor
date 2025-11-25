@@ -84,16 +84,11 @@ export class SpeechRecognitionManager {
             ? this.config.shortPhraseDelay
             : this.config.longPhraseDelay;
 
-        console.log(
-          `⏱️  Final debounce: ${delay}ms (${wordCount} words, accumulated: "${this._accumulatedTranscript}")`
-        );
+        console.log(`⏱️  Final debounce: ${delay}ms`);
 
         this._finalDebounceTimer = setTimeout(() => {
           if (this.onFinalTranscript && this._accumulatedTranscript) {
-            console.log(
-              "✅ Processing accumulated transcript:",
-              this._accumulatedTranscript
-            );
+            console.log("✅ Processing accumulated transcript");
             this.onFinalTranscript(this._accumulatedTranscript);
             this._accumulatedTranscript = "";
             this._pendingFinalTranscript = "";
@@ -148,7 +143,9 @@ export class SpeechRecognitionManager {
         } catch (error) {
           // Ignore "already started" errors
           if (error.message && error.message.includes("already")) {
-            console.log("⏭️ Speech recognition already starting, skipping restart");
+            console.log(
+              "⏭️ Speech recognition already starting, skipping restart"
+            );
           } else {
             console.error("Failed to restart recognition:", error);
           }
@@ -213,8 +210,7 @@ export class SpeechRecognitionManager {
       const finalText = this._accumulatedTranscript.trim();
 
       console.log(
-        "⏹️  Stop triggered, processing accumulated transcript immediately:",
-        finalText
+        "⏹️  Stop triggered, processing accumulated transcript immediately"
       );
       if (this.onFinalTranscript && finalText) {
         this.onFinalTranscript(finalText);
@@ -226,7 +222,9 @@ export class SpeechRecognitionManager {
       clearTimeout(this._finalDebounceTimer);
       this._accumulatedTranscript = "";
       this._pendingFinalTranscript = "";
-      console.log("⏹️  Stop triggered, clearing pending transcript (no processing)");
+      console.log(
+        "⏹️  Stop triggered, clearing pending transcript (no processing)"
+      );
     }
 
     this.isListening = false;

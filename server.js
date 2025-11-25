@@ -33,7 +33,7 @@ app.post("/api/sentiment", async (req, res) => {
       return res.json({ sentiment: "neutral" });
     }
 
-    console.log("🔍 Sentiment analysis for chunk:", chunk.substring(0, 50));
+    console.log("🔍 Sentiment analysis for chunk");
 
     const prompt = `Analyze the sentiment of this text chunk briefly.
 Return only ONE word: positive, negative, or neutral.
@@ -60,7 +60,7 @@ Sentiment:`;
       ? sentiment
       : "neutral";
 
-    console.log(`✅ Sentiment: ${finalSentiment}`);
+    console.log(`✅ Final Sentiment analysis completed`);
 
     res.json({ sentiment: finalSentiment });
   } catch (error) {
@@ -82,10 +82,7 @@ app.post("/api/generate-response-with-emotion", async (req, res) => {
       });
     }
 
-    console.log(
-      "💬 Generating counselor response with emotion for:",
-      message.substring(0, 50)
-    );
+    console.log("💬 Generating counselor response with emotion");
 
     // Build conversation context
     let conversationContext = "";
@@ -188,11 +185,7 @@ CRITICAL: Return ONLY valid JSON (no markdown):
       Math.min(1.5, data.counselorEmotion.intensityMultiplier || 1.0)
     );
 
-    console.log(
-      `✅ Response: "${data.response.substring(0, 30)}..." | Emotion: ${
-        data.counselorEmotion.dominantEmotion
-      }, Multiplier: ${data.counselorEmotion.intensityMultiplier}`
-    );
+    console.log(`✅ Response completed`);
 
     res.json(data);
   } catch (error) {
@@ -224,7 +217,7 @@ app.post("/api/tts", async (req, res) => {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    console.log(`🔊 TTS request: ${text.substring(0, 50)}... (${language})`);
+    console.log(`🔊 TTS request`);
 
     // Select voice based on language
     const voice = language === "ko-KR" ? "shimmer" : "nova";
@@ -241,7 +234,7 @@ app.post("/api/tts", async (req, res) => {
     // Convert response to buffer
     const buffer = Buffer.from(await mp3.arrayBuffer());
 
-    console.log(`✅ TTS generated: ${buffer.length} bytes`);
+    console.log(`✅ TTS generated`);
 
     // Send audio as response
     res.set({

@@ -52,7 +52,7 @@ export class MicroResponseController {
       this._minTriggerInterval / this.customization.baseFrequency;
 
     if (now - this._lastTriggerTime < adjustedInterval) {
-      console.log(`⏭️ Micro response debounced (${sentiment})`);
+      // console.log(`⏭️ Micro response debounced`);
       return;
     }
 
@@ -65,9 +65,7 @@ export class MicroResponseController {
       return;
     }
 
-    console.log(
-      `😊 Micro response triggered: ${sentiment} (${microConfig.name})`
-    );
+    console.log(`😊 Micro response triggered`);
 
     // Apply micro response
     this._applyMicroResponse(microConfig);
@@ -468,8 +466,6 @@ export class MicroResponseController {
       ...this.customization,
       ...newCustomization,
     };
-
-    console.log("⚙️ Micro response customization updated:", this.customization);
   }
 
   /**

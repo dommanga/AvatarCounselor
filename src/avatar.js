@@ -142,7 +142,7 @@ export class AvatarController {
    * @param {number} fadeDuration - Fade duration in seconds
    */
   fadeToNeutral(fadeDuration = 1.0) {
-    console.log(`Fading to neutral over ${fadeDuration}s`);
+    // console.log(`Fading to neutral over ${fadeDuration}s`);
 
     // Gradual fade out (20 steps)
     const steps = 20;

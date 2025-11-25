@@ -124,7 +124,7 @@ export class APIManager {
         throw new Error("TTS returned empty audio");
       }
 
-      console.log(`✅ TTS audio received: ${audioBuffer.byteLength} bytes`);
+      // console.log(`✅ TTS audio received: ${audioBuffer.byteLength} bytes`);
       return audioBuffer;
     } catch (e) {
       console.error("❌ generateTTS failed:", e);

@@ -175,11 +175,6 @@ function initializeSpeechRecognition() {
     if (microResponseController) {
       const updatedSettings = customizationManager.getSettings();
       microResponseController.updateCustomization(updatedSettings);
-      console.log(
-        `🔄 Updated MicroResponse: ${settingName} = ${updatedSettings.baseIntensity.toFixed(
-          2
-        )}`
-      );
     }
   });
 
@@ -210,7 +205,6 @@ function initializeSpeechRecognition() {
     if (interimText && interimText.length > 10) {
       const sentiment = await apiManager.analyzeSentiment(interimText);
       if (sentiment !== null) {
-        console.log(`💡 Micro response trigger: ${sentiment}`);
         microResponseController.trigger(sentiment);
       }
     }
@@ -228,7 +222,7 @@ function initializeSpeechRecognition() {
       return;
     }
 
-    console.log("📝 Final transcript:", text);
+    console.log("📝 Final transcript");
     isProcessingResponse = true;
 
     // Stop speech recognition immediately after user finishes speaking
@@ -271,13 +265,14 @@ function initializeSpeechRecognition() {
       currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
     currentFinalIntensity = Math.max(0, rawFinal);
 
-    console.log(
-      `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(
-        2
-      )}, multiplier=${
-        counselorEmotion.intensityMultiplier
-      }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
-    );
+    console.log(`🎭 Full Response`);
+    // console.log(
+    //   `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(
+    //     2
+    //   )}, multiplier=${
+    //     counselorEmotion.intensityMultiplier
+    //   }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
+    // );
 
     // Store counselor text to show when TTS starts
     currentCounselorText = counselorText;
@@ -535,10 +530,7 @@ function initializeTTS() {
       currentCounselorEmotion = null;
       currentFinalIntensity = 0;
       currentCounselorText = null;
-    } else {
-      console.log("ℹ️ TTS was interrupted by user (this is normal)");
     }
-
     // Reset processing flag
     isProcessingResponse = false;
 
@@ -572,14 +564,14 @@ async function speakResponse(text) {
     const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
     const language = hasKorean ? "ko-KR" : "en-US";
 
-    console.log(`🔊 Speaking in ${language}:`, text.substring(0, 50) + "...");
+    console.log(`🔊 Speaking in ${language}`);
 
     // Speak with TTS (callbacks handle UI and lip sync)
     await ttsManager.speak(text, language);
   } catch (error) {
     // Interrupt error: normal
     if (error.message && error.message.includes("interrupted")) {
-      console.log("ℹ️  TTS interrupted by user input");
+      console.log("ℹ️  TTS interrupted");
     } else {
       console.error("❌ Error in TTS:", error);
     }
