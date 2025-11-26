@@ -10,8 +10,6 @@ import { APIManager } from "./APIManager.js";
 import { MicroResponseController } from "./microResponse.js";
 import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
-import { RealtimeManager } from "./realtimeManager.js";
-import { RealtimeAudioPlayer } from "./realtimeAudioPlayer.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -75,10 +73,6 @@ let uiController = null;
 // TTS and Lip Sync managers
 let ttsManager = null;
 let lipSyncController = null;
-
-let realtimeManager = null;
-let realtimeAudioPlayer = null;
-let useRealtimeAPI = false; // Use or not
 
 // Micro Response controller
 let microResponseController = null;
@@ -243,93 +237,58 @@ function initializeSpeechRecognition() {
     uiController.addToHistory(text);
     addToConversation("user", text);
 
-    // ⚡ Realtime API vs Traditional API
-    if (useRealtimeAPI && realtimeManager && realtimeManager.connected) {
-      console.log("🚀 Using Realtime API");
+    const responseData = await apiManager.generateCounselorResponse(
+      text,
+      conversationHistory
+    );
 
-      // Get emotion from traditional API for avatar expression
-      const responseData = await apiManager.generateCounselorResponse(
-        text,
-        conversationHistory
-      );
+    const counselorText = responseData.response || "";
+    const counselorEmotion = responseData.counselorEmotion || {
+      dominantEmotion: "neutral",
+      intensityMultiplier: 1.0,
+    };
 
-      const counselorEmotion = responseData.counselorEmotion || {
-        dominantEmotion: "neutral",
-        intensityMultiplier: 1.0,
-      };
+    if (!counselorText) {
+      console.log("⏭️ Empty counselor text, skipping.");
+      isProcessingResponse = false;
+      uiController.enableMicButton();
 
-      // Set emotion for avatar
-      const currentSettings = customizationManager.getSettings();
-      currentCounselorEmotion = counselorEmotion.dominantEmotion;
-      let rawFinal =
-        currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
-      currentFinalIntensity = Math.max(0, rawFinal);
-
-      console.log(`🎭 Emotion: ${currentCounselorEmotion}`);
-
-      // Initialize currentCounselorText for UI
-      currentCounselorText = "";
-
-      // Send to Realtime API
-      realtimeManager.sendText(text, currentCounselorEmotion);
-    } else {
-      console.log("🔄 Using traditional API");
-
-      const responseData = await apiManager.generateCounselorResponse(
-        text,
-        conversationHistory
-      );
-
-      const counselorText = responseData.response || "";
-      const counselorEmotion = responseData.counselorEmotion || {
-        dominantEmotion: "neutral",
-        intensityMultiplier: 1.0,
-      };
-
-      if (!counselorText) {
-        console.log("⏭️ Empty counselor text, skipping.");
-        isProcessingResponse = false;
-        uiController.enableMicButton();
-
-        // Restart speech recognition
-        if (speechManager && !speechManager.isListening) {
-          console.log("🎤 Resuming speech recognition");
-          speechManager.start();
-        }
-        return;
+      // Restart speech recognition
+      if (speechManager && !speechManager.isListening) {
+        console.log("🎤 Resuming speech recognition");
+        speechManager.start();
       }
-
-      // Store for conversation history
-      addToConversation("counselor", counselorText);
-
-      // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
-      const currentSettings = customizationManager.getSettings();
-      currentCounselorEmotion = counselorEmotion.dominantEmotion;
-      let rawFinal =
-        currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
-      currentFinalIntensity = Math.max(0, rawFinal);
-
-      console.log(`🎭 Full Response`);
-      // console.log(
-      //   `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(
-      //     2
-      //   )}, multiplier=${
-      //     counselorEmotion.intensityMultiplier
-      //   }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
-      // );
-
-      // Store counselor text to show when TTS starts
-      currentCounselorText = counselorText;
-
-      avatarController.setEmotion(
-        currentCounselorEmotion,
-        currentFinalIntensity
-      );
-      // TTS start
-      void speakResponse(counselorText).catch((err) =>
-        console.warn("TTS play error:", err)
-      );
+      return;
     }
+
+    // Store for conversation history
+    addToConversation("counselor", counselorText);
+
+    // ===== APPLY COUNSELOR EMOTION with CUSTOMIZATION =====
+    const currentSettings = customizationManager.getSettings();
+    currentCounselorEmotion = counselorEmotion.dominantEmotion;
+    let rawFinal =
+      currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
+    currentFinalIntensity = Math.max(0, rawFinal);
+
+    console.log(`🎭 Full Response`);
+    // console.log(
+    //   `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(
+    //     2
+    //   )}, multiplier=${
+    //     counselorEmotion.intensityMultiplier
+    //   }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
+    // );
+
+    // Store counselor text to show when TTS starts
+    currentCounselorText = counselorText;
+
+    // TTS start
+    void speakResponse(counselorText).catch((err) =>
+      console.warn("TTS play error:", err)
+    );
+
+    avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
   };
 
   speechManager.onError = (error) => {
@@ -355,11 +314,6 @@ function initializeSpeechRecognition() {
     if (buttonText === "Stop Conversation") {
       // Stop everything
       speechManager.stop(false);
-
-      // Stop Realtime API if active
-      if (realtimeAudioPlayer && realtimeAudioPlayer.playing) {
-        realtimeAudioPlayer.stop();
-      }
 
       // Stop TTS if playing
       if (ttsManager && ttsManager.isSpeaking) {
@@ -441,8 +395,6 @@ function initializeSpeechRecognition() {
   });
 
   console.log("✅ Speech recognition initialized!");
-
-  initializeRealtimeAPI();
 }
 
 // Initialize TTS system
@@ -630,199 +582,6 @@ async function speakResponse(text) {
       console.error("❌ Error in TTS:", error);
     }
     // Continue even if TTS fails
-  }
-}
-
-// Initialize Realtime API
-async function initializeRealtimeAPI() {
-  console.log("🔌 Initializing Realtime API...");
-
-  try {
-    // Create managers
-    realtimeManager = new RealtimeManager("ws://localhost:3000/realtime");
-    realtimeAudioPlayer = new RealtimeAudioPlayer();
-
-    // Connect to Realtime API
-    await realtimeManager.connect();
-
-    // Initialize session
-    realtimeManager.initializeSession("ko-KR");
-
-    // Setup callbacks
-    realtimeManager.onSessionCreated = (session) => {
-      console.log("✅ Realtime session created");
-    };
-
-    realtimeManager.onResponseStarted = (response) => {
-      console.log("🎤 Realtime response started");
-
-      // Show counselor message in UI (will be updated with transcript)
-      if (currentCounselorText) {
-        uiController.addCounselorMessage(currentCounselorText);
-      }
-
-      uiController.setSpeakingStatus(true);
-      lipSyncController.start();
-
-      if (idleAnimationController) {
-        idleAnimationController.pauseHeadSway();
-      }
-
-      // Stop micro response
-      if (
-        microResponseController?.isActive() ||
-        microResponseController?.isNodding()
-      ) {
-        microResponseController.stopImmediate();
-      }
-
-      // Start expression fluctuation
-      if (currentCounselorEmotion && currentFinalIntensity > 0) {
-        startExpressionFluctuation();
-      }
-    };
-
-    realtimeManager.onAudioDelta = async (audioChunk) => {
-      // Play audio chunk in real-time
-      await realtimeAudioPlayer.addChunk(audioChunk);
-    };
-
-    realtimeManager.onTranscriptDelta = (delta) => {
-      // Update counselor message with streaming transcript
-      currentCounselorText = (currentCounselorText || "") + delta;
-    };
-
-    realtimeManager.onTranscriptDone = (fullTranscript) => {
-      console.log("📝 Full transcript:", fullTranscript);
-      currentCounselorText = fullTranscript;
-
-      // Update UI with complete text
-      uiController.updateLastCounselorMessage(fullTranscript);
-
-      // Store in conversation history
-      addToConversation("counselor", fullTranscript);
-    };
-
-    realtimeManager.onResponseDone = (response) => {
-      console.log("✅ Realtime response completed");
-
-      // Signal audio player that stream ended
-      realtimeAudioPlayer.endStream();
-    };
-
-    // Audio player callbacks
-    realtimeAudioPlayer.onStart = () => {
-      console.log("🔊 Audio playback started");
-    };
-
-    realtimeAudioPlayer.onEnd = () => {
-      console.log("🔇 Audio playback ended");
-
-      uiController.setSpeakingStatus(false);
-      uiController.enableMicButton();
-      lipSyncController.stop();
-
-      // Stop expression fluctuation
-      if (expressionInterval) {
-        clearInterval(expressionInterval);
-        expressionInterval = null;
-      }
-
-      if (idleAnimationController) {
-        idleAnimationController.resumeHeadSway();
-      }
-
-      avatarController.fadeToNeutral(1.0);
-
-      // Reset state
-      currentCounselorEmotion = null;
-      currentFinalIntensity = 0;
-      currentCounselorText = null;
-      isProcessingResponse = false;
-
-      // Restart speech recognition
-      if (speechManager && !speechManager.isListening) {
-        console.log("🎤 Resuming speech recognition after Realtime response");
-        speechManager.start();
-      }
-    };
-
-    realtimeAudioPlayer.onError = (error) => {
-      console.error("❌ Audio player error:", error);
-      handleRealtimeError(error);
-    };
-
-    realtimeManager.onError = (error) => {
-      console.error("❌ Realtime API error:", error);
-      handleRealtimeError(error);
-    };
-
-    console.log("✅ Realtime API initialized!");
-  } catch (error) {
-    console.error("❌ Failed to initialize Realtime API:", error);
-    console.log("⚠️ Falling back to traditional API");
-    useRealtimeAPI = false;
-  }
-}
-
-// Start expression fluctuation (extracted from existing code)
-function startExpressionFluctuation() {
-  // Clear any existing interval
-  if (expressionInterval) {
-    clearInterval(expressionInterval);
-  }
-
-  let time = 0;
-  let fadeInProgress = 0;
-  const fadeInDuration = 1.0;
-  const fadeInSteps = (fadeInDuration * 1000) / 100;
-
-  expressionInterval = setInterval(() => {
-    time += 0.1;
-
-    if (fadeInProgress < 1) {
-      fadeInProgress += 1 / fadeInSteps;
-      fadeInProgress = Math.min(1, fadeInProgress);
-    }
-
-    const sineValue = Math.sin(time);
-    const variation = 1.0 + sineValue * 0.1;
-
-    avatarController.setEmotion(
-      currentCounselorEmotion,
-      currentFinalIntensity * variation * fadeInProgress
-    );
-  }, 100);
-
-  console.log("🔄 Expression fluctuation started");
-}
-
-// Handle Realtime API errors
-function handleRealtimeError(error) {
-  uiController.setSpeakingStatus(false);
-  uiController.enableMicButton();
-  lipSyncController.stop();
-
-  if (expressionInterval) {
-    clearInterval(expressionInterval);
-    expressionInterval = null;
-  }
-
-  if (idleAnimationController) {
-    idleAnimationController.resumeHeadSway();
-  }
-
-  avatarController.fadeToNeutral(0.3);
-
-  currentCounselorEmotion = null;
-  currentFinalIntensity = 0;
-  currentCounselorText = null;
-  isProcessingResponse = false;
-
-  // Restart speech recognition
-  if (speechManager && !speechManager.isListening) {
-    console.log("🎤 Resuming speech recognition after error");
-    speechManager.start();
   }
 }
 
