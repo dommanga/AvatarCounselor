@@ -16,8 +16,7 @@ const openai = new OpenAI({
 
 // Model configuration
 const SENTIMENT_MODEL = "gpt-4o-mini";
-const EMOTION_MODEL = "gpt-4o";
-const COUNSELOR_MODEL = "gpt-4o";
+const COUNSELOR_MODEL = "gpt-4o-mini";
 
 app.use(cors());
 app.use(express.json());
@@ -100,7 +99,7 @@ ${conversationContext ? `Conversation history:\n${conversationContext}\n` : ""}
 User just said: "${message}"
 
 Generate:
-1. An empathetic and supportive response (2-3 sentences)
+1. An empathetic and supportive response (1-3 sentences)
 2. The facial expression YOU should show while delivering this response
    - Your avatar will display this emotion through realistic facial expressions
    - Choose the emotion that best conveys empathy and support
@@ -130,7 +129,7 @@ Generate:
 
 Guidelines for response:
 - Response should validate feelings and show understanding
-- Keep responses natural and conversational (2-3 sentences)
+- Keep responses natural and conversational (1-3 sentences)
 - Match the language of input (Korean/English)
 - Your facial expression should enhance, not contradict, your words
 
