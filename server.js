@@ -2,6 +2,9 @@ import express from "express";
 import OpenAI from "openai";
 import cors from "cors";
 import dotenv from "dotenv";
+import { WebSocketServer } from "ws";
+import { createServer } from "http";
+import WebSocket from "ws";
 
 dotenv.config();
 
@@ -268,12 +271,96 @@ app.get("/health", (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════
+// Create HTTP Server (for both Express and WebSocket)
+// ═════════════════════════════════════════════════════════════════════
+const server = createServer(app);
+
+// ═════════════════════════════════════════════════════════════════════
+// WebSocket Proxy for Realtime API
+// ═════════════════════════════════════════════════════════════════════
+const wss = new WebSocketServer({ server, path: "/realtime" });
+
+wss.on("connection", (clientWs) => {
+  console.log("🔌 Client connected to Realtime proxy");
+
+  let openaiWs = null;
+
+  try {
+    // Connect to OpenAI Realtime API
+    openaiWs = new WebSocket(
+      "wss://api.openai.com/v1/realtime?model=gpt-realtime",
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "OpenAI-Beta": "realtime=v1",
+        },
+      }
+    );
+
+    // OpenAI connection opened
+    openaiWs.on("open", () => {
+      console.log("✅ Connected to OpenAI Realtime API");
+    });
+
+    // OpenAI → Client (forward all messages)
+    openaiWs.on("message", (data) => {
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(data);
+      }
+    });
+
+    // Client → OpenAI (forward all messages)
+    clientWs.on("message", (data) => {
+      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.send(data);
+      }
+    });
+
+    // Error handling
+    openaiWs.on("error", (error) => {
+      console.error("❌ OpenAI WebSocket error:", error.message);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.close(1011, "OpenAI connection error");
+      }
+    });
+
+    clientWs.on("error", (error) => {
+      console.error("❌ Client WebSocket error:", error.message);
+      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.close();
+      }
+    });
+
+    // Connection cleanup
+    openaiWs.on("close", (code, reason) => {
+      console.log(`🔌 OpenAI WebSocket closed: ${code} ${reason}`);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.close();
+      }
+    });
+
+    clientWs.on("close", (code, reason) => {
+      console.log(`🔌 Client disconnected: ${code} ${reason}`);
+      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.close();
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error creating OpenAI WebSocket:", error);
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.close(1011, "Failed to connect to OpenAI");
+    }
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════
 // Start Server
 // ═════════════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`\n🚀 AI Avatar Counselor API - Phase 2 (OpenAI GPT-4)`);
   console.log(`📡 Server running on http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket proxy on ws://localhost:${PORT}/realtime`);
   console.log(
     `✅ OpenAI API Key: ${
       process.env.OPENAI_API_KEY ? "Configured" : "⚠️  Missing!"
@@ -285,5 +372,6 @@ app.listen(PORT, () => {
     `   POST /api/generate-response-with-emotion - Counselor Response with emotion`
   );
   console.log(`   POST /api/tts                 - Text-to-Speech`);
+  console.log(`   WS   /realtime                - Realtime API Proxy`);
   console.log(`   GET  /health                  - Health Check\n`);
 });
