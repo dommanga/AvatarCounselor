@@ -258,7 +258,6 @@ function initializeSpeechRecognition() {
         console.log("🎤 Resuming speech recognition");
         speechManager.start();
       }
-
       return;
     }
 
