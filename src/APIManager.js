@@ -80,10 +80,11 @@ export class APIManager {
     } catch (e) {
       console.error("❌ generateCounselorResponse failed:", e);
       return {
-        response: "",
+        response:
+          "죄송해요, 잠시 생각을 정리하는 데 문제가 있었어요. 방금 하신 말씀을 다시 한 번 말씀해 주시겠어요?",
         counselorEmotion: {
           dominantEmotion: "neutral",
-          intensityMultiplier: 1.0,
+          intensityMultiplier: 0.8,
         },
         error: true,
       };

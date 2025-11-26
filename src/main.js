@@ -252,6 +252,13 @@ function initializeSpeechRecognition() {
       console.log("⏭️ Empty counselor text, skipping.");
       isProcessingResponse = false;
       uiController.enableMicButton();
+
+      // Restart speech recognition
+      if (speechManager && !speechManager.isListening) {
+        console.log("🎤 Resuming speech recognition");
+        speechManager.start();
+      }
+
       return;
     }
 
