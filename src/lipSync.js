@@ -15,14 +15,14 @@ export class LipSyncController {
     // Animation parameters
     this.time = 0;
     this.syllablePhase = 0;
-    this.syllableDuration = 0.3; // seconds per syllable
+    this.syllableDuration = 0.4; // seconds per syllable
     this.pauseChance = 0.15; // 15% chance of brief pause
     this.isPausing = false;
     this.pauseTimer = 0;
 
     // Tunable parameters
-    this.maxJawOpen = 0.5; // Reduced from 0.9
-    this.maxMouthOpen = 0.3; // Added for more natural look
+    this.maxJawOpen = 0.3; // Reduced from 0.9
+    this.maxMouthOpen = 0.2; // Added for more natural look
     this.baseSpeed = 0.12; // Smoother interpolation
     this.variationSpeed = 0.08; // Speed for variation
   }
@@ -72,14 +72,14 @@ export class LipSyncController {
       if (this.syllablePhase >= 1.0) {
         this.syllablePhase = 0;
         // Vary syllable duration slightly
-        this.syllableDuration = 0.25 + Math.random() * 0.2; // 0.25-0.45s
+        this.syllableDuration = 0.4 + Math.random() * 0.3;
       }
 
       // Smooth sine wave for syllable (0 → 1 → 0)
       const syllableProgress = Math.sin(this.syllablePhase * Math.PI);
 
       // Add subtle randomness for variation (reduced amplitude)
-      const variation = Math.sin(this.time * 8) * 0.15; // Slower, smaller variation
+      const variation = Math.sin(this.time * 4) * 0.1; // Slower, smaller variation
 
       // Combine for natural movement
       const intensity = syllableProgress * 0.85 + variation * 0.15;
