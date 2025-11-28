@@ -91,6 +91,10 @@ let isProcessingResponse = false;
 // Current counselor text (to show in UI when TTS starts)
 let currentCounselorText = null;
 
+let currentSessionActive = false;
+
+let currentUserAge = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -122,11 +126,23 @@ loader.load(
 );
 
 // Initialize speech recognition system
-function initializeSpeechRecognition() {
+async function initializeSpeechRecognition() {
   console.log("🎤 Initializing speech recognition...");
 
   // Create UI
   uiController = new UIController();
+
+  // Check if logging is enabled from backend
+  try {
+    const configRes = await fetch("http://localhost:3000/api/config");
+    const config = await configRes.json();
+
+    if (config.loggingEnabled) {
+      uiController.showSessionModal();
+    }
+  } catch (e) {
+    console.warn("⚠️ Could not fetch config, assuming logging disabled");
+  }
 
   // Create speech manager
   speechManager = new SpeechRecognitionManager();
@@ -171,10 +187,20 @@ function initializeSpeechRecognition() {
   });
 
   // Listen to customization changes and update micro response controller
-  customizationManager.addListener((settingName, newValue) => {
+  customizationManager.addListener(async (settingName, newValue) => {
     if (microResponseController) {
       const updatedSettings = customizationManager.getSettings();
       microResponseController.updateCustomization(updatedSettings);
+    }
+
+    // Log settings change (only if session is active and not a reset)
+    if (
+      currentSessionActive &&
+      uiController.getSessionInfo() &&
+      settingName !== "reset"
+    ) {
+      const settings = customizationManager.getSettings();
+      await apiManager.logSettingsChange(settings);
     }
   });
 
@@ -239,7 +265,8 @@ function initializeSpeechRecognition() {
 
     const responseData = await apiManager.generateCounselorResponse(
       text,
-      conversationHistory
+      conversationHistory,
+      currentUserAge
     );
 
     const counselorText = responseData.response || "";
@@ -280,6 +307,19 @@ function initializeSpeechRecognition() {
     //   }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
     // );
 
+    // Turn logging
+    if (uiController.getSessionInfo()) {
+      await apiManager.logTurn({
+        userTranscript: text,
+        counselorResponse: counselorText,
+        counselorEmotion: {
+          dominantEmotion: counselorEmotion.dominantEmotion,
+          intensityMultiplier: counselorEmotion.intensityMultiplier,
+          finalIntensity: currentFinalIntensity,
+        },
+      });
+    }
+
     // Store counselor text to show when TTS starts
     currentCounselorText = counselorText;
 
@@ -307,7 +347,7 @@ function initializeSpeechRecognition() {
   };
 
   // Connect UI buttons
-  uiController.micButton.addEventListener("click", () => {
+  uiController.micButton.addEventListener("click", async () => {
     const buttonText =
       uiController.micButton.querySelector(".status-text").textContent;
 
@@ -349,12 +389,38 @@ function initializeSpeechRecognition() {
       uiController.setRestartState();
     } else {
       // Start or restart
+
+      // Start session logging ONLY if not already active
+      if (!currentSessionActive) {
+        const sessionInfo = uiController.getSessionInfo();
+        console.log("🔍 Session info:", sessionInfo);
+
+        if (sessionInfo) {
+          const currentSettings = customizationManager.getSettings();
+          const language = speechManager.getLanguage();
+
+          await apiManager.startSession({
+            ...sessionInfo,
+            customizationSettings: currentSettings,
+            language,
+          });
+
+          currentSessionActive = true;
+          currentUserAge = sessionInfo.age;
+          console.log("✅ Session logging started");
+        } else {
+          console.log("⚠️ No session info available");
+        }
+      } else {
+        console.log("⏭️ Session already active, skipping start");
+      }
+
       speechManager.start();
       uiController.setStatus("ready", "Ready");
     }
   });
 
-  uiController.newSessionButton.addEventListener("click", () => {
+  uiController.newSessionButton.addEventListener("click", async () => {
     // Stop everything first
     speechManager.stop(false);
 
@@ -382,12 +448,30 @@ function initializeSpeechRecognition() {
 
     isProcessingResponse = false;
 
+    // End session logging
+    if (currentSessionActive && uiController.getSessionInfo()) {
+      await apiManager.endSession();
+      currentSessionActive = false;
+      console.log("✅ Session logging ended");
+    }
+
     // Clear all histories
     uiController.startNewSession();
     speechManager.clearTranscript();
     conversationHistory = [];
 
     console.log("🆕 New session started");
+
+    try {
+      const configRes = await fetch("http://localhost:3000/api/config");
+      const config = await configRes.json();
+
+      if (config.loggingEnabled) {
+        uiController.showSessionModal();
+      }
+    } catch (e) {
+      console.warn("⚠️ Could not fetch config");
+    }
   });
 
   uiController.languageSelect.addEventListener("change", (e) => {

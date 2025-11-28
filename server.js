@@ -2,6 +2,12 @@ import express from "express";
 import OpenAI from "openai";
 import cors from "cors";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -20,6 +26,120 @@ const COUNSELOR_MODEL = "gpt-4o-mini";
 
 app.use(cors());
 app.use(express.json());
+
+// ═════════════════════════════════════════════════════════════════════
+// Session Logger
+// ═════════════════════════════════════════════════════════════════════
+class SessionLogger {
+  constructor() {
+    this.logsDir = path.join(__dirname, "logs");
+    this.currentSession = null;
+    this.enabled = process.env.LOGGING_ENABLED === "true";
+
+    console.log("🔍 SessionLogger initialized:");
+    console.log("   - LOGGING_ENABLED:", process.env.LOGGING_ENABLED);
+
+    if (this.enabled && !fs.existsSync(this.logsDir)) {
+      fs.mkdirSync(this.logsDir, { recursive: true, mode: 0o777 });
+    }
+  }
+
+  startSession(metadata) {
+    if (!this.enabled) return;
+
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, -5);
+    const sessionId = `${metadata.participantId}_condition${metadata.conditionNumber}_${metadata.condition}_${timestamp}`;
+
+    const participantDir = path.join(this.logsDir, metadata.participantId);
+    const sessionDir = path.join(participantDir, sessionId);
+
+    if (!fs.existsSync(participantDir)) {
+      fs.mkdirSync(participantDir, { recursive: true });
+    }
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
+    }
+
+    this.currentSession = {
+      sessionId,
+      sessionDir,
+      metadata: {
+        ...metadata,
+        sessionId,
+        startTime: new Date().toISOString(),
+        settingsChanges: [],
+      },
+      turns: [],
+    };
+
+    this._saveMetadata();
+    console.log(`📝 Session started: ${sessionId}`);
+  }
+
+  logTurn(turnData) {
+    if (!this.enabled || !this.currentSession) {
+      return;
+    }
+
+    const turn = {
+      turnNumber: this.currentSession.turns.length + 1,
+      timestamp: new Date().toISOString(),
+      ...turnData,
+    };
+
+    this.currentSession.turns.push(turn);
+    this._saveConversation();
+  }
+
+  logSettingsChange(settings) {
+    if (!this.enabled || !this.currentSession) return;
+
+    const change = {
+      timestamp: new Date().toISOString(),
+      ...settings,
+    };
+
+    this.currentSession.metadata.settingsChanges.push(change);
+    this._saveMetadata();
+  }
+
+  endSession() {
+    if (!this.enabled || !this.currentSession) return;
+
+    this.currentSession.metadata.endTime = new Date().toISOString();
+    const start = new Date(this.currentSession.metadata.startTime);
+    const end = new Date(this.currentSession.metadata.endTime);
+    this.currentSession.metadata.duration = end - start;
+
+    this._saveMetadata();
+    console.log(`✅ Session ended: ${this.currentSession.sessionId}`);
+    this.currentSession = null;
+  }
+
+  _saveMetadata() {
+    const filePath = path.join(this.currentSession.sessionDir, "metadata.json");
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify(this.currentSession.metadata, null, 2)
+    );
+  }
+
+  _saveConversation() {
+    const filePath = path.join(
+      this.currentSession.sessionDir,
+      "conversation.json"
+    );
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({ turns: this.currentSession.turns }, null, 2)
+    );
+  }
+}
+
+const sessionLogger = new SessionLogger();
 
 // ═════════════════════════════════════════════════════════════════════
 // ENDPOINT 1: Sentiment Analysis (Micro Response)
@@ -73,7 +193,7 @@ Sentiment:`;
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/generate-response-with-emotion", async (req, res) => {
   try {
-    const { message, conversationHistory } = req.body;
+    const { message, conversationHistory, userAge } = req.body;
 
     if (!message || message.trim().length < 2) {
       return res.status(400).json({
@@ -92,50 +212,67 @@ app.post("/api/generate-response-with-emotion", async (req, res) => {
         .join("\n");
     }
 
-    const prompt = `You are an empathetic AI counselor with an avatar that can express emotions through facial expressions.
+    const age = userAge || 23;
+
+    const prompt = `You are a peer counselor AI avatar - a trained friend who has learned counseling skills like active listening, empathy, and reflection.
+
+As a peer counselor, you:
+- Listen with genuine care and show understanding through both words and facial expressions
+- Use basic counseling skills: validate feelings, reflect what you hear, ask gentle follow-up questions when appropriate
+- Offer emotional support and companionship, not professional diagnosis or advice
+- Communicate like a caring peer of similar age who has been trained to help
+- Balance warmth and professionalism - friendly but not casual, supportive but not prescriptive
 
 ${conversationContext ? `Conversation history:\n${conversationContext}\n` : ""}
 
-User just said: "${message}"
+User (age ${age} years old) just said: "${message}"
 
 Generate:
-1. An empathetic and supportive response (1-3 sentences)
+1. A supportive and empathetic response (1-3 sentences)
+   - Use peer counseling skills: validate emotions, reflect key feelings/thoughts, show you're truly listening
+   - When helpful, gently invite them to explore their feelings further (but don't interrogate)
+   - Balance being relatable and being helpful - you're a trained peer, not just a friend
+   - Match the language of input:
+     * Korean: Use polite form (존댓말: -요, -세요 endings) with warm, friendly tone
+     * English: Use conversational, supportive language
+   - Use age-appropriate language (user is ${age} years old)
+   - Avoid overly clinical or formal phrasing
+   - Your facial expression should match and enhance your words
+
 2. The facial expression YOU should show while delivering this response
    - Your avatar will display this emotion through realistic facial expressions
-   - Choose the emotion that best conveys empathy and support
+   - Choose the emotion that best conveys peer support and understanding
   
    Available expressions:
-   - joy: warm smile when user shares good news or progress
-   - sadness: empathic concern when user expresses CLEAR pain or difficulty
-   - anger: supportive validation when user expresses frustration
-   - fear: calm reassurance when user expresses worry
-   - surprise: genuine interest when user shares unexpected news
-   - disgust: acknowledging difficult or unfair situations
-   - neutral: calm presence for greetings, casual conversation, or opening statements
+   - joy: warm smile when they share good news or positive moments
+   - sadness: empathic concern when they express clear pain or difficulty
+   - anger: supportive validation when they express frustration or unfairness
+   - fear: gentle reassurance when they express worry or anxiety
+   - surprise: genuine interest when they share unexpected news
+   - disgust: acknowledging difficult or unjust situations with them
+   - neutral: calm, attentive presence for greetings, casual talk, or when just listening
 
-   IMPORTANT Guidelines:
-   - Default to neutral for greetings, introductions, or opening statements
-   - Willingness to talk/share ≠ emotional distress (use neutral, not sadness)
-   - Only use strong emotions when user explicitly describes difficult feelings or situations
-   - Your expression should match the tone of your response
-   - If uncertain between neutral and emotional, choose emotional with lower multiplier (0.85-0.90)
+   IMPORTANT Guidelines for peer counseling context:
+   - Default to neutral for greetings, introductions, or casual conversation
+   - Just because someone is willing to talk ≠ they're in distress (use neutral, not sadness)
+   - Only use stronger emotions when they explicitly describe difficult feelings or situations
+   - Your expression should feel like a trained peer counselor's natural reaction - caring but composed
+   - Your expression should feel like a friend's natural reaction, not clinical assessment
+   - Match your expression to your supportive words
+   - When uncertain between neutral and emotional, choose the emotional one with lower multiplier (0.85-0.90)
 
 3. Intensity Multiplier (0.85 to 1.15)
    - This controls how strongly the facial expression is displayed
-   - 0.85-0.90: Light conversation, subtle expression
-   - 0.95-1.00: Normal emotional expression
-   - 1.05-1.10: Significant emotional moment, clear expression
-   - 1.15: Strong emotional peak, pronounced expression
-
-Guidelines for response:
-- Response should validate feelings and show understanding
-- Keep responses natural and conversational (1-3 sentences)
-- Match the language of input (Korean/English)
-- Your facial expression should enhance, not contradict, your words
+   - Think: how would a caring peer friend naturally react?
+   
+   - 0.85-0.90: Light conversation, just checking in, subtle expression
+   - 0.95-1.00: Normal emotional moment, natural peer reaction
+   - 1.05-1.10: Significant moment they're sharing, clear supportive expression
+   - 1.15: Really important/intense moment, pronounced caring expression
 
 CRITICAL: Return ONLY valid JSON (no markdown):
 {
-  "response": "your empathetic response here",
+  "response": "your peer counselor response here",
   "counselorEmotion": {
     "dominantEmotion": "sadness",
     "intensityMultiplier": 0.95
@@ -251,6 +388,90 @@ app.post("/api/tts", async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════
+// Session Logging Endpoints
+// ═════════════════════════════════════════════════════════════════════
+app.post("/api/session/start", (req, res) => {
+  try {
+    const {
+      participantId,
+      age,
+      group,
+      conditionNumber,
+      condition,
+      customizationSettings,
+      language,
+    } = req.body;
+
+    sessionLogger.startSession({
+      participantId,
+      age,
+      group,
+      conditionNumber,
+      condition,
+      language,
+      initialSettings: customizationSettings,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Session start error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/session/log-turn", (req, res) => {
+  try {
+    const { userTranscript, counselorResponse, counselorEmotion } = req.body;
+
+    sessionLogger.logTurn({
+      userTranscript,
+      counselorResponse,
+      counselorEmotion,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Turn logging error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/session/log-settings", (req, res) => {
+  try {
+    const { baseIntensity, baseFrequency } = req.body;
+
+    sessionLogger.logSettingsChange({
+      baseIntensity,
+      baseFrequency,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Settings logging error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/session/end", (req, res) => {
+  try {
+    sessionLogger.endSession();
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Session end error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Config Endpoint
+// ═════════════════════════════════════════════════════════════════════
+app.get("/api/config", (req, res) => {
+  res.json({
+    loggingEnabled: process.env.LOGGING_ENABLED === "true",
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════
 // Health Check
 // ═════════════════════════════════════════════════════════════════════
 app.get("/health", (req, res) => {
@@ -271,11 +492,16 @@ app.get("/health", (req, res) => {
 // ═════════════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`\n🚀 AI Avatar Counselor API - Phase 2 (OpenAI GPT-4)`);
+  console.log(`\n🚀 AI Avatar Counselor API`);
   console.log(`📡 Server running on http://localhost:${PORT}`);
   console.log(
     `✅ OpenAI API Key: ${
       process.env.OPENAI_API_KEY ? "Configured" : "⚠️  Missing!"
+    }`
+  );
+  console.log(
+    `📝 Session Logging: ${
+      process.env.LOGGING_ENABLED === "true" ? "Enabled ✅" : "Disabled"
     }`
   );
   console.log(`\n📋 Available endpoints:`);
@@ -284,5 +510,9 @@ app.listen(PORT, () => {
     `   POST /api/generate-response-with-emotion - Counselor Response with emotion`
   );
   console.log(`   POST /api/tts                 - Text-to-Speech`);
+  console.log(`   POST /api/session/start       - Start session logging`);
+  console.log(`   POST /api/session/log-turn    - Log conversation turn`);
+  console.log(`   POST /api/session/log-settings - Log settings change`);
+  console.log(`   POST /api/session/end         - End session logging`);
   console.log(`   GET  /health                  - Health Check\n`);
 });

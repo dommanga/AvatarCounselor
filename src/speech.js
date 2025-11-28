@@ -261,6 +261,10 @@ export class SpeechRecognitionManager {
     this.recognition.lang = lang;
   }
 
+  getLanguage() {
+    return this.recognition.lang;
+  }
+
   // Debounce delay managing method
   setFinalDelay(shortDelay, longDelay, threshold) {
     this.config.shortPhraseDelay = shortDelay || this.config.shortPhraseDelay;

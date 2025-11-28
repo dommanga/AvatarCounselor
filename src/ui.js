@@ -1,6 +1,12 @@
 // UI controller for speech recognition interface with customization
 export class UIController {
   constructor() {
+    // Session info storage
+    this.sessionInfo = null;
+
+    // Create session start modal
+    this.createSessionModal();
+
     this.conversationHistory = [];
     this.lastCounselorMessageElement = null;
     this.setupUI();
@@ -919,5 +925,155 @@ export class UIController {
       this.statusIndicator.style.pointerEvents = "auto";
       this.setStatus("ready", "Ready");
     }
+  }
+
+  createSessionModal() {
+    const modal = document.createElement("div");
+    modal.id = "session-modal";
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000; 
+    `;
+
+    modal.innerHTML = `
+      <div style="background: white; padding: 30px; border-radius: 10px; max-width: 400px; width: 90%;">
+        <h2 style="margin-top: 0;">Session Information</h2>
+
+        <div class="keep-previous-container" style="margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="keep-previous-info" style="margin-right: 8px; cursor: pointer;">
+            <span>Keep previous participant info</span>
+          </label>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px;">Participant ID:</label>
+          <input type="text" id="participant-id" placeholder="P01" 
+                 style="width: 100%; padding: 8px; box-sizing: border-box;">
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px;">Age:</label>
+          <input type="number" id="participant-age" placeholder="23" 
+                 style="width: 100%; padding: 8px; box-sizing: border-box;">
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px;">Group:</label>
+          <select id="participant-group" style="width: 100%; padding: 8px;">
+            <option value="Group1">Group 1 (Default → Customized)</option>
+            <option value="Group2">Group 2 (Customized → Default)</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px;">Condition Number:</label>
+          <select id="condition-number" style="width: 100%; padding: 8px;">
+            <option value="1">Condition 1</option>
+            <option value="2">Condition 2</option>
+          </select>
+        </div>
+        <button id="start-session-btn" 
+                style="width: 100%; padding: 12px; background: #4CAF50; color: white; 
+                       border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+          Start Session
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    this.sessionModal = modal;
+
+    const keepPreviousCheckbox = document.getElementById("keep-previous-info");
+    const participantIdInput = document.getElementById("participant-id");
+    const ageInput = document.getElementById("participant-age");
+    const groupSelect = document.getElementById("participant-group");
+
+    keepPreviousCheckbox.addEventListener("change", (e) => {
+      const isChecked = e.target.checked;
+
+      if (isChecked && this.sessionInfo) {
+        participantIdInput.value = this.sessionInfo.participantId;
+        ageInput.value = this.sessionInfo.age;
+        groupSelect.value = this.sessionInfo.group;
+
+        participantIdInput.disabled = true;
+        ageInput.disabled = true;
+        groupSelect.disabled = true;
+      } else {
+        participantIdInput.disabled = false;
+        ageInput.disabled = false;
+        groupSelect.disabled = false;
+      }
+    });
+
+    document
+      .getElementById("start-session-btn")
+      .addEventListener("click", () => {
+        const participantId = document
+          .getElementById("participant-id")
+          .value.trim();
+        const age = document.getElementById("participant-age").value;
+        const group = document.getElementById("participant-group").value;
+        const conditionNumber =
+          document.getElementById("condition-number").value;
+
+        if (!participantId || !age) {
+          alert("Please fill in Participant ID and Age");
+          return;
+        }
+
+        let condition;
+        if (group === "Group1") {
+          condition = conditionNumber === "1" ? "Default" : "Customized";
+        } else {
+          // Group2
+          condition = conditionNumber === "1" ? "Customized" : "Default";
+        }
+
+        this.sessionInfo = {
+          participantId,
+          age: parseInt(age),
+          group,
+          conditionNumber: parseInt(conditionNumber),
+          condition,
+        };
+
+        this.sessionModal.style.display = "none";
+
+        if (this.onSessionStart) {
+          this.onSessionStart(this.sessionInfo);
+        }
+      });
+  }
+
+  showSessionModal() {
+    this.sessionModal.style.display = "flex";
+
+    const keepPreviousDiv = this.sessionModal.querySelector(
+      ".keep-previous-container"
+    );
+    const keepPreviousCheckbox = document.getElementById("keep-previous-info");
+
+    if (this.sessionInfo) {
+      if (keepPreviousDiv) {
+        keepPreviousDiv.style.display = "block";
+      }
+      keepPreviousCheckbox.checked = true;
+      keepPreviousCheckbox.dispatchEvent(new Event("change"));
+    } else {
+      if (keepPreviousDiv) {
+        keepPreviousDiv.style.display = "none";
+      }
+    }
+  }
+
+  getSessionInfo() {
+    return this.sessionInfo;
   }
 }
