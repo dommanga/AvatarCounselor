@@ -11,6 +11,9 @@ import { MicroResponseController } from "./microResponse.js";
 import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
 
+// sessionStorage.clear();
+const DEV_DEFAULT_AVATAR = "female";
+
 // Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf0f0f0);
@@ -41,10 +44,10 @@ controls.enableZoom = false;
 controls.enablePan = false;
 
 // Lights
-const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
+const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 3.0);
 directionalLight.position.set(5, 10, 5);
 directionalLight.castShadow = true;
 scene.add(directionalLight);
@@ -143,7 +146,8 @@ function loadAvatar() {
     idleAnimationController.stop();
   }
 
-  const selectedAvatar = sessionStorage.getItem("selectedAvatar") || "female";
+  const selectedAvatar =
+    sessionStorage.getItem("selectedAvatar") || DEV_DEFAULT_AVATAR;
   const avatarPath =
     selectedAvatar === "male"
       ? "./assets/avatar_boy.glb"
@@ -689,7 +693,8 @@ async function speakResponse(text) {
 
     console.log(`🔊 Speaking in ${language}`);
 
-    const selectedAvatar = sessionStorage.getItem("selectedAvatar") || "female";
+    const selectedAvatar =
+      sessionStorage.getItem("selectedAvatar") || DEV_DEFAULT_AVATAR;
 
     // Speak with TTS (callbacks handle UI and lip sync)
     await ttsManager.speak(text, language, selectedAvatar);

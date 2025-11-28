@@ -370,7 +370,7 @@ app.post("/api/tts", async (req, res) => {
         "en-US": "nova",
       },
       male: {
-        "ko-KR": "onyx",
+        "ko-KR": "cedar",
         "en-US": "echo",
       },
     };
