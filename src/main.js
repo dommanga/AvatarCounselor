@@ -62,6 +62,7 @@ const customizationManager = new CustomizationManager();
 
 // Initialize api manager
 const apiManager = new APIManager();
+window.apiManager = apiManager;
 
 let conversationHistory = []; // [{ speaker: 'user'|'counselor', text, timestamp }]
 
@@ -95,54 +96,86 @@ let currentSessionActive = false;
 
 let currentUserAge = null;
 
+let currentAvatar = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
-loader.load(
-  "./assets/avatar_torso.glb", // GLB File
-  (gltf) => {
-    const avatar = gltf.scene;
-    scene.add(avatar);
-    avatarController.init(avatar);
-    console.log("✅ Avatar loaded successfully!");
-
-    // Initialize Eye Movement
-    idleAnimationController = new IdleAnimationController(avatarController);
-    idleAnimationController.start();
-    console.log("✅ Eye movements started!");
-
-    // Initialize speech recognition after avatar loads
-    initializeSpeechRecognition();
-  },
-  (progress) => {
-    console.log(
-      "Loading:",
-      ((progress.loaded / progress.total) * 100).toFixed(0) + "%"
-    );
-  },
-  (error) => {
-    console.error("❌ Error loading avatar:", error);
-  }
-);
-
-// Initialize speech recognition system
-async function initializeSpeechRecognition() {
-  console.log("🎤 Initializing speech recognition...");
-
-  // Create UI
+(async function init() {
   uiController = new UIController();
 
-  // Check if logging is enabled from backend
+  uiController.onSessionStart = async (sessionInfo) => {
+    loadAvatar();
+  };
+
   try {
     const configRes = await fetch("http://localhost:3000/api/config");
     const config = await configRes.json();
 
     if (config.loggingEnabled) {
       uiController.showSessionModal();
+    } else {
+      loadAvatar();
     }
   } catch (e) {
-    console.warn("⚠️ Could not fetch config, assuming logging disabled");
+    console.warn("⚠️ Could not fetch config");
+    loadAvatar();
   }
+})();
+
+function loadAvatar() {
+  if (currentAvatar) {
+    scene.remove(currentAvatar);
+    currentAvatar.traverse((node) => {
+      if (node.geometry) node.geometry.dispose();
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          node.material.forEach((m) => m.dispose());
+        } else {
+          node.material.dispose();
+        }
+      }
+    });
+    console.log("🗑️ Previous avatar removed and disposed");
+  }
+
+  if (idleAnimationController) {
+    idleAnimationController.stop();
+  }
+
+  const selectedAvatar = sessionStorage.getItem("selectedAvatar") || "female";
+  const avatarPath =
+    selectedAvatar === "male"
+      ? "./assets/avatar_boy.glb"
+      : "./assets/avatar_girl.glb";
+  console.log("🎭 Loading avatar:", selectedAvatar, "from", avatarPath);
+
+  loader.load(
+    avatarPath,
+    (gltf) => {
+      const avatar = gltf.scene;
+      currentAvatar = avatar;
+      scene.add(avatar);
+      avatarController.init(avatar);
+
+      const loadingScreen = document.getElementById("loadingScreen");
+      if (loadingScreen) loadingScreen.classList.add("hidden");
+
+      idleAnimationController = new IdleAnimationController(avatarController);
+      idleAnimationController.start();
+
+      initializeSpeechRecognition();
+    },
+    undefined,
+    (error) => {
+      console.error("❌ Error loading avatar:", error);
+    }
+  );
+}
+
+// Initialize speech recognition system
+async function initializeSpeechRecognition() {
+  console.log("🎤 Initializing speech recognition...");
 
   // Create speech manager
   speechManager = new SpeechRecognitionManager();
@@ -656,8 +689,10 @@ async function speakResponse(text) {
 
     console.log(`🔊 Speaking in ${language}`);
 
+    const selectedAvatar = sessionStorage.getItem("selectedAvatar") || "female";
+
     // Speak with TTS (callbacks handle UI and lip sync)
-    await ttsManager.speak(text, language);
+    await ttsManager.speak(text, language, selectedAvatar);
   } catch (error) {
     // Interrupt error: normal
     if (error.message && error.message.includes("interrupted")) {

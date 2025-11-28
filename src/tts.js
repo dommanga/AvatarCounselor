@@ -18,7 +18,7 @@ export class TTSManager {
     console.log("🔊 TTSManager initialized");
   }
 
-  async speak(text, language = "ko-KR") {
+  async speak(text, language = "ko-KR", avatarGender = null) {
     // Clean up previous audio
     if (this.audio) {
       this.audio.pause();
@@ -38,7 +38,11 @@ export class TTSManager {
       console.log(`🔊 Requesting TTS`);
 
       // Use APIManager instead of direct fetch
-      const audioBuffer = await this.apiManager.generateTTS(text, language);
+      const audioBuffer = await this.apiManager.generateTTS(
+        text,
+        language,
+        avatarGender
+      );
 
       // Convert ArrayBuffer to Blob
       const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });

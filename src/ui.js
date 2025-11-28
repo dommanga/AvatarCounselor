@@ -941,6 +941,7 @@ export class UIController {
       justify-content: center;
       align-items: center;
       z-index: 10000; 
+      user-select: none;
     `;
 
     modal.innerHTML = `
@@ -959,10 +960,21 @@ export class UIController {
           <input type="text" id="participant-id" placeholder="P01" 
                  style="width: 100%; padding: 8px; box-sizing: border-box;">
         </div>
-        <div style="margin-bottom: 15px;">
-          <label style="display: block; margin-bottom: 5px;">Age:</label>
-          <input type="number" id="participant-age" placeholder="23" 
-                 style="width: 100%; padding: 8px; box-sizing: border-box;">
+        <div style="margin-bottom: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label style="display: block; margin-bottom: 5px;">Age:</label>
+            <input type="number" id="participant-age" placeholder="23" 
+                  style="width: 100%; padding: 8px; box-sizing: border-box;">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px;">Gender:</label>
+            <select id="participant-gender" style="width: 100%; padding: 8px; box-sizing: border-box;">
+              <option value="">Select</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
         </div>
         <div style="margin-bottom: 15px;">
           <label style="display: block; margin-bottom: 5px;">Group:</label>
@@ -978,6 +990,22 @@ export class UIController {
             <option value="2">Condition 2</option>
           </select>
         </div>
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 8px;">AI Avatar:</label>
+          <div id="avatar-selection-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="avatar-select-btn" data-gender="male" 
+                style="padding: 15px; border: 3px solid #e0e0e0; border-radius: 12px; cursor: pointer; background: white; text-align: center; transition: all 0.3s;">
+              <img src="./assets/boy.png" alt="Male Avatar" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; margin-bottom: 10px;">
+              <div style="font-size: 24px;">🔊</div>
+            </div>
+            <div class="avatar-select-btn" data-gender="female"
+                style="padding: 15px; border: 3px solid #e0e0e0; border-radius: 12px; cursor: pointer; background: white; text-align: center; transition: all 0.3s;">
+              <img src="./assets/girl.png" alt="Female Avatar" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; margin-bottom: 10px;">
+              <div style="font-size: 24px;">🔊</div>
+            </div>
+          </div>
+          <div id="avatar-status" style="margin-top: 8px; font-size: 12px; color: #666; text-align: center;"></div>
+        </div>
         <button id="start-session-btn" 
                 style="width: 100%; padding: 12px; background: #4CAF50; color: white; 
                        border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
@@ -992,6 +1020,7 @@ export class UIController {
     const keepPreviousCheckbox = document.getElementById("keep-previous-info");
     const participantIdInput = document.getElementById("participant-id");
     const ageInput = document.getElementById("participant-age");
+    const genderSelect = document.getElementById("participant-gender");
     const groupSelect = document.getElementById("participant-group");
 
     keepPreviousCheckbox.addEventListener("change", (e) => {
@@ -1000,33 +1029,152 @@ export class UIController {
       if (isChecked && this.sessionInfo) {
         participantIdInput.value = this.sessionInfo.participantId;
         ageInput.value = this.sessionInfo.age;
+        genderSelect.value = this.sessionInfo.gender;
         groupSelect.value = this.sessionInfo.group;
 
         participantIdInput.disabled = true;
         ageInput.disabled = true;
+        genderSelect.disabled = true;
         groupSelect.disabled = true;
+
+        const savedAvatar = sessionStorage.getItem("selectedAvatar");
+        if (savedAvatar) {
+          avatarBtns.forEach((btn) => {
+            btn.style.border = "3px solid #e0e0e0";
+            btn.style.background = "white";
+            btn.classList.remove("selected");
+          });
+
+          const savedAvatarBtn = modal.querySelector(
+            `.avatar-select-btn[data-gender="${savedAvatar}"]`
+          );
+          if (savedAvatarBtn) {
+            savedAvatarBtn.style.border = "3px solid #667eea";
+            savedAvatarBtn.style.background =
+              "linear-gradient(135deg, #667eea15 0%, #764ba215 100%)";
+            savedAvatarBtn.classList.add("selected");
+          }
+        }
       } else {
         participantIdInput.disabled = false;
         ageInput.disabled = false;
+        genderSelect.disabled = false;
         groupSelect.disabled = false;
+
+        avatarBtns.forEach((btn) => {
+          btn.style.border = "3px solid #e0e0e0";
+          btn.style.background = "white";
+          btn.classList.remove("selected");
+        });
       }
+    });
+
+    // Avatar selection buttons
+    const avatarBtns = modal.querySelectorAll(".avatar-select-btn");
+    let currentAudio = null;
+
+    avatarBtns.forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        const gender = btn.dataset.gender;
+
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+        }
+
+        avatarBtns.forEach((b) => {
+          b.style.border = "3px solid #e0e0e0";
+          b.style.background = "white";
+          b.classList.remove("selected");
+        });
+
+        btn.style.border = "3px solid #667eea";
+        btn.style.background =
+          "linear-gradient(135deg, #667eea15 0%, #764ba215 100%)";
+        btn.classList.add("selected");
+
+        try {
+          const audioFile =
+            gender === "male"
+              ? "./assets/boy-intro.wav"
+              : "./assets/girl-intro.wav";
+          currentAudio = new Audio(audioFile);
+
+          currentAudio.onended = () => {
+            currentAudio = null;
+          };
+
+          currentAudio.onerror = () => {
+            currentAudio = null;
+          };
+
+          await currentAudio.play();
+        } catch (error) {
+          console.error("Voice sample error:", error);
+        }
+      });
+    });
+
+    const voiceBtns = modal.querySelectorAll(".avatar-select-btn button");
+    voiceBtns.forEach((voiceBtn) => {
+      voiceBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const gender = voiceBtn.parentElement.dataset.gender;
+        // 음성 재생 로직 (나중에 추가)
+        console.log(`Play voice sample: ${gender}`);
+      });
     });
 
     document
       .getElementById("start-session-btn")
-      .addEventListener("click", () => {
+      .addEventListener("click", async () => {
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+        }
+
         const participantId = document
           .getElementById("participant-id")
           .value.trim();
         const age = document.getElementById("participant-age").value;
+        const gender = document.getElementById("participant-gender").value;
         const group = document.getElementById("participant-group").value;
         const conditionNumber =
           document.getElementById("condition-number").value;
 
-        if (!participantId || !age) {
-          alert("Please fill in Participant ID and Age");
+        if (!participantId || !age || !gender) {
+          alert("Please fill in Participant ID, Age, and Gender");
           return;
         }
+
+        // Check participant & get avatar
+        const apiManager = window.apiManager;
+        const result = await apiManager.checkParticipant(participantId);
+
+        let selectedAvatar;
+        if (result.exists) {
+          selectedAvatar = result.selectedAvatar;
+          console.log("✅ Existing participant, avatar:", selectedAvatar);
+        } else {
+          selectedAvatar = document.querySelector(".avatar-select-btn.selected")
+            ?.dataset.gender;
+          console.log("📝 New participant, selected avatar:", selectedAvatar);
+          if (!selectedAvatar) {
+            alert("Please select an avatar");
+            return;
+          }
+          // 참여자 생성
+          await apiManager.createParticipant(
+            participantId,
+            parseInt(age),
+            gender,
+            selectedAvatar
+          );
+        }
+
+        // Store avatar selection
+        sessionStorage.setItem("selectedAvatar", selectedAvatar);
+        console.log("💾 Saved to sessionStorage:", selectedAvatar);
 
         let condition;
         if (group === "Group1") {
@@ -1039,6 +1187,7 @@ export class UIController {
         this.sessionInfo = {
           participantId,
           age: parseInt(age),
+          gender,
           group,
           conditionNumber: parseInt(conditionNumber),
           condition,
@@ -1059,6 +1208,13 @@ export class UIController {
       ".keep-previous-container"
     );
     const keepPreviousCheckbox = document.getElementById("keep-previous-info");
+    const avatarBtns = this.sessionModal.querySelectorAll(".avatar-select-btn");
+
+    avatarBtns.forEach((btn) => {
+      btn.style.border = "3px solid #e0e0e0";
+      btn.style.background = "white";
+      btn.classList.remove("selected");
+    });
 
     if (this.sessionInfo) {
       if (keepPreviousDiv) {
@@ -1066,6 +1222,19 @@ export class UIController {
       }
       keepPreviousCheckbox.checked = true;
       keepPreviousCheckbox.dispatchEvent(new Event("change"));
+
+      const savedAvatar = sessionStorage.getItem("selectedAvatar");
+      if (savedAvatar) {
+        const savedAvatarBtn = this.sessionModal.querySelector(
+          `.avatar-select-btn[data-gender="${savedAvatar}"]`
+        );
+        if (savedAvatarBtn) {
+          savedAvatarBtn.style.border = "3px solid #667eea";
+          savedAvatarBtn.style.background =
+            "linear-gradient(135deg, #667eea15 0%, #764ba215 100%)";
+          savedAvatarBtn.classList.add("selected");
+        }
+      }
     } else {
       if (keepPreviousDiv) {
         keepPreviousDiv.style.display = "none";

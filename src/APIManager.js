@@ -102,7 +102,7 @@ export class APIManager {
   }
 
   // TTS generation
-  async generateTTS(text, language, { timeoutMs = 10000 } = {}) {
+  async generateTTS(text, language, avatarGender, { timeoutMs = 10000 } = {}) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
 
@@ -110,7 +110,7 @@ export class APIManager {
       const res = await fetch(`${this.apiBase}/api/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, language }),
+        body: JSON.stringify({ text, language, avatarGender }),
         signal: ctl.signal,
       });
 
@@ -193,6 +193,35 @@ export class APIManager {
       return await res.json();
     } catch (e) {
       console.error("❌ endSession failed:", e);
+    }
+  }
+
+  // Participant management methods
+  async checkParticipant(participantId) {
+    try {
+      const res = await fetch(`${this.apiBase}/api/participants/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId }),
+      });
+      return await res.json();
+    } catch (e) {
+      console.error("❌ checkParticipant failed:", e);
+      return { exists: false };
+    }
+  }
+
+  async createParticipant(participantId, age, gender, selectedAvatar) {
+    try {
+      const res = await fetch(`${this.apiBase}/api/participants/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId, age, gender, selectedAvatar }),
+      });
+      return await res.json();
+    } catch (e) {
+      console.error("❌ createParticipant failed:", e);
+      throw e;
     }
   }
 }

@@ -47,17 +47,18 @@ class SessionLogger {
   startSession(metadata) {
     if (!this.enabled) return;
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .slice(0, -5);
-    const sessionId = `${metadata.participantId}_condition${metadata.conditionNumber}_${metadata.condition}_${timestamp}`;
+    const timestamp = this._getKSTTimestamp();
+    const sessionId = `condition${metadata.conditionNumber}_${metadata.condition}_${timestamp}`;
 
     const participantDir = path.join(this.logsDir, metadata.participantId);
-    const sessionDir = path.join(participantDir, sessionId);
-
+    const sessionsDir = path.join(participantDir, "sessions");
+    const sessionDir = path.join(sessionsDir, sessionId);
+    ``;
     if (!fs.existsSync(participantDir)) {
       fs.mkdirSync(participantDir, { recursive: true });
+    }
+    if (!fs.existsSync(sessionsDir)) {
+      fs.mkdirSync(sessionsDir, { recursive: true });
     }
     if (!fs.existsSync(sessionDir)) {
       fs.mkdirSync(sessionDir, { recursive: true });
@@ -69,7 +70,7 @@ class SessionLogger {
       metadata: {
         ...metadata,
         sessionId,
-        startTime: new Date().toISOString(),
+        startTime: this._getKSTTimestamp(),
         settingsChanges: [],
       },
       turns: [],
@@ -86,7 +87,7 @@ class SessionLogger {
 
     const turn = {
       turnNumber: this.currentSession.turns.length + 1,
-      timestamp: new Date().toISOString(),
+      timestamp: this._getKSTTimestamp(),
       ...turnData,
     };
 
@@ -98,7 +99,7 @@ class SessionLogger {
     if (!this.enabled || !this.currentSession) return;
 
     const change = {
-      timestamp: new Date().toISOString(),
+      timestamp: this._getKSTTimestamp(),
       ...settings,
     };
 
@@ -109,7 +110,7 @@ class SessionLogger {
   endSession() {
     if (!this.enabled || !this.currentSession) return;
 
-    this.currentSession.metadata.endTime = new Date().toISOString();
+    this.currentSession.metadata.endTime = this._getKSTTimestamp();
     const start = new Date(this.currentSession.metadata.startTime);
     const end = new Date(this.currentSession.metadata.endTime);
     this.currentSession.metadata.duration = end - start;
@@ -136,6 +137,13 @@ class SessionLogger {
       filePath,
       JSON.stringify({ turns: this.currentSession.turns }, null, 2)
     );
+  }
+
+  _getKSTTimestamp() {
+    return new Date(Date.now() + 9 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 19)
+      .replace(/:/g, "-");
   }
 }
 
@@ -347,16 +355,34 @@ CRITICAL: Return ONLY valid JSON (no markdown):
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/tts", async (req, res) => {
   try {
-    const { text, language } = req.body;
+    const { text, language, avatarGender } = req.body;
 
     if (!text || text.trim().length === 0) {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    console.log(`🔊 TTS request`);
+    console.log(`🔊 TTS request (avatar: ${avatarGender || "default"})`);
 
-    // Select voice based on language
-    const voice = language === "ko-KR" ? "shimmer" : "nova";
+    // Voice configuration based on avatar gender and language
+    const VOICE_CONFIG = {
+      female: {
+        "ko-KR": "shimmer",
+        "en-US": "nova",
+      },
+      male: {
+        "ko-KR": "onyx",
+        "en-US": "echo",
+      },
+    };
+
+    // Select voice based on avatar gender and language
+    let voice;
+    if (avatarGender && VOICE_CONFIG[avatarGender]) {
+      voice = VOICE_CONFIG[avatarGender][language] || "shimmer";
+    } else {
+      // Fallback to default (female voices)
+      voice = language === "ko-KR" ? "shimmer" : "nova";
+    }
 
     // Generate speech using OpenAI TTS
     const mp3 = await openai.audio.speech.create({
@@ -370,7 +396,7 @@ app.post("/api/tts", async (req, res) => {
     // Convert response to buffer
     const buffer = Buffer.from(await mp3.arrayBuffer());
 
-    console.log(`✅ TTS generated`);
+    console.log(`✅ TTS generated (voice: ${voice})`);
 
     // Send audio as response
     res.set({
@@ -388,6 +414,98 @@ app.post("/api/tts", async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════
+// Participant Management Endpoints
+// ═════════════════════════════════════════════════════════════════════
+const PARTICIPANTS_DIR = path.join(__dirname, "logs");
+
+// Ensure participants directory exists
+if (!fs.existsSync(PARTICIPANTS_DIR)) {
+  fs.mkdirSync(PARTICIPANTS_DIR, { recursive: true });
+  console.log("📁 Created logging directory");
+}
+
+// Check if participant exists and return their avatar selection
+app.post("/api/participants/check", (req, res) => {
+  try {
+    const { participantId } = req.body;
+
+    if (!participantId) {
+      return res.status(400).json({ error: "participantId is required" });
+    }
+
+    const participantDir = path.join(PARTICIPANTS_DIR, participantId);
+    const infoFile = path.join(participantDir, "participant-info.json");
+
+    if (fs.existsSync(infoFile)) {
+      const info = JSON.parse(fs.readFileSync(infoFile, "utf8"));
+      console.log(`✅ Existing participant found: ${participantId}`);
+      res.json({
+        exists: true,
+        age: info.age,
+        gender: info.gender,
+        selectedAvatar: info.selectedAvatar,
+      });
+    } else {
+      console.log(`📝 New participant: ${participantId}`);
+      res.json({ exists: false });
+    }
+  } catch (error) {
+    console.error("❌ Check participant error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new participant with avatar selection
+app.post("/api/participants/create", (req, res) => {
+  try {
+    const { participantId, age, gender, selectedAvatar } = req.body;
+
+    if (!participantId || !selectedAvatar) {
+      return res
+        .status(400)
+        .json({ error: "participantId and selectedAvatar are required" });
+    }
+
+    // Validate avatar selection
+    if (!["female", "male"].includes(selectedAvatar)) {
+      return res
+        .status(400)
+        .json({ error: "selectedAvatar must be 'female' or 'male'" });
+    }
+
+    const participantDir = path.join(PARTICIPANTS_DIR, participantId);
+    const sessionsDir = path.join(participantDir, "sessions");
+
+    // Create directories
+    if (!fs.existsSync(participantDir)) {
+      fs.mkdirSync(participantDir, { recursive: true });
+    }
+    if (!fs.existsSync(sessionsDir)) {
+      fs.mkdirSync(sessionsDir, { recursive: true });
+    }
+
+    const participantInfo = {
+      participantId,
+      age: age || null,
+      gender: gender || "",
+      selectedAvatar,
+    };
+
+    const infoFile = path.join(participantDir, "participant-info.json");
+    fs.writeFileSync(infoFile, JSON.stringify(participantInfo, null, 2));
+
+    console.log(
+      `✅ Participant created: ${participantId} (avatar: ${selectedAvatar})`
+    );
+
+    res.json({ success: true, participantInfo });
+  } catch (error) {
+    console.error("❌ Create participant error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════
 // Session Logging Endpoints
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/session/start", (req, res) => {
@@ -395,6 +513,7 @@ app.post("/api/session/start", (req, res) => {
     const {
       participantId,
       age,
+      gender,
       group,
       conditionNumber,
       condition,
@@ -405,6 +524,7 @@ app.post("/api/session/start", (req, res) => {
     sessionLogger.startSession({
       participantId,
       age,
+      gender,
       group,
       conditionNumber,
       condition,
@@ -483,6 +603,8 @@ app.get("/health", (req, res) => {
       sentiment: "POST /api/sentiment",
       generateResponseWithEmotion: "POST /api/generate-response-with-emotion",
       tts: "POST /api/tts",
+      participantCheck: "POST /api/participants/check",
+      participantCreate: "POST /api/participants/create",
     },
   });
 });
@@ -509,7 +631,11 @@ app.listen(PORT, () => {
   console.log(
     `   POST /api/generate-response-with-emotion - Counselor Response with emotion`
   );
-  console.log(`   POST /api/tts                 - Text-to-Speech`);
+  console.log(
+    `   POST /api/tts                 - Text-to-Speech (with avatar voice)`
+  );
+  console.log(`   POST /api/participants/check  - Check participant exists`);
+  console.log(`   POST /api/participants/create - Create new participant`);
   console.log(`   POST /api/session/start       - Start session logging`);
   console.log(`   POST /api/session/log-turn    - Log conversation turn`);
   console.log(`   POST /api/session/log-settings - Log settings change`);
