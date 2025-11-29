@@ -217,6 +217,68 @@ export class UIController {
     console.log(`⚙️ Frequency level set to: ${value.toFixed(2)}`);
   }
 
+  lockCustomizationSettings() {
+    // Disable all level buttons
+    this.intensityLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      btn.style.cursor = "not-allowed";
+      btn.style.pointerEvents = "none";
+    });
+
+    this.frequencyLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      btn.style.cursor = "not-allowed";
+      btn.style.pointerEvents = "none";
+    });
+
+    // Disable reset button
+    this.resetButton.disabled = true;
+    this.resetButton.style.opacity = "0.5";
+    this.resetButton.style.cursor = "not-allowed";
+    this.resetButton.style.pointerEvents = "none";
+
+    // Add locked indicator to panel header
+    const panelHeader = document.querySelector(
+      ".customization-panel .panel-header span"
+    );
+    if (panelHeader && !panelHeader.textContent.includes("🔒")) {
+      panelHeader.textContent = "🔒 Expression Settings (Default - Locked)";
+    }
+  }
+
+  unlockCustomizationSettings() {
+    // Enable all level buttons
+    this.intensityLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.style.cursor = "pointer";
+      btn.style.pointerEvents = "auto";
+    });
+
+    this.frequencyLevels.querySelectorAll(".level-btn").forEach((btn) => {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.style.cursor = "pointer";
+      btn.style.pointerEvents = "auto";
+    });
+
+    // Enable reset button
+    this.resetButton.disabled = false;
+    this.resetButton.style.opacity = "1";
+    this.resetButton.style.cursor = "pointer";
+    this.resetButton.style.pointerEvents = "auto";
+
+    // Update panel header
+    const panelHeader = document.querySelector(
+      ".customization-panel .panel-header span"
+    );
+    if (panelHeader) {
+      panelHeader.textContent = "⚙️ Expression Settings";
+    }
+  }
+
   getIntensityLevel() {
     return this.currentIntensity;
   }
@@ -234,6 +296,9 @@ export class UIController {
   addStyles() {
     const style = document.createElement("style");
     style.textContent = `
+        * {
+          user-select: none;
+        }
         #customization-ui {
             position: fixed;
             left: 20px;
@@ -895,6 +960,24 @@ export class UIController {
     }
   }
 
+  disableNewSessionButton() {
+    if (this.newSessionButton) {
+      this.newSessionButton.disabled = true;
+      this.newSessionButton.style.opacity = "0.5";
+      this.newSessionButton.style.cursor = "not-allowed";
+      this.newSessionButton.style.pointerEvents = "none";
+    }
+  }
+
+  enableNewSessionButton() {
+    if (this.newSessionButton) {
+      this.newSessionButton.disabled = false;
+      this.newSessionButton.style.opacity = "1";
+      this.newSessionButton.style.cursor = "pointer";
+      this.newSessionButton.style.pointerEvents = "auto";
+    }
+  }
+
   // Status indicator control
   setStatus(status, label) {
     // Remove all status classes
@@ -1194,6 +1277,30 @@ export class UIController {
         };
 
         this.sessionModal.style.display = "none";
+
+        if (condition === "Default") {
+          // This will update both customizationManager and microResponseController
+          if (this.onIntensityChange) {
+            this.onIntensityChange(0.75);
+          }
+          if (this.onFrequencyChange) {
+            this.onFrequencyChange(0.6);
+          }
+
+          // Disable customization UI
+          this.lockCustomizationSettings();
+
+          // Set to moderate (level 3)
+          this.setIntensityLevel(0.75);
+          this.setFrequencyLevel(0.6);
+
+          console.log("🔒 Expression settings locked to Default (Moderate)");
+        } else {
+          // Enable customization UI
+          this.unlockCustomizationSettings();
+
+          console.log("🔓 Expression settings unlocked for Customization");
+        }
 
         if (this.onSessionStart) {
           this.onSessionStart(this.sessionInfo);

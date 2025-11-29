@@ -12,7 +12,7 @@ import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
 
 // sessionStorage.clear();
-const DEV_DEFAULT_AVATAR = "female";
+const DEV_DEFAULT_AVATAR = "male";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -245,20 +245,7 @@ async function initializeSpeechRecognition() {
   speechManager.onTranscriptUpdate = async (finalText, interimText) => {
     uiController.updateTranscript(finalText, interimText);
 
-    // CRITICAL: If detect Interim -> immediately stop TTS
     if (interimText && interimText.trim().length > 0) {
-      if (ttsManager && ttsManager.isSpeaking) {
-        console.log(
-          "🎤 User started speaking (interim detected), stopping TTS"
-        );
-        ttsManager.stop();
-
-        // Mark last counselor message as interrupted
-        if (uiController) {
-          uiController.markLastCounselorMessageAsInterrupted();
-        }
-      }
-
       if (idleAnimationController) {
         idleAnimationController.pauseHeadSway();
       }
@@ -274,6 +261,8 @@ async function initializeSpeechRecognition() {
   };
 
   speechManager.onFinalTranscript = async (text) => {
+    apiManager.resetSentimentStream();
+
     if (!text || text.trim().length === 0) {
       console.log("⏭️  Skipping empty transcript");
       return;
@@ -360,12 +349,21 @@ async function initializeSpeechRecognition() {
     // Store counselor text to show when TTS starts
     currentCounselorText = counselorText;
 
+    if (
+      microResponseController?.isActive() ||
+      microResponseController?.isNodding()
+    ) {
+      microResponseController.stopImmediate();
+      console.log("⚡ Micro stopped, blendshapes preserved");
+      console.log("🎭 Full Response applied (smooth transition from Micro)");
+    }
+
+    avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
+
     // TTS start
     void speakResponse(counselorText).catch((err) =>
       console.warn("TTS play error:", err)
     );
-
-    avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
   };
 
   speechManager.onError = (error) => {
@@ -453,7 +451,7 @@ async function initializeSpeechRecognition() {
       }
 
       speechManager.start();
-      uiController.setStatus("ready", "Ready");
+      // uiController.setStatus("ready", "Ready");
     }
   });
 
@@ -544,7 +542,9 @@ function initializeTTS() {
     }
 
     uiController.setSpeakingStatus(true);
+    uiController.disableNewSessionButton();
     lipSyncController.start();
+    lipSyncController.setCurrentEmotion(currentCounselorEmotion || "neutral");
 
     if (idleAnimationController) {
       idleAnimationController.pauseHeadSway();
@@ -603,6 +603,7 @@ function initializeTTS() {
     console.log("🔇 TTS ended");
     uiController.setSpeakingStatus(false);
     uiController.enableMicButton();
+    uiController.enableNewSessionButton();
     lipSyncController.stop();
 
     // Expression fluctuation stop
@@ -637,6 +638,7 @@ function initializeTTS() {
     console.error("❌ TTS error:", error);
     uiController.setSpeakingStatus(false);
     uiController.enableMicButton();
+    uiController.enableNewSessionButton();
     lipSyncController.stop();
 
     // Expression fluctuation stop

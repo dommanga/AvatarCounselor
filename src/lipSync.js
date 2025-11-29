@@ -7,6 +7,7 @@ export class LipSyncController {
     this.avatarController = avatarController;
     this.isActive = false;
     this.animationFrameId = null;
+    this.currentEmotion = "neutral";
 
     // Current state
     this.currentJawOpen = 0;
@@ -131,6 +132,10 @@ export class LipSyncController {
     console.log("👄 Lip sync stopped");
   }
 
+  setCurrentEmotion(emotion) {
+    this.currentEmotion = emotion;
+  }
+
   /**
    * Update mouth blendshapes on avatar
    */
@@ -139,9 +144,8 @@ export class LipSyncController {
       this.avatarController.setMorphTarget("jawOpen", jawValue);
       this.avatarController.setMorphTarget("mouthOpen", mouthValue);
 
-      // Optional: Add subtle smile variation for more natural look
-      const smileVariation = Math.sin(this.time * 3) * 0.05;
-      if (this.isActive) {
+      if (this.isActive && this.currentEmotion === "neutral") {
+        const smileVariation = Math.sin(this.time * 3) * 0.05;
         this.avatarController.setMorphTarget(
           "mouthSmileLeft",
           Math.max(0, smileVariation)

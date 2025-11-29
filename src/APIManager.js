@@ -5,29 +5,54 @@ export class APIManager {
     // Rate limit for sentiment analysis
     this._lastChunkAt = 0;
     this._minChunkGapMs = 400;
-    this._lastChunkText = "";
+
+    this._lastRawChunk = "";
+    this._pendingBuffer = "";
+  }
+
+  resetSentimentStream() {
+    this._lastRawChunk = "";
+    this._pendingBuffer = "";
+    this._lastChunkAt = 0;
   }
 
   // Sentiment analysis (Micro Response)
-  async analyzeSentiment(chunkText, { timeoutMs = 2000 } = {}) {
-    // Rate limit protection
-    if (chunkText.trim() === this._lastChunkText.trim()) {
-      console.log("⏭️ Skipping duplicate chunk");
+  async analyzeSentiment(rawChunkText, { timeoutMs = 2000 } = {}) {
+    const chunkText = (rawChunkText || "").trim();
+    if (!chunkText) return null;
+
+    let newPart = chunkText;
+    if (this._lastRawChunk) {
+      const prev = this._lastRawChunk;
+      const minLen = Math.min(prev.length, chunkText.length);
+      let i = 0;
+      while (i < minLen && prev[i] === chunkText[i]) i++;
+      newPart = chunkText.slice(i);
+    }
+    this._lastRawChunk = chunkText;
+
+    if (!newPart) {
+      // console.log("⏭️ Skipping empty newPart");
+      return null;
+    }
+
+    this._pendingBuffer += newPart;
+    const buffered = this._pendingBuffer;
+
+    if (buffered.replace(/\s+/g, "").length < 6) {
+      // console.log("⏭️ Skipping, buffered too short:", buffered);
       return null;
     }
 
     const now = Date.now();
     if (now - this._lastChunkAt < this._minChunkGapMs) {
-      console.log("⏭️ Skipping chunk (rate limit)");
+      // console.log("⏭️ Skipping newPart (rate limit):", newPart);
       return null;
     }
 
     this._lastChunkAt = now;
-    this._lastChunkText = chunkText;
 
-    if (!chunkText || chunkText.trim().length < 10) {
-      return null;
-    }
+    this._pendingBuffer = "";
 
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
@@ -36,7 +61,7 @@ export class APIManager {
       const res = await fetch(`${this.apiBase}/api/sentiment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chunk: chunkText }),
+        body: JSON.stringify({ chunk: rawChunkText }),
         signal: ctl.signal,
       });
 

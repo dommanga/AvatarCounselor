@@ -52,22 +52,24 @@ export class MicroResponseController {
       this._minTriggerInterval / this.customization.baseFrequency;
 
     if (now - this._lastTriggerTime < adjustedInterval) {
-      // console.log(`⏭️ Micro response debounced`);
+      console.log(`⏭️ Micro response debounced`);
+      return;
+    }
+
+    if (this._isActive) {
+      console.log(`Micro response not ended - debounced`);
       return;
     }
 
     this._lastTriggerTime = now;
 
-    // Get micro response config
     const microConfig = this._getMicroResponseConfig(sentiment);
     if (!microConfig) {
       console.warn(`Unknown sentiment: ${sentiment}`);
       return;
     }
 
-    console.log(`😊 Micro response triggered`);
-
-    // Apply micro response
+    console.log(`😊 Micro response triggered ${sentiment}`);
     this._applyMicroResponse(microConfig);
   }
 
@@ -158,7 +160,7 @@ export class MicroResponseController {
 
     // Auto-fade after duration
     this._autoFadeTimeout = setTimeout(() => {
-      this._fadeToNeutral(microConfig.duration * 0.6);
+      this._fadeToNeutral(microConfig.duration);
     }, microConfig.duration * 1000);
   }
 

@@ -36,9 +36,9 @@ export class SpeechRecognitionManager {
 
     // Debounce configuration
     this.config = {
-      shortPhraseDelay: 500, // Increased to prevent premature sending
+      shortPhraseDelay: 700, // Increased to prevent premature sending
       longPhraseDelay: 1500,
-      shortPhraseThreshold: 10, // short - long criteria
+      shortPhraseThreshold: 5, // short - long criteria
     };
 
     // Guard against duplicate start() calls

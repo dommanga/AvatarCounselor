@@ -111,13 +111,38 @@ class SessionLogger {
     if (!this.enabled || !this.currentSession) return;
 
     this.currentSession.metadata.endTime = this._getKSTTimestamp();
-    const start = new Date(this.currentSession.metadata.startTime);
-    const end = new Date(this.currentSession.metadata.endTime);
-    this.currentSession.metadata.duration = end - start;
+
+    const convertToISO = (timestamp) => {
+      return (
+        timestamp.substring(0, 10) +
+        "T" +
+        timestamp.substring(11).replace(/-/g, ":")
+      );
+    };
+
+    const start = new Date(
+      convertToISO(this.currentSession.metadata.startTime)
+    );
+    const end = new Date(convertToISO(this.currentSession.metadata.endTime));
+    this.currentSession.metadata.duration = this._formatDuration(end - start);
 
     this._saveMetadata();
     console.log(`✅ Session ended: ${this.currentSession.sessionId}`);
     this.currentSession = null;
+  }
+
+  _formatDuration(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 
   _saveMetadata() {
@@ -261,13 +286,16 @@ Generate:
    - neutral: calm, attentive presence for greetings, casual talk, or when just listening
 
    IMPORTANT Guidelines for peer counseling context:
-   - Default to neutral for greetings, introductions, or casual conversation
+   - Use neutral for simple greetings or casual small talk
    - Just because someone is willing to talk ≠ they're in distress (use neutral, not sadness)
    - Only use stronger emotions when they explicitly describe difficult feelings or situations
    - Your expression should feel like a trained peer counselor's natural reaction - caring but composed
    - Your expression should feel like a friend's natural reaction, not clinical assessment
    - Match your expression to your supportive words
-   - When uncertain between neutral and emotional, choose the emotional one with lower multiplier (0.85-0.90)
+   - When uncertain, use a gentle emotional expression with lower multiplier (0.85-0.90) rather than staying completely neutral
+
+
+- When uncertain, use a gentle emotional expression with lower multiplier (0.85-0.90) rather than staying completely neutral
 
 3. Intensity Multiplier (0.85 to 1.15)
    - This controls how strongly the facial expression is displayed

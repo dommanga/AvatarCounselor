@@ -89,9 +89,6 @@ export class AvatarController {
    * @param {number} finalIntensity - baseIntensity × intensityMultiplier (0.255 ~ 1.38)
    */
   setEmotion(emotion, finalIntensity = 1.0) {
-    // console.log(
-    //   `Setting emotion: ${emotion}, finalIntensity: ${finalIntensity}`
-    // );
     this.currentEmotion = emotion;
 
     const emotionConfig = EMOTION_CONFIGS[emotion];
@@ -100,39 +97,28 @@ export class AvatarController {
       return;
     }
 
-    // Reset all morph targets to zero first (except eye blink - managed by IdleAnimation)
+    const blendshapes = emotionConfig.blendshapes || {};
+
+    const newEmotionBlendshapes = new Set(Object.keys(blendshapes));
+
     for (let key in this.targetMorphValues) {
-      // Preserve eye blink values set by IdleAnimation
       if (
         key === "eyeBlinkLeft" ||
         key === "eyeBlinkRight" ||
-        key === "eyeLookUpLeft" ||
-        key === "eyeLookUpRight" ||
-        key === "eyeLookDownLeft" ||
-        key === "eyeLookDownRight" ||
-        key === "eyeLookOutLeft" ||
-        key === "eyeLookOutRight" ||
-        key === "eyeLookInLeft" ||
-        key === "eyeLookInRight"
+        key.includes("eyeLook")
       ) {
         continue;
       }
-      this.targetMorphValues[key] = 0;
+
+      if (!newEmotionBlendshapes.has(key)) {
+        this.targetMorphValues[key] = 0;
+      }
     }
 
-    // FACS-based emotion config
-    // console.log(`Applying FACS-based emotion: ${emotionConfig.name}`);
-
-    const blendshapes = emotionConfig.blendshapes || {};
-
-    // Calculate and apply blendshape values
     for (const [blendshapeName, value] of Object.entries(blendshapes)) {
       let finalValue = value * finalIntensity;
-
-      // Clamp to [0, 1]
       finalValue = Math.max(0, Math.min(1, finalValue));
 
-      // Apply to avatar
       this.setMorphTarget(blendshapeName, finalValue);
     }
   }
