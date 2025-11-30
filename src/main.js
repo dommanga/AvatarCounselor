@@ -12,7 +12,7 @@ import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
 
 // sessionStorage.clear();
-const DEV_DEFAULT_AVATAR = "male";
+const DEV_DEFAULT_AVATAR = "female";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -108,6 +108,17 @@ const loader = new GLTFLoader();
   uiController = new UIController();
 
   uiController.onSessionStart = async (sessionInfo) => {
+    customizationManager.resetToDefaults();
+
+    uiController.setIntensityLevel(0.75);
+    uiController.setFrequencyLevel(0.6);
+
+    if (sessionInfo.condition === "Default") {
+      uiController.lockCustomizationSettings();
+    } else {
+      uiController.unlockCustomizationSettings();
+    }
+
     loadAvatar();
   };
 
@@ -494,6 +505,11 @@ async function initializeSpeechRecognition() {
     uiController.startNewSession();
     speechManager.clearTranscript();
     conversationHistory = [];
+
+    customizationManager.resetToDefaults();
+    uiController.setIntensityLevel(0.75);
+    uiController.setFrequencyLevel(0.6);
+    uiController.unlockCustomizationSettings();
 
     console.log("🆕 New session started");
 

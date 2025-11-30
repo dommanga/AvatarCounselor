@@ -10,6 +10,7 @@ export class UIController {
     this.conversationHistory = [];
     this.lastCounselorMessageElement = null;
     this.setupUI();
+    this.isLocked = false;
   }
 
   setupUI() {
@@ -165,6 +166,7 @@ export class UIController {
     // Intensity buttons
     this.intensityLevels.querySelectorAll(".level-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (this.isLocked) return;
         const value = parseFloat(btn.dataset.value);
         this.setIntensityLevel(value);
 
@@ -178,6 +180,7 @@ export class UIController {
     // Frequency buttons
     this.frequencyLevels.querySelectorAll(".level-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (this.isLocked) return;
         const value = parseFloat(btn.dataset.value);
         this.setFrequencyLevel(value);
 
@@ -218,6 +221,7 @@ export class UIController {
   }
 
   lockCustomizationSettings() {
+    this.isLocked = true;
     // Disable all level buttons
     this.intensityLevels.querySelectorAll(".level-btn").forEach((btn) => {
       btn.disabled = true;
@@ -249,6 +253,7 @@ export class UIController {
   }
 
   unlockCustomizationSettings() {
+    this.isLocked = false;
     // Enable all level buttons
     this.intensityLevels.querySelectorAll(".level-btn").forEach((btn) => {
       btn.disabled = false;
@@ -1278,32 +1283,16 @@ export class UIController {
 
         this.sessionModal.style.display = "none";
 
-        if (condition === "Default") {
-          // This will update both customizationManager and microResponseController
-          if (this.onIntensityChange) {
-            this.onIntensityChange(0.75);
-          }
-          if (this.onFrequencyChange) {
-            this.onFrequencyChange(0.6);
-          }
-
-          // Disable customization UI
-          this.lockCustomizationSettings();
-
-          // Set to moderate (level 3)
-          this.setIntensityLevel(0.75);
-          this.setFrequencyLevel(0.6);
-
-          console.log("🔒 Expression settings locked to Default (Moderate)");
-        } else {
-          // Enable customization UI
-          this.unlockCustomizationSettings();
-
-          console.log("🔓 Expression settings unlocked for Customization");
-        }
-
         if (this.onSessionStart) {
           this.onSessionStart(this.sessionInfo);
+        }
+
+        if (condition === "Default") {
+          this.lockCustomizationSettings();
+          console.log("🔒 Expression settings locked to Default (Moderate)");
+        } else {
+          this.unlockCustomizationSettings();
+          console.log("🔓 Expression settings unlocked for Customization");
         }
       });
   }

@@ -14,7 +14,7 @@ export class CustomizationManager {
     };
 
     // Load from localStorage if exists
-    this.loadSettings();
+    // this.loadSettings();
 
     // Listeners for settings changes
     this.listeners = [];
@@ -62,7 +62,7 @@ export class CustomizationManager {
     const clamped = this.clamp(value, 0.3, 1.2);
     if (this.settings.baseIntensity !== clamped) {
       this.settings.baseIntensity = clamped;
-      this.saveSettings();
+      // this.saveSettings();
       this.notifyListeners("baseIntensity", clamped);
     }
   }
@@ -75,7 +75,7 @@ export class CustomizationManager {
     const clamped = this.clamp(value, 0, 1);
     if (this.settings.baseFrequency !== clamped) {
       this.settings.baseFrequency = clamped;
-      this.saveSettings();
+      // this.saveSettings();
       this.notifyListeners("baseFrequency", clamped);
     }
   }
@@ -137,7 +137,7 @@ export class CustomizationManager {
       baseIntensity: 0.75,
       baseFrequency: 0.6,
     };
-    this.saveSettings();
+    // this.saveSettings();
     this.notifyListeners("reset", null);
     console.log("🔄 Reset to default settings");
   }
