@@ -11,7 +11,6 @@ import { MicroResponseController } from "./microResponse.js";
 import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
 
-// sessionStorage.clear();
 const DEV_DEFAULT_AVATAR = "female";
 
 // Scene setup
@@ -101,6 +100,8 @@ let currentUserAge = null;
 
 let currentAvatar = null;
 
+let customizationListener = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -108,6 +109,11 @@ const loader = new GLTFLoader();
   uiController = new UIController();
 
   uiController.onSessionStart = async (sessionInfo) => {
+    if (customizationListener) {
+      customizationManager.removeListener(customizationListener);
+      console.log("🗑️ Removed previous customization listener");
+    }
+
     customizationManager.resetToDefaults();
 
     uiController.setIntensityLevel(0.75);
@@ -235,7 +241,7 @@ async function initializeSpeechRecognition() {
   });
 
   // Listen to customization changes and update micro response controller
-  customizationManager.addListener(async (settingName, newValue) => {
+  customizationListener = async (settingName, newValue) => {
     if (microResponseController) {
       const updatedSettings = customizationManager.getSettings();
       microResponseController.updateCustomization(updatedSettings);
@@ -250,7 +256,9 @@ async function initializeSpeechRecognition() {
       const settings = customizationManager.getSettings();
       await apiManager.logSettingsChange(settings);
     }
-  });
+  };
+
+  customizationManager.addListener(customizationListener);
 
   // Set up callbacks
   speechManager.onTranscriptUpdate = async (finalText, interimText) => {
