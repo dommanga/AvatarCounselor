@@ -127,7 +127,7 @@ export class APIManager {
   }
 
   // TTS generation
-  async generateTTS(text, language, avatarGender, { timeoutMs = 10000 } = {}) {
+  async generateTTS(text, language, avatarGender, { timeoutMs = 50000 } = {}) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
 
