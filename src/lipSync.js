@@ -36,7 +36,7 @@ export class LipSyncController {
     this.time = 0;
     this.syllablePhase = 0;
     this.animate();
-    console.log("👄 Enhanced lip sync started");
+    // console.log("👄 Enhanced lip sync started");
   }
 
   /**
@@ -129,7 +129,7 @@ export class LipSyncController {
     };
     closeMouth();
 
-    console.log("👄 Lip sync stopped");
+    // console.log("👄 Lip sync stopped");
   }
 
   setCurrentEmotion(emotion) {
@@ -202,7 +202,7 @@ export class LipSyncController {
     const preset = LipSyncController.PRESETS[presetName];
     if (preset) {
       this.setParameters(preset);
-      console.log(`👄 Applied lip sync preset: ${presetName}`);
+      // console.log(`👄 Applied lip sync preset: ${presetName}`);
     }
   }
 }

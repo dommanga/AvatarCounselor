@@ -203,7 +203,7 @@ export class UIController {
       }
     });
 
-    console.log(`⚙️ Intensity level set to: ${value.toFixed(2)}`);
+    // console.log(`⚙️ Intensity level set to: ${value.toFixed(2)}`);
   }
 
   setFrequencyLevel(value) {
@@ -217,7 +217,7 @@ export class UIController {
       }
     });
 
-    console.log(`⚙️ Frequency level set to: ${value.toFixed(2)}`);
+    // console.log(`⚙️ Frequency level set to: ${value.toFixed(2)}`);
   }
 
   lockCustomizationSettings() {
@@ -923,7 +923,7 @@ export class UIController {
   markLastCounselorMessageAsInterrupted() {
     if (this.lastCounselorMessageElement) {
       this.lastCounselorMessageElement.classList.add("interrupted");
-      console.log("✂️ Marked last counselor message as interrupted");
+      // console.log("✂️ Marked last counselor message as interrupted");
     }
   }
 
@@ -1209,7 +1209,7 @@ export class UIController {
         e.stopPropagation();
         const gender = voiceBtn.parentElement.dataset.gender;
         // 음성 재생 로직 (나중에 추가)
-        console.log(`Play voice sample: ${gender}`);
+        // console.log(`Play voice sample: ${gender}`);
       });
     });
 
@@ -1242,11 +1242,11 @@ export class UIController {
         let selectedAvatar;
         if (result.exists) {
           selectedAvatar = result.selectedAvatar;
-          console.log("✅ Existing participant, avatar:", selectedAvatar);
+          // console.log("✅ Existing participant, avatar:", selectedAvatar);
         } else {
           selectedAvatar = document.querySelector(".avatar-select-btn.selected")
             ?.dataset.gender;
-          console.log("📝 New participant, selected avatar:", selectedAvatar);
+          // console.log("📝 New participant, selected avatar:", selectedAvatar);
           if (!selectedAvatar) {
             alert("Please select an avatar");
             return;
@@ -1262,7 +1262,7 @@ export class UIController {
 
         // Store avatar selection
         sessionStorage.setItem("selectedAvatar", selectedAvatar);
-        console.log("💾 Saved to sessionStorage:", selectedAvatar);
+        // console.log("💾 Saved to sessionStorage:", selectedAvatar);
 
         let condition;
         if (group === "Group1") {
@@ -1289,10 +1289,10 @@ export class UIController {
 
         if (condition === "Default") {
           this.lockCustomizationSettings();
-          console.log("🔒 Expression settings locked to Default (Moderate)");
+          // console.log("🔒 Expression settings locked to Default (Moderate)");
         } else {
           this.unlockCustomizationSettings();
-          console.log("🔓 Expression settings unlocked for Customization");
+          // console.log("🔓 Expression settings unlocked for Customization");
         }
       });
   }

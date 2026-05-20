@@ -68,7 +68,7 @@ export class IdleAnimationController {
    * Start all idle movement behaviors
    */
   start() {
-    console.log("🧍 Starting idle movements");
+    // console.log("🧍 Starting idle movements");
     this.startBlinking();
     this.startGaze();
     this.startMovement();
@@ -80,7 +80,7 @@ export class IdleAnimationController {
    * Stop all idle movement behaviors
    */
   stop() {
-    console.log("🧍 Stopping idle movements");
+    // console.log("🧍 Stopping idle movements");
     this.stopBlinking();
     this.stopGaze();
     this.stopMovement();

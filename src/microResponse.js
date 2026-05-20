@@ -52,12 +52,12 @@ export class MicroResponseController {
       this._minTriggerInterval / this.customization.baseFrequency;
 
     if (now - this._lastTriggerTime < adjustedInterval) {
-      console.log(`⏭️ Micro response debounced`);
+      // console.log(`⏭️ Micro response debounced`);
       return;
     }
 
     if (this._isActive) {
-      console.log(`Micro response not ended - debounced`);
+      // console.log(`Micro response not ended - debounced`);
       return;
     }
 
@@ -69,7 +69,7 @@ export class MicroResponseController {
       return;
     }
 
-    console.log(`😊 Micro response triggered ${sentiment}`);
+    console.log(`😊 Listening with emotion: ${sentiment}`);
     this._applyMicroResponse(microConfig);
   }
 
@@ -170,7 +170,7 @@ export class MicroResponseController {
    */
   _startHeadNodding(noddingConfig) {
     if (this._isNodding) {
-      console.log("⏭️ Nodding already in progress, skipping new trigger");
+      // console.log("⏭️ Nodding already in progress, skipping new trigger");
       return;
     }
 
@@ -194,7 +194,7 @@ export class MicroResponseController {
     const stepsPerNod = 20;
     let currentStep = 0;
 
-    console.log(`👤 Starting head nodding (${count} nods, speed: ${speed})`);
+    // console.log(`👤 Starting head nodding (${count} nods, speed: ${speed})`);
 
     this._noddingInterval = setInterval(() => {
       currentStep++;
@@ -235,7 +235,7 @@ export class MicroResponseController {
           this._noddingInterval = null;
           this._isNodding = false;
 
-          console.log("👤 Head nodding complete");
+          // console.log("👤 Head nodding complete");
         }
       }
     }, speed * 100); // Speed multiplier (smaller = faster)
@@ -251,7 +251,7 @@ export class MicroResponseController {
   _fadeToNeutral(fadeDuration = 0.3) {
     if (!this._currentMicroResponse) return;
 
-    console.log(`😐 Micro response fading to neutral (${fadeDuration}s)`);
+    // console.log(`😐 Micro response fading to neutral (${fadeDuration}s)`);
 
     // Gradual fadeout (20 steps)
     const steps = 20;
@@ -328,9 +328,9 @@ export class MicroResponseController {
       this._currentMicroResponse = null;
     }
 
-    console.log(
-      "⚡ Micro response stopped immediately (blendshapes preserved for smooth transition)"
-    );
+    // console.log(
+    //   "⚡ Micro response stopped immediately (blendshapes preserved for smooth transition)"
+    // );
   }
 
   /**
@@ -353,7 +353,7 @@ export class MicroResponseController {
         return;
       }
 
-      console.log(`ℹ️ Stopping micro response with ${fadeDuration}s fade`);
+      // console.log(`ℹ️ Stopping micro response with ${fadeDuration}s fade`);
 
       // Clear all active intervals immediately
       for (const interval of this._activeIntervals) {
@@ -448,7 +448,7 @@ export class MicroResponseController {
       // Resolve when all fadeouts complete
       if (fadePromises.length > 0) {
         Promise.all(fadePromises).then(() => {
-          console.log("✅ Micro response stop complete");
+          // console.log("✅ Micro response stop complete");
           resolve();
         });
       } else {

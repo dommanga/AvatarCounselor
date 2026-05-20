@@ -15,7 +15,7 @@ export class TTSManager {
     this.onEnd = null;
     this.onError = null;
 
-    console.log("🔊 TTSManager initialized");
+    // console.log("🔊 TTSManager initialized");
   }
 
   async speak(text, language = "ko-KR", avatarGender = null) {
@@ -35,7 +35,7 @@ export class TTSManager {
     }
 
     try {
-      console.log(`🔊 Requesting TTS`);
+      // console.log(`🔊 Requesting TTS`);
 
       // Use APIManager instead of direct fetch
       const audioBuffer = await this.apiManager.generateTTS(
@@ -57,14 +57,14 @@ export class TTSManager {
       // Create audio element
       this.audio = new Audio(audioUrl);
       this.audio.volume = this.volume;
-      console.log("🔊 Audio element created successfully");
+      // console.log("🔊 Audio element created successfully");
 
       // Set up event handlers
       this.audio.onended = () => {
         this.isSpeaking = false;
         this.cleanupAudio();
         if (this.onEnd) this.onEnd();
-        console.log("🔇 TTS playback ended");
+        // console.log("🔇 TTS playback ended");
       };
 
       this.audio.onerror = (event) => {
@@ -76,7 +76,7 @@ export class TTSManager {
 
       // Start callbacks BEFORE playing
       this.isSpeaking = true;
-      console.log("🔊 TTS playback starting");
+      // console.log("🔊 TTS playback starting");
 
       if (this.onStart) {
         await this.onStart();
@@ -96,7 +96,7 @@ export class TTSManager {
     if (this.currentAudioUrl) {
       URL.revokeObjectURL(this.currentAudioUrl);
       this.currentAudioUrl = null;
-      console.log("🧹 Audio URL cleaned up");
+      // console.log("🧹 Audio URL cleaned up");
     }
   }
 

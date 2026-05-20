@@ -111,7 +111,7 @@ const loader = new GLTFLoader();
   uiController.onSessionStart = async (sessionInfo) => {
     if (customizationListener) {
       customizationManager.removeListener(customizationListener);
-      console.log("🗑️ Removed previous customization listener");
+      // console.log("🗑️ Removed previous customization listener");
     }
 
     customizationManager.resetToDefaults();
@@ -156,7 +156,7 @@ function loadAvatar() {
         }
       }
     });
-    console.log("🗑️ Previous avatar removed and disposed");
+    // console.log("🗑️ Previous avatar removed and disposed");
   }
 
   if (idleAnimationController) {
@@ -169,7 +169,7 @@ function loadAvatar() {
     selectedAvatar === "male"
       ? "./assets/avatar_boy.glb"
       : "./assets/avatar_girl.glb";
-  console.log("🎭 Loading avatar:", selectedAvatar, "from", avatarPath);
+  // console.log("🎭 Loading avatar:", selectedAvatar, "from", avatarPath);
 
   loader.load(
     avatarPath,
@@ -196,7 +196,7 @@ function loadAvatar() {
 
 // Initialize speech recognition system
 async function initializeSpeechRecognition() {
-  console.log("🎤 Initializing speech recognition...");
+  // console.log("🎤 Initializing speech recognition...");
 
   // Create speech manager
   speechManager = new SpeechRecognitionManager();
@@ -217,7 +217,7 @@ async function initializeSpeechRecognition() {
     baseIntensity: currentSettings.baseIntensity, // 0.3-1.2
     baseFrequency: currentSettings.baseFrequency, // 0.2-1.0
   });
-  console.log("✅ Micro response controller initialized!");
+  // console.log("✅ Micro response controller initialized!");
 
   // ===== CUSTOMIZATION UI SETUP =====
 
@@ -283,22 +283,22 @@ async function initializeSpeechRecognition() {
     apiManager.resetSentimentStream();
 
     if (!text || text.trim().length === 0) {
-      console.log("⏭️  Skipping empty transcript");
+      // console.log("⏭️  Skipping empty transcript");
       return;
     }
 
     // Prevent duplicate processing
     if (isProcessingResponse) {
-      console.log("⏭️ Already processing a response, skipping duplicate");
+      // console.log("⏭️ Already processing a response, skipping duplicate");
       return;
     }
 
-    console.log("📝 Final transcript");
+    // console.log("📝 Final transcript");
     isProcessingResponse = true;
 
     // Stop speech recognition immediately after user finishes speaking
     if (speechManager && speechManager.isListening) {
-      console.log("🎤 Stopping speech recognition (waiting for response)");
+      // console.log("🎤 Stopping speech recognition (waiting for response)");
       speechManager.stop(false); // Don't process transcript (we're already processing this one)
     }
 
@@ -321,13 +321,13 @@ async function initializeSpeechRecognition() {
     };
 
     if (!counselorText) {
-      console.log("⏭️ Empty counselor text, skipping.");
+      // console.log("⏭️ Empty counselor text, skipping.");
       isProcessingResponse = false;
       uiController.enableMicButton();
 
       // Restart speech recognition
       if (speechManager && !speechManager.isListening) {
-        console.log("🎤 Resuming speech recognition");
+        // console.log("🎤 Resuming speech recognition");
         speechManager.start();
       }
       return;
@@ -343,14 +343,10 @@ async function initializeSpeechRecognition() {
       currentSettings.baseIntensity * counselorEmotion.intensityMultiplier;
     currentFinalIntensity = Math.max(0, rawFinal);
 
-    console.log(`🎭 Full Response`);
-    // console.log(
-    //   `🎭 Full Response: emotion=${currentCounselorEmotion}, baseIntensity=${currentSettings.baseIntensity.toFixed(
-    //     2
-    //   )}, multiplier=${
-    //     counselorEmotion.intensityMultiplier
-    //   }, finalIntensity=${currentFinalIntensity.toFixed(2)}`
-    // );
+    // console.log(`🎭 Full Response`);
+    console.log(
+      `🎭 Answering with emotion=${currentCounselorEmotion}`
+    );
 
     // Turn logging
     if (uiController.getSessionInfo()) {
@@ -373,8 +369,8 @@ async function initializeSpeechRecognition() {
       microResponseController?.isNodding()
     ) {
       microResponseController.stopImmediate();
-      console.log("⚡ Micro stopped, blendshapes preserved");
-      console.log("🎭 Full Response applied (smooth transition from Micro)");
+      // console.log("⚡ Micro stopped, blendshapes preserved");
+      // console.log("🎭 Full Response applied (smooth transition from Micro)");
     }
 
     avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
@@ -447,7 +443,7 @@ async function initializeSpeechRecognition() {
       // Start session logging ONLY if not already active
       if (!currentSessionActive) {
         const sessionInfo = uiController.getSessionInfo();
-        console.log("🔍 Session info:", sessionInfo);
+        // console.log("🔍 Session info:", sessionInfo);
 
         if (sessionInfo) {
           const currentSettings = customizationManager.getSettings();
@@ -463,10 +459,10 @@ async function initializeSpeechRecognition() {
           currentUserAge = sessionInfo.age;
           console.log("✅ Session logging started");
         } else {
-          console.log("⚠️ No session info available");
+          // console.log("⚠️ No session info available");
         }
       } else {
-        console.log("⏭️ Session already active, skipping start");
+        // console.log("⏭️ Session already active, skipping start");
       }
 
       speechManager.start();
@@ -506,7 +502,7 @@ async function initializeSpeechRecognition() {
     if (currentSessionActive && uiController.getSessionInfo()) {
       await apiManager.endSession();
       currentSessionActive = false;
-      console.log("✅ Session logging ended");
+      // console.log("✅ Session logging ended");
     }
 
     // Clear all histories
@@ -519,7 +515,7 @@ async function initializeSpeechRecognition() {
     uiController.setFrequencyLevel(0.6);
     uiController.unlockCustomizationSettings();
 
-    console.log("🆕 New session started");
+    // console.log("🆕 New session started");
 
     try {
       const configRes = await fetch("http://localhost:3000/api/config");
@@ -537,12 +533,12 @@ async function initializeSpeechRecognition() {
     speechManager.setLanguage(e.target.value);
   });
 
-  console.log("✅ Speech recognition initialized!");
+  // console.log("✅ Speech recognition initialized!");
 }
 
 // Initialize TTS system
 function initializeTTS() {
-  console.log("🔊 Initializing TTS...");
+  // console.log("🔊 Initializing TTS...");
 
   // Create TTS manager
   ttsManager = new TTSManager(apiManager);
@@ -552,7 +548,7 @@ function initializeTTS() {
 
   // Setup TTS callbacks
   ttsManager.onStart = async () => {
-    console.log("🔊 TTS started");
+    // console.log("🔊 TTS started");
 
     // Show counselor message in UI (synced with TTS start)
     if (currentCounselorText) {
@@ -561,7 +557,7 @@ function initializeTTS() {
 
     // Ensure speech recognition is stopped (should already be stopped from onFinalTranscript)
     if (speechManager && speechManager.isListening) {
-      console.log("⚠️ Speech recognition still active, stopping now");
+      // console.log("⚠️ Speech recognition still active, stopping now");
       speechManager.stop(false); // Don't process transcript during TTS
     }
 
@@ -581,7 +577,7 @@ function initializeTTS() {
     ) {
       microResponseController.stopImmediate(); // Instant stop without fade
     }
-    console.log("✅ Micro stopped, starting Full Response");
+    // console.log("✅ Micro stopped, starting Full Response");
 
     if (currentCounselorEmotion && currentFinalIntensity > 0) {
       // Clear any existing interval
@@ -617,14 +613,14 @@ function initializeTTS() {
         );
       }, 100); // 10fps for smooth animation
 
-      console.log(
-        `🔄 Natural expression fluctuation started (sine wave with fade-in)`
-      );
+      // console.log(
+      //   `🔄 Natural expression fluctuation started (sine wave with fade-in)`
+      // );
     }
   };
 
   ttsManager.onEnd = () => {
-    console.log("🔇 TTS ended");
+    // console.log("🔇 TTS ended");
     uiController.setSpeakingStatus(false);
     uiController.enableMicButton();
     uiController.enableNewSessionButton();
@@ -634,7 +630,7 @@ function initializeTTS() {
     if (expressionInterval) {
       clearInterval(expressionInterval);
       expressionInterval = null;
-      console.log("🔄 Expression fluctuation stopped");
+      // console.log("🔄 Expression fluctuation stopped");
     }
 
     if (idleAnimationController) {
@@ -653,7 +649,7 @@ function initializeTTS() {
 
     // Restart speech recognition after TTS ends
     if (speechManager && !speechManager.isListening) {
-      console.log("🎤 Resuming speech recognition after TTS");
+      // console.log("🎤 Resuming speech recognition after TTS");
       speechManager.start();
     }
   };
@@ -692,12 +688,12 @@ function initializeTTS() {
     if (error === "interrupted") {
       console.log("ℹ️ TTS interrupted");
     } else if (speechManager && !speechManager.isListening) {
-      console.log("🎤 Resuming speech recognition after TTS error");
+      // console.log("🎤 Resuming speech recognition after TTS error");
       speechManager.start();
     }
   };
 
-  console.log("✅ TTS initialized!");
+  // console.log("✅ TTS initialized!");
 }
 
 function addToConversation(speaker, text) {
@@ -717,7 +713,7 @@ async function speakResponse(text) {
     const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
     const language = hasKorean ? "ko-KR" : "en-US";
 
-    console.log(`🔊 Speaking in ${language}`);
+    // console.log(`🔊 Speaking in ${language}`);
 
     const selectedAvatar =
       sessionStorage.getItem("selectedAvatar") || DEV_DEFAULT_AVATAR;

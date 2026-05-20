@@ -84,11 +84,11 @@ export class SpeechRecognitionManager {
             ? this.config.shortPhraseDelay
             : this.config.longPhraseDelay;
 
-        console.log(`⏱️  Final debounce: ${delay}ms`);
+        // console.log(`⏱️  Final debounce: ${delay}ms`);
 
         this._finalDebounceTimer = setTimeout(() => {
           if (this.onFinalTranscript && this._accumulatedTranscript) {
-            console.log("✅ Processing accumulated transcript");
+            // console.log("✅ Processing accumulated transcript");
             this.onFinalTranscript(this._accumulatedTranscript);
             this._accumulatedTranscript = "";
             this._pendingFinalTranscript = "";
@@ -98,9 +98,9 @@ export class SpeechRecognitionManager {
 
       // user keep speaking - cancel timer but keep accumulated transcript
       if (this.interimTranscript && this._pendingFinalTranscript) {
-        console.log(
-          "⏭️  Speech continuing, canceling debounce timer (keeping accumulated)"
-        );
+        // console.log(
+        //   "⏭️  Speech continuing, canceling debounce timer (keeping accumulated)"
+        // );
         clearTimeout(this._finalDebounceTimer);
         this._pendingFinalTranscript = "";
         // Note: _accumulatedTranscript is kept for the next final transcript
@@ -143,9 +143,9 @@ export class SpeechRecognitionManager {
         } catch (error) {
           // Ignore "already started" errors
           if (error.message && error.message.includes("already")) {
-            console.log(
-              "⏭️ Speech recognition already starting, skipping restart"
-            );
+            // console.log(
+            //   "⏭️ Speech recognition already starting, skipping restart"
+            // );
           } else {
             console.error("Failed to restart recognition:", error);
           }
@@ -156,7 +156,7 @@ export class SpeechRecognitionManager {
     // Handle start
     this.recognition.onstart = () => {
       this._isStarting = false;
-      console.log("Speech recognition started");
+      // console.log("Speech recognition started");
       if (this.onStatusChange) {
         this.onStatusChange(true);
       }
@@ -176,7 +176,7 @@ export class SpeechRecognitionManager {
 
     // Prevent duplicate start() calls
     if (this._isStarting) {
-      console.log("⏭️ Speech recognition already starting, skipping");
+      // console.log("⏭️ Speech recognition already starting, skipping");
       return false;
     }
 
@@ -209,9 +209,9 @@ export class SpeechRecognitionManager {
       // Don't add _pendingFinalTranscript again to avoid duplication
       const finalText = this._accumulatedTranscript.trim();
 
-      console.log(
-        "⏹️  Stop triggered, processing accumulated transcript immediately"
-      );
+      // console.log(
+      //   "⏹️  Stop triggered, processing accumulated transcript immediately"
+      // );
       if (this.onFinalTranscript && finalText) {
         this.onFinalTranscript(finalText);
       }
@@ -222,9 +222,9 @@ export class SpeechRecognitionManager {
       clearTimeout(this._finalDebounceTimer);
       this._accumulatedTranscript = "";
       this._pendingFinalTranscript = "";
-      console.log(
-        "⏹️  Stop triggered, clearing pending transcript (no processing)"
-      );
+      // console.log(
+      //   "⏹️  Stop triggered, clearing pending transcript (no processing)"
+      // );
     }
 
     this.isListening = false;
@@ -272,6 +272,6 @@ export class SpeechRecognitionManager {
     this.config.shortPhraseThreshold =
       threshold || this.config.shortPhraseThreshold;
 
-    console.log("⏱️  Debounce config updated:", this.config);
+    // console.log("⏱️  Debounce config updated:", this.config);
   }
 }

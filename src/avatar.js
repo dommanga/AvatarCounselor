@@ -30,12 +30,12 @@ export class AvatarController {
       // Find Head bone
       if (node.isBone && node.name === "Head") {
         this.headBone = node;
-        console.log("✅ Head bone found!");
+        // console.log("✅ Head bone found!");
       }
       // Find Spine bone
       if (node.isBone && node.name === "Spine") {
         this.spineBone = node;
-        console.log("✅ Spine bone found!");
+        // console.log("✅ Spine bone found!");
       }
     });
 
@@ -44,11 +44,11 @@ export class AvatarController {
       return;
     }
 
-    console.log("✅ Avatar mesh loaded");
-    console.log(
-      "✅ Total morph targets:",
-      Object.keys(this.morphTargetDictionary).length
-    );
+    // console.log("✅ Avatar mesh loaded");
+    // console.log(
+    //   "✅ Total morph targets:",
+    //   Object.keys(this.morphTargetDictionary).length
+    // );
 
     this.initializeMorphValues();
   }
