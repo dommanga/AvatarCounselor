@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel Avatar Stress Test Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #1a1a1a;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #info {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.65);
+      padding: 16px 18px;
+      border-radius: 10px;
+      max-width: 320px;
+      backdrop-filter: blur(6px);
+      z-index: 10;
+    }
+
+    #info h3 {
+      margin: 0 0 6px 0;
+      font-size: 15px;
+    }
+
+    #info .desc {
+      margin: 0 0 14px 0;
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.5;
+    }
+
+    .slot {
+      margin: 10px 0;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      border-left: 3px solid #555;
+    }
+
+    .slot.loaded {
+      border-left-color: #5ec27a;
+    }
+
+    .slot label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .slot input[type="file"] {
+      font-size: 11px;
+      color: #ccc;
+      width: 100%;
+    }
+
+    .slot input[type="file"]::file-selector-button {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      margin-right: 8px;
+    }
+
+    .source-label {
+      font-size: 10px;
+      color: #888;
+      margin-top: 6px;
+    }
+
+    #controls {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 11px;
+      color: #ccc;
+      backdrop-filter: blur(6px);
+    }
+
+    #controls button {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      margin-right: 6px;
+    }
+
+    #controls button:hover {
+      background: #444;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="info">
+    <h3>Panel Avatar Stress Test</h3>
+    <p class="desc">
+      Evaluator panel 3명의 시각적 stress 유발 효과 점검용 viewer.<br>
+      각 slot 에 .glb 파일을 선택하면 즉시 panel 위치에 렌더링됨.
+    </p>
+
+    <div class="slot" id="slot1">
+      <label>Slot 1 — 왼쪽 panel</label>
+      <input type="file" id="file1" accept=".glb">
+      <div class="source-label" id="label1">기본: assets/panel/slot1.glb</div>
+    </div>
+
+    <div class="slot" id="slot2">
+      <label>Slot 2 — 가운데 panel</label>
+      <input type="file" id="file2" accept=".glb">
+      <div class="source-label" id="label2">기본: assets/panel/slot2.glb</div>
+    </div>
+
+    <div class="slot" id="slot3">
+      <label>Slot 3 — 오른쪽 panel</label>
+      <input type="file" id="file3" accept=".glb">
+      <div class="source-label" id="label3">기본: assets/panel/slot3.glb</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="resetCamera">카메라 리셋</button>
+    <span>마우스: 회전 / 휠: 줌 / 우클릭 드래그: 이동</span>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ===== Scene 셋업 =====
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x2a2a30);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+
+    // 카메라 default 위치 — 학생이 panel 마주보고 서있는 first-person view
+    const DEFAULT_CAM_POS = { x: 0, y: 0.65, z: 1 };
+    const DEFAULT_CAM_TARGET = { x: 0, y: 0.5, z: -1 };
+
+    camera.position.set(DEFAULT_CAM_POS.x, DEFAULT_CAM_POS.y, DEFAULT_CAM_POS.z);
+    camera.lookAt(DEFAULT_CAM_TARGET.x, DEFAULT_CAM_TARGET.y, DEFAULT_CAM_TARGET.z);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    // ===== Lighting — formal evaluation room 톤 =====
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(ambient);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    keyLight.position.set(0, 4, 3);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xc8d4e0, 0.3);
+    fillLight.position.set(-3, 2, 2);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
+    rimLight.position.set(0, 2, -3);
+    scene.add(rimLight);
+
+    // ===== Ground (있어야 panel 들이 어색하지 않음) =====
+    const groundGeom = new THREE.PlaneGeometry(20, 20);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x1f1f24,
+      roughness: 0.9
+    });
+    const ground = new THREE.Mesh(groundGeom, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    scene.add(ground);
+
+    // ===== Controls =====
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(DEFAULT_CAM_TARGET.x, DEFAULT_CAM_TARGET.y, DEFAULT_CAM_TARGET.z);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.update();
+
+    // ===== Panel slot 위치 =====
+    // 학생 시점에서 panel 3명이 가로로 일렬 — vcTSST 스타일
+    // 가운데가 정면, 양쪽이 약간 안쪽으로 angle (-15도 / +15도)
+    const slotConfigs = [
+      { x: -0.45, y: 0, z: 0, rotY: (15 * Math.PI / 180) },  // 왼쪽 — 약간 안쪽
+      { x: 0,     y: 0, z: 0, rotY: 0 },                        // 가운데
+      { x: 0.45,  y: 0, z: 0, rotY: - (15 * Math.PI / 180) }   // 오른쪽 — 약간 안쪽
+    ];
+
+    const avatarGroups = [null, null, null];
+    const loader = new GLTFLoader();
+
+    function loadAvatar(slotIndex, url, sourceName) {
+      loader.load(
+        url,
+        (gltf) => {
+          // 기존 avatar 제거
+          if (avatarGroups[slotIndex]) {
+            scene.remove(avatarGroups[slotIndex]);
+          }
+
+          const model = gltf.scene;
+          const cfg = slotConfigs[slotIndex];
+
+          model.position.set(cfg.x, cfg.y, cfg.z);
+          model.rotation.y = cfg.rotY;
+
+          // 무표정 baseline — 모든 blendshape (morph target) 0 으로 리셋
+          model.traverse((child) => {
+            if (child.isMesh && child.morphTargetInfluences) {
+              for (let i = 0; i < child.morphTargetInfluences.length; i++) {
+                child.morphTargetInfluences[i] = 0;
+              }
+            }
+          });
+
+          scene.add(model);
+          avatarGroups[slotIndex] = model;
+
+          // UI 상태 업데이트
+          document.getElementById(`slot${slotIndex + 1}`).classList.add('loaded');
+          if (sourceName) {
+            document.getElementById(`label${slotIndex + 1}`).textContent =
+              `로드됨: ${sourceName}`;
+          }
+
+          console.log(`[Slot ${slotIndex + 1}] 로드 완료: ${url}`);
+        },
+        undefined,
+        (error) => {
+          console.warn(`[Slot ${slotIndex + 1}] 로드 실패: ${url}`, error.message || error);
+        }
+      );
+    }
+
+    // ===== 기본 path 시도 (assets/panel/ 에 미리 .glb 떨어뜨려두면 자동 로드) =====
+    loadAvatar(0, 'assets/panel/slot1.glb');
+    loadAvatar(1, 'assets/panel/slot2.glb');
+    loadAvatar(2, 'assets/panel/slot3.glb');
+
+    // ===== File input handlers =====
+    function setupFileInput(inputId, slotIndex) {
+      const input = document.getElementById(inputId);
+      input.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        loadAvatar(slotIndex, url, file.name);
+      });
+    }
+
+    setupFileInput('file1', 0);
+    setupFileInput('file2', 1);
+    setupFileInput('file3', 2);
+
+    // ===== 카메라 리셋 =====
+    document.getElementById('resetCamera').addEventListener('click', () => {
+      camera.position.set(DEFAULT_CAM_POS.x, DEFAULT_CAM_POS.y, DEFAULT_CAM_POS.z);
+      controls.target.set(DEFAULT_CAM_TARGET.x, DEFAULT_CAM_TARGET.y, DEFAULT_CAM_TARGET.z);
+      controls.update();
+    });
+
+    // ===== Resize =====
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ===== Animation loop =====
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+
+</html>
