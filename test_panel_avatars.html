@@ -104,10 +104,36 @@
     #controls button:hover {
       background: #444;
     }
+
+    .floating-toggle {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 11;
+      background: rgba(0, 0, 0, 0.65);
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 16px;
+      backdrop-filter: blur(6px);
+      transition: background 0.15s;
+    }
+
+    .floating-toggle:hover {
+      background: rgba(70, 70, 70, 0.8);
+    }
+
+    #info.hidden {
+      display: none;
+    }
   </style>
 </head>
 
 <body>
+  <button id="toggleInfo" class="floating-toggle" title="UI 토글 (H)">☰</button>
+
   <div id="info">
     <h3>Panel Avatar Stress Test</h3>
     <p class="desc">
@@ -285,6 +311,22 @@
     setupFileInput('file1', 0);
     setupFileInput('file2', 1);
     setupFileInput('file3', 2);
+
+    // ===== Info panel 토글 (클릭 + H 키) =====
+    const toggleBtn = document.getElementById('toggleInfo');
+    const infoPanel = document.getElementById('info');
+
+    function toggleInfoPanel() {
+      infoPanel.classList.toggle('hidden');
+    }
+
+    toggleBtn.addEventListener('click', toggleInfoPanel);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'h' || e.key === 'H') {
+        toggleInfoPanel();
+      }
+    });
 
     // ===== 카메라 리셋 =====
     document.getElementById('resetCamera').addEventListener('click', () => {
