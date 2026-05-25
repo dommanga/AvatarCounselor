@@ -898,10 +898,10 @@
       }
 
       _setGazeOffset(yaw, pitch) {
-        if (lookAtCameraMode) return; // lookAt mode 중엔 idle gaze 무시
         idleGazeOffsets[this.slotIndex].yaw = yaw;
         idleGazeOffsets[this.slotIndex].pitch = pitch;
-        applyGaze(this.slotIndex);
+        // lookAtCameraMode 일 때도 offset 저장 — applyGaze/updateLookAtCamera 에서 합산됨
+        if (!lookAtCameraMode) applyGaze(this.slotIndex);
       }
 
       _rand(min, max) { return Math.random() * (max - min) + min; }
@@ -920,20 +920,50 @@
       _blink() {
         if (this.isBlinking) return;
         this.isBlinking = true;
-        this._setMorph('eyeBlinkLeft', 1.0);
-        this._setMorph('eyeBlinkRight', 1.0);
-        setTimeout(() => {
-          this._setMorph('eyeBlinkLeft', 0);
-          this._setMorph('eyeBlinkRight', 0);
-          this.isBlinking = false;
-        }, this.cfg.blinkDuration);
+
+        const closeSteps = 8;
+        const openSteps  = 10;
+        const closeDur   = 70;   // ms — 눈 감기 총 시간
+        const holdDur    = 30;   // ms — 완전히 감긴 상태 유지
+        const openDur    = 110;  // ms — 눈 뜨기 총 시간
+
+        // Phase 1: 눈 감기 (0 → 1)
+        let step = 0;
+        const closeInterval = setInterval(() => {
+          step++;
+          const v = step / closeSteps;
+          this._setMorph('eyeBlinkLeft', v);
+          this._setMorph('eyeBlinkRight', v);
+          if (step >= closeSteps) {
+            clearInterval(closeInterval);
+            // Phase 2: hold
+            setTimeout(() => {
+              // Phase 3: 눈 뜨기 (1 → 0)
+              let openStep = 0;
+              const openInterval = setInterval(() => {
+                openStep++;
+                // ease-out: 처음엔 빠르게, 끝에서 느리게
+                const t = openStep / openSteps;
+                const v = 1 - (t * t * (3 - 2 * t)); // smoothstep
+                this._setMorph('eyeBlinkLeft',  Math.max(0, v));
+                this._setMorph('eyeBlinkRight', Math.max(0, v));
+                if (openStep >= openSteps) {
+                  clearInterval(openInterval);
+                  this._setMorph('eyeBlinkLeft', 0);
+                  this._setMorph('eyeBlinkRight', 0);
+                  this.isBlinking = false;
+                }
+              }, openDur / openSteps);
+            }, holdDur);
+          }
+        }, closeDur / closeSteps);
       }
 
       // ── Eye Tremor (micro movement) ────────────────────────
 
       _startTremor() {
         this.tremorInterval = setInterval(() => {
-          if (!this.active || this.isDarting || lookAtCameraMode) return;
+          if (!this.active || this.isDarting) return;
           const i = this.cfg.tremorIntensity;
           const ty = this._rand(-i, i);
           const tp = this._rand(-i * 0.6, i * 0.6);
@@ -955,7 +985,7 @@
       }
 
       _dart() {
-        if (this.isDarting || lookAtCameraMode) return;
+        if (this.isDarting) return;
         this.isDarting = true;
 
         const targetYaw   = this._rand(-this.cfg.dartIntensity, this.cfg.dartIntensity);
