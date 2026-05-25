@@ -128,6 +128,86 @@
     #info.hidden {
       display: none;
     }
+
+    .gaze-section {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #444;
+    }
+
+    .gaze-section .gaze-title {
+      font-size: 10px;
+      color: #aaa;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .gaze-section.unavailable .gaze-title {
+      color: #666;
+    }
+
+    .gaze-section.unavailable input[type="range"] {
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+
+    .slider-row label {
+      font-size: 10px;
+      color: #999;
+      width: 36px;
+      flex-shrink: 0;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .slider-row .val {
+      font-size: 10px;
+      color: #888;
+      width: 30px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gaze-status {
+      font-size: 9px;
+      color: #666;
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    .gaze-status.bone {
+      color: #6ab0ff;
+    }
+
+    .gaze-status.morph {
+      color: #b06aff;
+    }
+
+    .gaze-status.none {
+      color: #ff6a6a;
+    }
+
+    #controls .lookat-toggle {
+      background: #2a3a5a;
+      border-color: #4a5a7a;
+    }
+
+    #controls .lookat-toggle.active {
+      background: #4a5a8a;
+      border-color: #6a7aaa;
+      color: #fff;
+    }
   </style>
 </head>
 
@@ -145,23 +225,66 @@
       <label>Slot 1 — 왼쪽 panel</label>
       <input type="file" id="file1" accept=".glb">
       <div class="source-label" id="label1">기본: assets/panel/slot1.glb</div>
+      <div class="gaze-section" id="gaze1">
+        <div class="gaze-title">EYE GAZE</div>
+        <div class="slider-row">
+          <label>yaw</label>
+          <input type="range" id="yaw1" min="-1" max="1" step="0.01" value="0">
+          <span class="val" id="yaw1-val">0.00</span>
+        </div>
+        <div class="slider-row">
+          <label>pitch</label>
+          <input type="range" id="pitch1" min="-1" max="1" step="0.01" value="0">
+          <span class="val" id="pitch1-val">0.00</span>
+        </div>
+        <div class="gaze-status none" id="gaze1-status">아바타 미로드</div>
+      </div>
     </div>
 
     <div class="slot" id="slot2">
       <label>Slot 2 — 가운데 panel</label>
       <input type="file" id="file2" accept=".glb">
       <div class="source-label" id="label2">기본: assets/panel/slot2.glb</div>
+      <div class="gaze-section" id="gaze2">
+        <div class="gaze-title">EYE GAZE</div>
+        <div class="slider-row">
+          <label>yaw</label>
+          <input type="range" id="yaw2" min="-1" max="1" step="0.01" value="0">
+          <span class="val" id="yaw2-val">0.00</span>
+        </div>
+        <div class="slider-row">
+          <label>pitch</label>
+          <input type="range" id="pitch2" min="-1" max="1" step="0.01" value="0">
+          <span class="val" id="pitch2-val">0.00</span>
+        </div>
+        <div class="gaze-status none" id="gaze2-status">아바타 미로드</div>
+      </div>
     </div>
 
     <div class="slot" id="slot3">
       <label>Slot 3 — 오른쪽 panel</label>
       <input type="file" id="file3" accept=".glb">
       <div class="source-label" id="label3">기본: assets/panel/slot3.glb</div>
+      <div class="gaze-section" id="gaze3">
+        <div class="gaze-title">EYE GAZE</div>
+        <div class="slider-row">
+          <label>yaw</label>
+          <input type="range" id="yaw3" min="-1" max="1" step="0.01" value="0">
+          <span class="val" id="yaw3-val">0.00</span>
+        </div>
+        <div class="slider-row">
+          <label>pitch</label>
+          <input type="range" id="pitch3" min="-1" max="1" step="0.01" value="0">
+          <span class="val" id="pitch3-val">0.00</span>
+        </div>
+        <div class="gaze-status none" id="gaze3-status">아바타 미로드</div>
+      </div>
     </div>
   </div>
 
   <div id="controls">
     <button id="resetCamera">카메라 리셋</button>
+    <button id="lookAtToggle" class="lookat-toggle">👀 카메라 응시</button>
     <span>마우스: 회전 / 휠: 줌 / 우클릭 드래그: 이동</span>
   </div>
 
@@ -249,6 +372,252 @@
     const avatarGroups = [null, null, null];
     const loader = new GLTFLoader();
 
+    // ===== Panel state — eye gaze 관리 =====
+    // 각 slot 마다 detect 된 eye bone / morph 정보 저장
+    const panelStates = [
+      createPanelState(),
+      createPanelState(),
+      createPanelState()
+    ];
+
+    function createPanelState() {
+      return {
+        leftEyeBone: null,
+        rightEyeBone: null,
+        leftEyeBoneRestQuat: null,  // bind pose orientation 저장
+        rightEyeBoneRestQuat: null,
+        morphMeshes: [],            // eye morph 가진 mesh 들 (head, eyes 등 여러 개일 수 있음)
+        morphIndices: {             // -1 if not available
+          lookInL: -1, lookOutL: -1, lookUpL: -1, lookDownL: -1,
+          lookInR: -1, lookOutR: -1, lookUpR: -1, lookDownR: -1
+        },
+        gazeMethod: 'none',         // 'bone' | 'morph' | 'none'
+        gaze: { yaw: 0, pitch: 0 }
+      };
+    }
+
+    // Morph dictionary 에서 keyword 매칭 (case-insensitive, partial match)
+    function findMorphIndex(dict, ...keywords) {
+      for (const key in dict) {
+        const lower = key.toLowerCase();
+        if (keywords.every(kw => lower.includes(kw.toLowerCase()))) {
+          return dict[key];
+        }
+      }
+      return -1;
+    }
+
+    // .glb 로드 후 eye control 자동 감지
+    function detectEyeControls(slotIndex, model) {
+      const state = panelStates[slotIndex];
+
+      // 1. Bone-based 시도 (CC4 등)
+      model.traverse((child) => {
+        if (child.isBone) {
+          const name = child.name.toLowerCase();
+          // CC4: CC_Base_L_Eye / CC_Base_R_Eye
+          // RPM: LeftEye / RightEye
+          // 일반: l_eye, r_eye, lefteye, righteye, eye_l, eye_r
+          if (!state.leftEyeBone && (
+            name.includes('l_eye') || name === 'lefteye' || name.includes('lefteye') || name.endsWith('eye_l')
+          )) {
+            state.leftEyeBone = child;
+            state.leftEyeBoneRestQuat = child.quaternion.clone();
+          }
+          if (!state.rightEyeBone && (
+            name.includes('r_eye') || name === 'righteye' || name.includes('righteye') || name.endsWith('eye_r')
+          )) {
+            state.rightEyeBone = child;
+            state.rightEyeBoneRestQuat = child.quaternion.clone();
+          }
+        }
+      });
+
+      // 2. Morph-based 시도 (RPM ARKit 등)
+      const morphMeshSet = new Set();
+      model.traverse((child) => {
+        if (child.isMesh && child.morphTargetDictionary) {
+          const dict = child.morphTargetDictionary;
+          const idx = {
+            lookInL: findMorphIndex(dict, 'eyelookin', 'left'),
+            lookOutL: findMorphIndex(dict, 'eyelookout', 'left'),
+            lookUpL: findMorphIndex(dict, 'eyelookup', 'left'),
+            lookDownL: findMorphIndex(dict, 'eyelookdown', 'left'),
+            lookInR: findMorphIndex(dict, 'eyelookin', 'right'),
+            lookOutR: findMorphIndex(dict, 'eyelookout', 'right'),
+            lookUpR: findMorphIndex(dict, 'eyelookup', 'right'),
+            lookDownR: findMorphIndex(dict, 'eyelookdown', 'right')
+          };
+          // 이 mesh 에 eye morph 가 하나라도 있으면 추가
+          if (Object.values(idx).some(v => v !== -1)) {
+            morphMeshSet.add(child);
+            // 가장 풍부한 mesh 의 indices 를 채택 (head/eye geometry mesh)
+            for (const key in idx) {
+              if (idx[key] !== -1 && state.morphIndices[key] === -1) {
+                state.morphIndices[key] = idx[key];
+              }
+            }
+          }
+        }
+      });
+      state.morphMeshes = Array.from(morphMeshSet);
+
+      // 3. Method 결정 — bone 우선 (더 자연스러움)
+      if (state.leftEyeBone && state.rightEyeBone) {
+        state.gazeMethod = 'bone';
+      } else if (state.morphMeshes.length > 0) {
+        state.gazeMethod = 'morph';
+      } else {
+        state.gazeMethod = 'none';
+      }
+
+      updateGazeStatusUI(slotIndex);
+    }
+
+    function updateGazeStatusUI(slotIndex) {
+      const state = panelStates[slotIndex];
+      const statusEl = document.getElementById(`gaze${slotIndex + 1}-status`);
+      const sectionEl = document.getElementById(`gaze${slotIndex + 1}`);
+
+      statusEl.className = 'gaze-status';
+      sectionEl.classList.remove('unavailable');
+
+      if (state.gazeMethod === 'bone') {
+        statusEl.classList.add('bone');
+        statusEl.textContent = '✓ bone 제어 (CC4 류)';
+      } else if (state.gazeMethod === 'morph') {
+        const found = Object.values(state.morphIndices).filter(v => v !== -1).length;
+        statusEl.classList.add('morph');
+        statusEl.textContent = `✓ morph 제어 (${found}/8 found)`;
+      } else {
+        statusEl.classList.add('none');
+        statusEl.textContent = '⚠ eye control 없음';
+        sectionEl.classList.add('unavailable');
+      }
+    }
+
+    // Gaze 적용 — bone 또는 morph 방식
+    function applyGaze(slotIndex) {
+      const state = panelStates[slotIndex];
+      if (state.gazeMethod === 'none') return;
+
+      const yaw = state.gaze.yaw;     // -1 ~ 1
+      const pitch = state.gaze.pitch; // -1 ~ 1
+
+      if (state.gazeMethod === 'bone') {
+        // 양 눈에 동일 회전 적용 (대략 -28° ~ +28°)
+        const maxRot = 0.5;           // ~28도
+        applyBoneGaze(state.leftEyeBone, state.leftEyeBoneRestQuat, yaw, pitch, maxRot);
+        applyBoneGaze(state.rightEyeBone, state.rightEyeBoneRestQuat, yaw, pitch, maxRot);
+      } else if (state.gazeMethod === 'morph') {
+        applyMorphGaze(state, yaw, pitch);
+      }
+    }
+
+    function applyBoneGaze(bone, restQuat, yaw, pitch, maxRot) {
+      if (!bone || !restQuat) return;
+      // Rest pose 에서 yaw (Y axis) / pitch (X axis) 만큼 회전
+      // 주의: CC4 의 eye bone local axis 가 model 마다 다를 수 있음
+      // 일반적으로 X = pitch, Y = yaw 이지만 안 맞으면 axis 바꿔야 함
+      const q = new THREE.Quaternion();
+      const euler = new THREE.Euler(pitch * maxRot, 0, yaw * maxRot, 'YXZ');
+      q.setFromEuler(euler);
+      bone.quaternion.copy(restQuat).multiply(q);
+    }
+
+    function applyMorphGaze(state, yaw, pitch) {
+      // yaw > 0 : 오른쪽 (사용자 시점). yaw < 0 : 왼쪽
+      // pitch > 0 : 위. pitch < 0 : 아래
+      // 양쪽 눈에 대해:
+      //   왼쪽 눈: yaw > 0 → lookIn, yaw < 0 → lookOut
+      //   오른쪽 눈: yaw > 0 → lookOut, yaw < 0 → lookIn
+      // (인간 시선이 한 점을 볼 때 두 눈은 서로 다른 방향으로 회전)
+      const yawAbs = Math.abs(yaw);
+      const pitchAbs = Math.abs(pitch);
+
+      const weights = {
+        lookInL: yaw > 0 ? yawAbs : 0,
+        lookOutL: yaw < 0 ? yawAbs : 0,
+        lookUpL: pitch > 0 ? pitchAbs : 0,
+        lookDownL: pitch < 0 ? pitchAbs : 0,
+        lookInR: yaw < 0 ? yawAbs : 0,
+        lookOutR: yaw > 0 ? yawAbs : 0,
+        lookUpR: pitch > 0 ? pitchAbs : 0,
+        lookDownR: pitch < 0 ? pitchAbs : 0
+      };
+
+      state.morphMeshes.forEach((mesh) => {
+        for (const key in weights) {
+          const idx = state.morphIndices[key];
+          if (idx === -1) continue;
+          // 이 mesh 에 해당 morph 있는지 확인
+          if (idx < mesh.morphTargetInfluences.length) {
+            mesh.morphTargetInfluences[idx] = weights[key];
+          }
+        }
+      });
+    }
+
+    // 카메라 응시 모드 — 각 panel 의 head world position 에서 camera 방향 계산
+    let lookAtCameraMode = false;
+
+    function updateLookAtCamera() {
+      if (!lookAtCameraMode) return;
+
+      for (let i = 0; i < 3; i++) {
+        const state = panelStates[i];
+        const avatar = avatarGroups[i];
+        if (!avatar || state.gazeMethod === 'none') continue;
+
+        // Panel head world position 추정 — bone 기반이면 eye bone 위치, 아니면 avatar position + offset
+        const headPos = new THREE.Vector3();
+        if (state.leftEyeBone) {
+          state.leftEyeBone.getWorldPosition(headPos);
+        } else {
+          avatar.getWorldPosition(headPos);
+          headPos.y += 1.6; // 대략적 head 높이
+        }
+
+        // Camera 와 head 사이의 vector (panel local space 로 변환)
+        const camPos = new THREE.Vector3();
+        camera.getWorldPosition(camPos);
+
+        // 단순화: panel 이 camera 방향을 향하도록 yaw/pitch 계산
+        // Panel 은 학생 (camera) 쪽 (z+) 을 바라보고 있음 (rotation.y = Math.PI)
+        // World direction
+        const dirWorld = new THREE.Vector3().subVectors(camPos, headPos).normalize();
+
+        // // Panel local 기준 (panel 의 forward 가 -z 방향이라고 가정)
+        // // Panel rotation 적용해서 local direction 구하기
+        // const panelQuat = new THREE.Quaternion();
+        // avatar.getWorldQuaternion(panelQuat);
+        // const dirLocal = dirWorld.clone().applyQuaternion(panelQuat.invert());
+
+        // // Yaw = atan2(x, -z), Pitch = atan2(y, length(xz))
+        // // Panel forward = -z (panel 이 학생을 바라보는 방향)
+        // const yawRad = Math.atan2(dirLocal.x, -dirLocal.z);
+        // const pitchRad = Math.atan2(dirLocal.y, Math.sqrt(dirLocal.x * dirLocal.x + dirLocal.z * dirLocal.z));
+
+        // World space 에서 직접 계산 (avatar forward = +Z 방향)
+        const avatarRotY = slotConfigs[i].rotY;
+        const yawRad = Math.atan2(dirWorld.x, dirWorld.z) - avatarRotY;
+        const pitchRad = Math.atan2(dirWorld.y, Math.sqrt(dirWorld.x * dirWorld.x + dirWorld.z * dirWorld.z));
+
+        // -1 ~ 1 로 normalize (max ~28도 = 0.5 radian)
+        const maxRot = 0.5;
+        state.gaze.yaw = Math.max(-1, Math.min(1, yawRad / maxRot));
+        state.gaze.pitch = Math.max(-1, Math.min(1, pitchRad / maxRot));
+
+        applyGaze(i);
+
+        // UI slider 도 동기화
+        document.getElementById(`yaw${i + 1}`).value = state.gaze.yaw.toFixed(2);
+        document.getElementById(`pitch${i + 1}`).value = state.gaze.pitch.toFixed(2);
+        document.getElementById(`yaw${i + 1}-val`).textContent = state.gaze.yaw.toFixed(2);
+        document.getElementById(`pitch${i + 1}-val`).textContent = state.gaze.pitch.toFixed(2);
+      }
+    }
+
     function loadAvatar(slotIndex, url, sourceName) {
       loader.load(
         url,
@@ -275,6 +644,16 @@
 
           scene.add(model);
           avatarGroups[slotIndex] = model;
+
+          // ===== Eye gaze controls 감지 =====
+          panelStates[slotIndex] = createPanelState();
+          detectEyeControls(slotIndex, model);
+          // 기존 슬라이더 값 reset
+          panelStates[slotIndex].gaze = { yaw: 0, pitch: 0 };
+          document.getElementById(`yaw${slotIndex + 1}`).value = 0;
+          document.getElementById(`pitch${slotIndex + 1}`).value = 0;
+          document.getElementById(`yaw${slotIndex + 1}-val`).textContent = '0.00';
+          document.getElementById(`pitch${slotIndex + 1}-val`).textContent = '0.00';
 
           // UI 상태 업데이트
           document.getElementById(`slot${slotIndex + 1}`).classList.add('loaded');
@@ -312,6 +691,53 @@
     setupFileInput('file2', 1);
     setupFileInput('file3', 2);
 
+    // ===== Gaze slider handlers =====
+    function setupGazeSliders(slotIndex) {
+      const yawSlider = document.getElementById(`yaw${slotIndex + 1}`);
+      const pitchSlider = document.getElementById(`pitch${slotIndex + 1}`);
+      const yawVal = document.getElementById(`yaw${slotIndex + 1}-val`);
+      const pitchVal = document.getElementById(`pitch${slotIndex + 1}-val`);
+
+      yawSlider.addEventListener('input', (e) => {
+        if (lookAtCameraMode) return;
+        const v = parseFloat(e.target.value);
+        panelStates[slotIndex].gaze.yaw = v;
+        yawVal.textContent = v.toFixed(2);
+        applyGaze(slotIndex);
+      });
+
+      pitchSlider.addEventListener('input', (e) => {
+        if (lookAtCameraMode) return;
+        const v = parseFloat(e.target.value);
+        panelStates[slotIndex].gaze.pitch = v;
+        pitchVal.textContent = v.toFixed(2);
+        applyGaze(slotIndex);
+      });
+    }
+
+    setupGazeSliders(0);
+    setupGazeSliders(1);
+    setupGazeSliders(2);
+
+    // ===== Look-at camera toggle =====
+    const lookAtBtn = document.getElementById('lookAtToggle');
+    lookAtBtn.addEventListener('click', () => {
+      lookAtCameraMode = !lookAtCameraMode;
+      lookAtBtn.classList.toggle('active', lookAtCameraMode);
+
+      // 토글 끌 때: gaze 리셋 (정면 응시로)
+      if (!lookAtCameraMode) {
+        for (let i = 0; i < 3; i++) {
+          panelStates[i].gaze = { yaw: 0, pitch: 0 };
+          document.getElementById(`yaw${i + 1}`).value = 0;
+          document.getElementById(`pitch${i + 1}`).value = 0;
+          document.getElementById(`yaw${i + 1}-val`).textContent = '0.00';
+          document.getElementById(`pitch${i + 1}-val`).textContent = '0.00';
+          applyGaze(i);
+        }
+      }
+    });
+
     // ===== Info panel 토글 (클릭 + H 키) =====
     const toggleBtn = document.getElementById('toggleInfo');
     const infoPanel = document.getElementById('info');
@@ -346,6 +772,7 @@
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
+      updateLookAtCamera();
       renderer.render(scene, camera);
     }
     animate();
