@@ -496,13 +496,22 @@
       }
     }
 
+    // ===== Idle gaze offset (slider 값과 분리) =====
+    const idleGazeOffsets = [
+      { yaw: 0, pitch: 0 },
+      { yaw: 0, pitch: 0 },
+      { yaw: 0, pitch: 0 }
+    ];
+
     // Gaze 적용 — bone 또는 morph 방식
     function applyGaze(slotIndex) {
       const state = panelStates[slotIndex];
       if (state.gazeMethod === 'none') return;
 
-      const yaw = state.gaze.yaw;     // -1 ~ 1
-      const pitch = state.gaze.pitch; // -1 ~ 1
+      // slider 기반 값 + idle tremor/dart offset 합산. -1~1 clamp
+      const offset = idleGazeOffsets[slotIndex];
+      const yaw = Math.max(-1, Math.min(1, state.gaze.yaw + offset.yaw));
+      const pitch = Math.max(-1, Math.min(1, state.gaze.pitch + offset.pitch));
 
       if (state.gazeMethod === 'bone') {
         // 양 눈에 동일 회전 적용 (대략 -28° ~ +28°)
@@ -625,6 +634,7 @@
           // 기존 avatar 제거
           if (avatarGroups[slotIndex]) {
             scene.remove(avatarGroups[slotIndex]);
+            idleControllers[slotIndex].stop();
           }
 
           const model = gltf.scene;
@@ -662,6 +672,7 @@
               `로드됨: ${sourceName}`;
           }
 
+          idleControllers[slotIndex].start();
           console.log(`[Slot ${slotIndex + 1}] 로드 완료: ${url}`);
         },
         undefined,
@@ -767,6 +778,266 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
+
+    // ===== Panel Idle Animation Controller =====
+    // 기존 IdleAnimationController (IdleAnimation.js) 를 panel 3명 동시 제어용으로 이식
+    // Eye tremor/dart 는 idleGazeOffsets 를 통해 viewer 의 bone/morph gaze 시스템과 통합
+
+    class PanelIdleController {
+      constructor(slotIndex) {
+        this.slotIndex = slotIndex;
+        this.active = false;
+
+        // Cached bones (start() 시 캐시 — traverse 반복 방지)
+        this.spineBone = null;
+        this.headBone = null;
+
+        // Blink
+        this.blinkTimeout = null;
+        this.isBlinking = false;
+
+        // Eye tremor (subtle micro-movement)
+        this.tremorInterval = null;
+        this.tremorCurrent = { yaw: 0, pitch: 0 };
+
+        // Eye dart (occasional shift)
+        this.dartTimeout = null;
+        this.isDarting = false;
+        this.dartStepInterval = null;
+
+        // Breathing
+        this.breathInterval = null;
+        this.breathPhase = 0;
+
+        // Head sway
+        this.swayInterval = null;
+        this.swayChangeTimeout = null;
+        this.swayTarget = 0;
+        this.swayValue = 0;
+
+        this.cfg = {
+          blinkMin: 2000, blinkMax: 6000, blinkDuration: 150,
+          tremorRate: 100, tremorIntensity: 0.04,
+          dartMin: 8000, dartMax: 14000,
+          dartIntensity: 0.22, dartPitchIntensity: 0.10,
+          dartDuration: 1500, dartSteps: 15,
+          breathRate: 4000, breathJawIntensity: 0.03, breathSpineIntensity: 0.015,
+          swayRate: 80, swayChangeInterval: 6000, swayIntensity: 0.07
+        };
+      }
+
+      start() {
+        if (this.active) this.stop();
+        this.active = true;
+
+        // Bone 캐시 (traverse 는 한 번만)
+        const model = avatarGroups[this.slotIndex];
+        if (model) {
+          model.traverse((child) => {
+            if (!child.isBone) return;
+            const n = child.name;
+            if (!this.spineBone && (n === 'Spine1' || n === 'Spine' || n === 'Spine2')) {
+              this.spineBone = child;
+            }
+            if (!this.headBone && n === 'Head') {
+              this.headBone = child;
+            }
+          });
+        }
+
+        this._scheduleBlink();
+        this._startTremor();
+        this._scheduleDart();
+        this._startBreathing();
+        this._startSway();
+      }
+
+      stop() {
+        this.active = false;
+
+        if (this.blinkTimeout)     clearTimeout(this.blinkTimeout);
+        if (this.tremorInterval)   clearInterval(this.tremorInterval);
+        if (this.dartTimeout)      clearTimeout(this.dartTimeout);
+        if (this.dartStepInterval) clearInterval(this.dartStepInterval);
+        if (this.breathInterval)   clearInterval(this.breathInterval);
+        if (this.swayInterval)     clearInterval(this.swayInterval);
+        if (this.swayChangeTimeout) clearTimeout(this.swayChangeTimeout);
+
+        this.blinkTimeout = this.tremorInterval = this.dartTimeout = null;
+        this.dartStepInterval = this.breathInterval = this.swayInterval = null;
+        this.swayChangeTimeout = null;
+
+        // 상태 리셋
+        this._setMorph('eyeBlinkLeft', 0);
+        this._setMorph('eyeBlinkRight', 0);
+        this._setMorph('jawOpen', 0);
+        if (this.spineBone) this.spineBone.rotation.x = 0;
+        if (this.headBone)  this.headBone.rotation.y = 0;
+        idleGazeOffsets[this.slotIndex] = { yaw: 0, pitch: 0 };
+        applyGaze(this.slotIndex);
+
+        this.isBlinking = false;
+        this.isDarting = false;
+        this.tremorCurrent = { yaw: 0, pitch: 0 };
+        this.swayValue = 0; this.swayTarget = 0;
+        this.breathPhase = 0;
+        this.spineBone = null; this.headBone = null;
+      }
+
+      // ── Helpers ────────────────────────────────────────────
+
+      _setMorph(name, value) {
+        const model = avatarGroups[this.slotIndex];
+        if (!model) return;
+        model.traverse((child) => {
+          if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
+            const idx = child.morphTargetDictionary[name];
+            if (idx !== undefined) child.morphTargetInfluences[idx] = value;
+          }
+        });
+      }
+
+      _setGazeOffset(yaw, pitch) {
+        if (lookAtCameraMode) return; // lookAt mode 중엔 idle gaze 무시
+        idleGazeOffsets[this.slotIndex].yaw = yaw;
+        idleGazeOffsets[this.slotIndex].pitch = pitch;
+        applyGaze(this.slotIndex);
+      }
+
+      _rand(min, max) { return Math.random() * (max - min) + min; }
+
+      // ── Eye Blink ──────────────────────────────────────────
+
+      _scheduleBlink() {
+        const t = this._rand(this.cfg.blinkMin, this.cfg.blinkMax);
+        this.blinkTimeout = setTimeout(() => {
+          if (!this.active) return;
+          this._blink();
+          this._scheduleBlink();
+        }, t);
+      }
+
+      _blink() {
+        if (this.isBlinking) return;
+        this.isBlinking = true;
+        this._setMorph('eyeBlinkLeft', 1.0);
+        this._setMorph('eyeBlinkRight', 1.0);
+        setTimeout(() => {
+          this._setMorph('eyeBlinkLeft', 0);
+          this._setMorph('eyeBlinkRight', 0);
+          this.isBlinking = false;
+        }, this.cfg.blinkDuration);
+      }
+
+      // ── Eye Tremor (micro movement) ────────────────────────
+
+      _startTremor() {
+        this.tremorInterval = setInterval(() => {
+          if (!this.active || this.isDarting || lookAtCameraMode) return;
+          const i = this.cfg.tremorIntensity;
+          const ty = this._rand(-i, i);
+          const tp = this._rand(-i * 0.6, i * 0.6);
+          this.tremorCurrent.yaw   += (ty - this.tremorCurrent.yaw)   * 0.3;
+          this.tremorCurrent.pitch += (tp - this.tremorCurrent.pitch)  * 0.3;
+          this._setGazeOffset(this.tremorCurrent.yaw, this.tremorCurrent.pitch);
+        }, this.cfg.tremorRate);
+      }
+
+      // ── Eye Dart (occasional shift) ────────────────────────
+
+      _scheduleDart() {
+        const t = this._rand(this.cfg.dartMin, this.cfg.dartMax);
+        this.dartTimeout = setTimeout(() => {
+          if (!this.active) return;
+          this._dart();
+          this._scheduleDart();
+        }, t);
+      }
+
+      _dart() {
+        if (this.isDarting || lookAtCameraMode) return;
+        this.isDarting = true;
+
+        const targetYaw   = this._rand(-this.cfg.dartIntensity, this.cfg.dartIntensity);
+        const targetPitch = this._rand(-this.cfg.dartPitchIntensity, this.cfg.dartPitchIntensity);
+        const steps = this.cfg.dartSteps;
+        const stepDur = this.cfg.dartDuration / (steps * 2);
+        let step = 0;
+
+        this.dartStepInterval = setInterval(() => {
+          step++;
+          let yaw, pitch;
+          if (step <= steps) {
+            const p = step / steps;
+            yaw = targetYaw * p; pitch = targetPitch * p;
+          } else if (step <= steps * 2) {
+            const p = (step - steps) / steps;
+            yaw = targetYaw * (1 - p); pitch = targetPitch * (1 - p);
+          } else {
+            clearInterval(this.dartStepInterval);
+            this.dartStepInterval = null;
+            this.isDarting = false;
+            this.tremorCurrent = { yaw: 0, pitch: 0 };
+            this._setGazeOffset(0, 0);
+            return;
+          }
+          this._setGazeOffset(yaw, pitch);
+        }, stepDur);
+      }
+
+      // ── Breathing ──────────────────────────────────────────
+
+      _startBreathing() {
+        this.breathInterval = setInterval(() => {
+          if (!this.active) return;
+          const speed = (2 * Math.PI) / (this.cfg.breathRate / 50);
+          this.breathPhase += speed;
+          const v = Math.sin(this.breathPhase) * 0.5 + 0.5; // 0→1→0
+
+          // jawOpen: 숨쉬는 느낌 (매우 subtle)
+          this._setMorph('jawOpen', v * this.cfg.breathJawIntensity);
+
+          // Spine rotation.x (앞뒤 subtle)
+          if (this.spineBone) {
+            this.spineBone.rotation.x = (v - 0.5) * this.cfg.breathSpineIntensity * 2;
+          }
+        }, 70);
+      }
+
+      // ── Head Sway ──────────────────────────────────────────
+
+      _startSway() {
+        this.swayInterval = setInterval(() => {
+          if (!this.active || !this.headBone) return;
+          const diff = this.swayTarget - this.swayValue;
+          const dist = Math.abs(diff);
+          let speed = 0.06;
+          if (dist > 0.01) {
+            const p = Math.min(dist / this.cfg.swayIntensity, 1.0);
+            speed = 0.06 * (p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2);
+          }
+          this.swayValue += diff * speed;
+          this.headBone.rotation.y = this.swayValue;
+        }, this.cfg.swayRate);
+
+        this._scheduleSwayChange();
+      }
+
+      _scheduleSwayChange() {
+        this.swayChangeTimeout = setTimeout(() => {
+          if (!this.active) return;
+          this.swayTarget = this._rand(-this.cfg.swayIntensity, this.cfg.swayIntensity);
+          this._scheduleSwayChange();
+        }, this.cfg.swayChangeInterval);
+      }
+    }
+
+    // 3 slot 독립 인스턴스
+    const idleControllers = [
+      new PanelIdleController(0),
+      new PanelIdleController(1),
+      new PanelIdleController(2)
+    ];
 
     // ===== Animation loop =====
     function animate() {
