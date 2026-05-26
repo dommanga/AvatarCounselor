@@ -327,14 +327,14 @@
     document.body.appendChild(renderer.domElement);
 
     // ===== Lighting — formal evaluation room 톤 =====
-    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambient);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
     keyLight.position.set(0, 4, 3);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xc8d4e0, 0.3);
+    const fillLight = new THREE.DirectionalLight(0xc8d4e0, 0.5);
     fillLight.position.set(-3, 2, 2);
     scene.add(fillLight);
 
@@ -627,6 +627,31 @@
       }
     }
 
+    // ===== 진지한 무표정 표정 설정 =====
+    // 평가자 panel 톤 — brow 살짝 내리고 입 다문 형태
+    // 값 조정 필요 시 sternMorphs 의 weight 수정
+    const sternMorphs = {
+      browDownLeft:    0.15,
+      browDownRight:   0.15,
+      eyeSquintLeft:  0.10,
+      eyeSquintRight: 0.10,
+      mouthPressLeft:  0.12,
+      mouthPressRight: 0.12,
+      mouthFrownLeft:  0.4,
+      mouthFrownRight: 0.4,
+      mouthClose:      0.05,
+    };
+
+    function applySternExpression(model) {
+      model.traverse((child) => {
+        if (!child.isMesh || !child.morphTargetDictionary || !child.morphTargetInfluences) return;
+        for (const [name, weight] of Object.entries(sternMorphs)) {
+          const idx = child.morphTargetDictionary[name];
+          if (idx !== undefined) child.morphTargetInfluences[idx] = weight;
+        }
+      });
+    }
+
     function loadAvatar(slotIndex, url, sourceName) {
       loader.load(
         url,
@@ -643,7 +668,7 @@
           model.position.set(cfg.x, cfg.y, cfg.z);
           model.rotation.y = cfg.rotY;
 
-          // 무표정 baseline — 모든 blendshape (morph target) 0 으로 리셋
+          // 무표정 baseline — 모든 blendshape 0 으로 리셋
           model.traverse((child) => {
             if (child.isMesh && child.morphTargetInfluences) {
               for (let i = 0; i < child.morphTargetInfluences.length; i++) {
@@ -651,6 +676,9 @@
               }
             }
           });
+
+          // 진지한 무표정 표정 적용 (리셋 후 위에 덮어씌움)
+          applySternExpression(model);
 
           scene.add(model);
           avatarGroups[slotIndex] = model;
@@ -816,13 +844,13 @@
         this.swayValue = 0;
 
         this.cfg = {
-          blinkMin: 2000, blinkMax: 6000, blinkDuration: 150,
+          blinkMin: 4000, blinkMax: 10000, blinkDuration: 150,
           tremorRate: 100, tremorIntensity: 0.04,
           dartMin: 8000, dartMax: 14000,
-          dartIntensity: 0.22, dartPitchIntensity: 0.10,
-          dartDuration: 1500, dartSteps: 15,
+          dartIntensity: 0.22, dartPitchIntensity: -0.15,
+          dartDuration: 1000, dartSteps: 15,
           breathRate: 4000, breathJawIntensity: 0.03, breathSpineIntensity: 0.015,
-          swayRate: 80, swayChangeInterval: 6000, swayIntensity: 0.07
+          swayRate: 80, swayChangeInterval: 15000, swayIntensity: 0.025
         };
       }
 
