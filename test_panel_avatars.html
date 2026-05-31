@@ -214,7 +214,7 @@
 <body>
   <button id="toggleInfo" class="floating-toggle" title="UI 토글 (H)">☰</button>
 
-  <div id="info">
+  <div id="info" class="hidden">
     <h3>Panel Avatar Stress Test</h3>
     <p class="desc">
       Evaluator panel 3명의 시각적 stress 유발 효과 점검용 viewer.<br>
@@ -314,8 +314,8 @@
     );
 
     // 카메라 default 위치 — 학생이 panel 마주보고 서있는 first-person view
-    const DEFAULT_CAM_POS = { x: 0, y: 0.65, z: 1 };
-    const DEFAULT_CAM_TARGET = { x: 0, y: 0.5, z: -1 };
+    const DEFAULT_CAM_POS = { x: 0, y: 1.2, z: 2 };
+    const DEFAULT_CAM_TARGET = { x: 0, y: 0.5, z: -2 };
 
     camera.position.set(DEFAULT_CAM_POS.x, DEFAULT_CAM_POS.y, DEFAULT_CAM_POS.z);
     camera.lookAt(DEFAULT_CAM_TARGET.x, DEFAULT_CAM_TARGET.y, DEFAULT_CAM_TARGET.z);
@@ -327,18 +327,22 @@
     document.body.appendChild(renderer.domElement);
 
     // ===== Lighting — formal evaluation room 톤 =====
-    const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+    const ambient = new THREE.AmbientLight(0xffffff, 3);
     scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 5);
     keyLight.position.set(0, 4, 3);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xc8d4e0, 0.5);
+    const keyLight1 = new THREE.DirectionalLight(0xffffff, 3);
+    keyLight1.position.set(0, -4, 3);
+    scene.add(keyLight1);
+
+    const fillLight = new THREE.DirectionalLight(0xc8d4e0, 3);
     fillLight.position.set(-3, 2, 2);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
     rimLight.position.set(0, 2, -3);
     scene.add(rimLight);
 
@@ -364,9 +368,9 @@
     // 학생 시점에서 panel 3명이 가로로 일렬 — vcTSST 스타일
     // 가운데가 정면, 양쪽이 약간 안쪽으로 angle (-15도 / +15도)
     const slotConfigs = [
-      { x: -0.45, y: 0, z: 0, rotY: (15 * Math.PI / 180) },  // 왼쪽 — 약간 안쪽
-      { x: 0,     y: 0, z: 0, rotY: 0 },                        // 가운데
-      { x: 0.45,  y: 0, z: 0, rotY: - (15 * Math.PI / 180) }   // 오른쪽 — 약간 안쪽
+      { x: -0.75, y: -0.4, z: 0, rotY: (15 * Math.PI / 180) },  // 왼쪽 — 약간 안쪽
+      { x: 0,     y: -0.4, z: 0, rotY: 0 },                        // 가운데
+      { x: 0.75,  y: -0.4, z: 0, rotY: - (15 * Math.PI / 180) }   // 오른쪽 — 약간 안쪽
     ];
 
     const avatarGroups = [null, null, null];
@@ -515,7 +519,7 @@
 
       if (state.gazeMethod === 'bone') {
         // 양 눈에 동일 회전 적용 (대략 -28° ~ +28°)
-        const maxRot = 0.5;           // ~28도
+        const maxRot = 0.6;           // ~28도
         applyBoneGaze(state.leftEyeBone, state.leftEyeBoneRestQuat, yaw, pitch, maxRot);
         applyBoneGaze(state.rightEyeBone, state.rightEyeBoneRestQuat, yaw, pitch, maxRot);
       } else if (state.gazeMethod === 'morph') {
@@ -541,7 +545,7 @@
       //   왼쪽 눈: yaw > 0 → lookIn, yaw < 0 → lookOut
       //   오른쪽 눈: yaw > 0 → lookOut, yaw < 0 → lookIn
       // (인간 시선이 한 점을 볼 때 두 눈은 서로 다른 방향으로 회전)
-      const yawAbs = Math.abs(yaw);
+      const yawAbs = -Math.abs(yaw);
       const pitchAbs = Math.abs(pitch);
 
       const weights = {
@@ -627,6 +631,73 @@
       }
     }
 
+    // ARKit 이름 → Rocketbox AK prefix 매핑
+    // RPM은 prefix 없는 원본 이름 그대로 작동
+    const MORPH_ALIASES = {
+      browDownLeft:    'AK_01_BrowDownLeft',
+      browDownRight:   'AK_02_BrowDownRight',
+      eyeSquintLeft:   'AK_19_EyeSquintLeft',
+      eyeSquintRight:  'AK_20_EyeSquintRight',
+      mouthPressLeft:  'AK_36_MouthPressLeft',
+      mouthPressRight: 'AK_37_MouthPressRight',
+      mouthFrownLeft:  'AK_30_MouthFrownLeft',
+      mouthFrownRight: 'AK_31_MouthFrownRight',
+      mouthClose:      'AK_27_MouthClose',
+      eyeBlinkLeft:    'AK_09_EyeBlinkLeft',
+      eyeBlinkRight:   'AK_10_EyeBlinkRight',
+      jawOpen:         'AK_25_JawOpen',
+    };
+
+    const SITTING_POSE = [
+      { name: 'Bip01_Pelvis',   x:  0,  y: 0, z: 0 },
+      { name: 'Bip01_L_Thigh',  x:  0,  y: 0, z: 0 },
+      { name: 'Bip01_R_Thigh',  x:  0,  y: 0, z: 0 },
+      { name: 'Bip01_L_Calf',   x:  0,  y: 0, z: 0 },
+      { name: 'Bip01_R_Calf',   x:  0,  y: 0, z: 0 },
+      { name: 'Bip01_L_Foot',   x:  0,  y: 0, z: 0 },
+      { name: 'Bip01_R_Foot',   x:  0,  y: 0, z: 0 },
+    ];
+
+    function applySittingPose(model) {
+      const boneMap = {};
+      model.traverse(child => {
+        if (child.isBone) boneMap[child.name] = child;
+      });
+
+      // 현재 quaternion에 상대적으로 회전 추가
+      const addRelative = (name, x, y, z) => {
+        const bone = boneMap[name];
+        if (!bone) { console.warn('bone not found:', name); return; }
+        const delta = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(x, y, z, 'XYZ')
+        );
+        bone.quaternion.multiply(delta);
+      };
+      model.traverse(child => {
+        if (child.isBone && (
+          child.name.includes('UpperArm') || 
+          child.name.includes('Forearm') ||
+          child.name.includes('Hand')
+        )) {
+          console.log(`${child.name} → (${child.rotation.x.toFixed(3)}, ${child.rotation.y.toFixed(3)}, ${child.rotation.z.toFixed(3)})`);
+        }
+      });
+
+      addRelative('Bip01_L_Clavicle', 0, 0.1, 0);
+      addRelative('Bip01_R_Clavicle', 0, -0.1, 0);
+      addRelative('Bip01_L_UpperArm', 0, 0.5, -0.5);
+      addRelative('Bip01_R_UpperArm', 0, -0.5, -0.5);
+      addRelative('Bip01_L_Forearm', 0.5, 0.2, -0.5);
+      addRelative('Bip01_R_Forearm', -0.5, -0.2, -0.5);
+      //
+      addRelative('Bip01_L_Thigh', 0.2, 0, Math.PI / 2);
+      addRelative('Bip01_R_Thigh', -0.2, 0, Math.PI / 2);
+      addRelative('Bip01_L_Calf',   0, 0, -1.3);
+      addRelative('Bip01_R_Calf',   0, 0, -1.2);
+      addRelative('Bip01_L_Foot',   0, 0, -0.3);
+      addRelative('Bip01_R_Foot',   0, 0, -0.3);
+    }
+
     // ===== 진지한 무표정 표정 설정 =====
     // 평가자 panel 톤 — brow 살짝 내리고 입 다문 형태
     // 값 조정 필요 시 sternMorphs 의 weight 수정
@@ -646,11 +717,15 @@
       model.traverse((child) => {
         if (!child.isMesh || !child.morphTargetDictionary || !child.morphTargetInfluences) return;
         for (const [name, weight] of Object.entries(sternMorphs)) {
-          const idx = child.morphTargetDictionary[name];
-          if (idx !== undefined) child.morphTargetInfluences[idx] = weight;
+          // 원본 이름 + alias 둘 다 시도
+          const names = [name, MORPH_ALIASES[name]].filter(Boolean);
+          names.forEach(n => {
+            const idx = child.morphTargetDictionary[n];
+            if (idx !== undefined) child.morphTargetInfluences[idx] = weight;
+          });
         }
       });
-    }
+    } 
 
     function loadAvatar(slotIndex, url, sourceName) {
       loader.load(
@@ -679,6 +754,10 @@
 
           // 진지한 무표정 표정 적용 (리셋 후 위에 덮어씌움)
           applySternExpression(model);
+          applySittingPose(model);
+          model.traverse(child => {
+            if (child.isBone) console.log(child.name);
+          });
 
           scene.add(model);
           avatarGroups[slotIndex] = model;
@@ -844,11 +923,12 @@
         this.swayValue = 0;
 
         this.cfg = {
-          blinkMin: 4000, blinkMax: 10000, blinkDuration: 150,
+          blinkMin: 5000, blinkMax: 10000, blinkDuration: 150,
           tremorRate: 100, tremorIntensity: 0.04,
-          dartMin: 8000, dartMax: 14000,
-          dartIntensity: 0.22, dartPitchIntensity: -0.15,
-          dartDuration: 1000, dartSteps: 15,
+          dartMin: 12000, dartMax: 20000,
+          dartDownMin: 0.12, dartDownMax: 0.20,
+          dartYawJitter: 0.02,
+          dartDuration: 1200, dartSteps: 12,
           breathRate: 4000, breathJawIntensity: 0.03, breathSpineIntensity: 0.015,
           swayRate: 80, swayChangeInterval: 15000, swayIntensity: 0.025
         };
@@ -864,10 +944,18 @@
           model.traverse((child) => {
             if (!child.isBone) return;
             const n = child.name;
-            if (!this.spineBone && (n === 'Spine1' || n === 'Spine' || n === 'Spine2')) {
+            if (!this.spineBone && (
+              n === 'Bip01_Spine1' || 
+              n === 'Bip01_Spine2' ||
+              n === 'Spine1' || n === 'Spine'   // RPM 호환
+            )) {
               this.spineBone = child;
             }
-            if (!this.headBone && n === 'Head') {
+            if (!this.headBone && (
+              n === 'Bip01_Head' || 
+              n === 'Bip01_Head1' ||
+              n === 'Head'                       // RPM 호환
+            )) {
               this.headBone = child;
             }
           });
@@ -876,7 +964,11 @@
         this._scheduleBlink();
         this._startTremor();
         this._scheduleDart();
+
+        this.breathPhase = Math.random() * Math.PI * 2;
         this._startBreathing();
+
+        this.swayTarget = this._rand(-this.cfg.swayIntensity, this.cfg.swayIntensity);
         this._startSway();
       }
 
@@ -917,10 +1009,14 @@
       _setMorph(name, value) {
         const model = avatarGroups[this.slotIndex];
         if (!model) return;
+        // 원본 이름 + alias 이름 둘 다 시도
+        const names = [name, MORPH_ALIASES[name]].filter(Boolean);
         model.traverse((child) => {
           if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
-            const idx = child.morphTargetDictionary[name];
-            if (idx !== undefined) child.morphTargetInfluences[idx] = value;
+            names.forEach(n => {
+              const idx = child.morphTargetDictionary[n];
+              if (idx !== undefined) child.morphTargetInfluences[idx] = value;
+            });
           }
         });
       }
@@ -946,7 +1042,7 @@
       }
 
       _blink() {
-        if (this.isBlinking) return;
+        if (this.isBlinking || this.isDarting) return;
         this.isBlinking = true;
 
         const closeSteps = 8;
@@ -1013,53 +1109,76 @@
       }
 
       _dart() {
-        if (this.isDarting) return;
+        if (this.isDarting || this.isBlinking) return;
         this.isDarting = true;
 
-        const targetYaw   = this._rand(-this.cfg.dartIntensity, this.cfg.dartIntensity);
-        const targetPitch = this._rand(-this.cfg.dartPitchIntensity, this.cfg.dartPitchIntensity);
-        const steps = this.cfg.dartSteps;
-        const stepDur = this.cfg.dartDuration / (steps * 2);
-        let step = 0;
+        // 대각선 아래 방향 — 좌우 랜덤
+        const side = Math.random() < 0.5 ? 1 : -1;
+        const targetYaw   =  side * this._rand(0.08, 0.15);
+        const targetPitch = -this._rand(0.15, 0.25);
+        const holdDur     =  this._rand(800, 2000);  // 시선 유지 시간
 
-        this.dartStepInterval = setInterval(() => {
-          step++;
-          let yaw, pitch;
-          if (step <= steps) {
-            const p = step / steps;
-            yaw = targetYaw * p; pitch = targetPitch * p;
-          } else if (step <= steps * 2) {
-            const p = (step - steps) / steps;
-            yaw = targetYaw * (1 - p); pitch = targetPitch * (1 - p);
-          } else {
-            clearInterval(this.dartStepInterval);
-            this.dartStepInterval = null;
-            this.isDarting = false;
-            this.tremorCurrent = { yaw: 0, pitch: 0 };
-            this._setGazeOffset(0, 0);
-            return;
-          }
-          this._setGazeOffset(yaw, pitch);
-        }, stepDur);
-      }
+        // blink 하면서 시선 이동하는 헬퍼
+        const blinkShift = (fromY, fromP, toY, toP, onDone) => {
+          const closeSteps = 8;
+          const closeDur   = 70;
+          let step = 0;
 
-      // ── Breathing ──────────────────────────────────────────
+          // Phase 1: 눈 감으면서 시선 이동
+          const closeInterval = setInterval(() => {
+            step++;
+            const t = step / closeSteps;
+            this._setMorph('eyeBlinkLeft',  t);
+            this._setMorph('eyeBlinkRight', t);
+            this._setGazeOffset(
+              fromY + (toY - fromY) * t,
+              fromP + (toP - fromP) * t
+            );
+            if (step >= closeSteps) {
+              clearInterval(closeInterval);
 
-      _startBreathing() {
-        this.breathInterval = setInterval(() => {
-          if (!this.active) return;
-          const speed = (2 * Math.PI) / (this.cfg.breathRate / 50);
-          this.breathPhase += speed;
-          const v = Math.sin(this.breathPhase) * 0.5 + 0.5; // 0→1→0
+              // Phase 2: 잠깐 hold (눈 감긴 상태)
+              setTimeout(() => {
+                let openStep = 0;
+                const openSteps = 10;
 
-          // jawOpen: 숨쉬는 느낌 (매우 subtle)
-          this._setMorph('jawOpen', v * this.cfg.breathJawIntensity);
+                // Phase 3: 눈 뜨기
+                const openInterval = setInterval(() => {
+                  openStep++;
+                  const t2 = openStep / openSteps;
+                  const v  = 1 - (t2 * t2 * (3 - 2 * t2));  // smoothstep
+                  this._setMorph('eyeBlinkLeft',  Math.max(0, v));
+                  this._setMorph('eyeBlinkRight', Math.max(0, v));
+                  if (openStep >= openSteps) {
+                    clearInterval(openInterval);
+                    this._setMorph('eyeBlinkLeft',  0);
+                    this._setMorph('eyeBlinkRight', 0);
+                    this._setGazeOffset(toY, toP);
+                    if (onDone) onDone();
+                  }
+                }, 110 / openSteps);
+              }, 30);
+            }
+          }, closeDur / closeSteps);
+        };
 
-          // Spine rotation.x (앞뒤 subtle)
-          if (this.spineBone) {
-            this.spineBone.rotation.x = (v - 0.5) * this.cfg.breathSpineIntensity * 2;
-          }
-        }, 70);
+        // 1단계: blink 하면서 대각선 아래로
+        blinkShift(0, 0, targetYaw, targetPitch, () => {
+
+          // 2단계: 시선 유지
+          setTimeout(() => {
+            if (!this.active) {
+              this.isDarting = false;
+              return;
+            }
+
+            // 3단계: blink 하면서 정면으로 복귀
+            blinkShift(targetYaw, targetPitch, 0, 0, () => {
+              this.isDarting = false;
+              this.tremorCurrent = { yaw: 0, pitch: 0 };
+            });
+          }, holdDur);
+        });
       }
 
       // ── Head Sway ──────────────────────────────────────────
@@ -1082,11 +1201,13 @@
       }
 
       _scheduleSwayChange() {
+        // 기본 15초에서 ±5초 랜덤 추가
+        const interval = this.cfg.swayChangeInterval + this._rand(-5000, 5000);
         this.swayChangeTimeout = setTimeout(() => {
           if (!this.active) return;
           this.swayTarget = this._rand(-this.cfg.swayIntensity, this.cfg.swayIntensity);
           this._scheduleSwayChange();
-        }, this.cfg.swayChangeInterval);
+        }, interval);
       }
     }
 
@@ -1105,6 +1226,17 @@
       renderer.render(scene, camera);
     }
     animate();
+    loader.load(
+      'assets/panel/table.glb',
+      (gltf) => {
+        const table = gltf.scene;
+        table.position.set(0, 0.5, 0.9);   // z: panel 앞쪽으로
+        table.scale.set(1, 1, 1);        // 크기 안 맞으면 여기서 조정
+        scene.add(table);
+      },
+      undefined,
+      (error) => console.warn('table 로드 실패:', error)
+    );
   </script>
 </body>
 
