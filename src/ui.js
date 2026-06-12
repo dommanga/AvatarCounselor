@@ -23,6 +23,23 @@ export class UIController {
                 <button id="settings-toggle" class="settings-toggle" title="Show/Hide Settings">▲</button>
             </div>
             <div id="settings-content" class="settings-content" style="display: block;">
+            <!-- Experiment Conditions (researcher) -->
+            <div class="setting-group">
+              <div class="cond-block">
+                <div class="cond-label">Verbal</div>
+                <div class="cond-row" id="verbal-style">
+                  <button class="cond-btn active" data-style="directing">Directing</button>
+                  <button class="cond-btn" data-style="following">Following</button>
+                </div>
+              </div>
+              <div class="cond-block">
+                <div class="cond-label">Nonverbal</div>
+                <div class="cond-row" id="nonverbal-mode">
+                  <button class="cond-btn active" data-mode="responsive">Responsive</button>
+                  <button class="cond-btn" data-mode="steady">Steady</button>
+                </div>
+              </div>
+            </div>
                 
             <!-- Intensity Setting -->
             <div class="setting-group">
@@ -783,6 +800,38 @@ export class UIController {
             border-color: #667eea;
             color: white;
             font-weight: 600;
+        }
+        
+        /* Compact condition toggles (researcher controls) */
+        .cond-block { margin-bottom: 10px; }
+        .cond-block:last-child { margin-bottom: 0; }
+        .cond-label {
+          font-size: 10px;
+          font-weight: 600;
+          color: #999;
+          margin-bottom: 4px;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+        .cond-row { display: flex; gap: 6px; }
+        .cond-btn {
+          flex: 1;
+          background: white;
+          border: 1px solid #e0e0e0;
+          border-radius: 6px;
+          padding: 5px 8px;
+          font-size: 12px;
+          font-weight: 500;
+          color: #666;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .cond-btn:hover { border-color: #667eea; background: #f8f9ff; }
+        .cond-btn.active {
+          background: #667eea;
+          border-color: #667eea;
+          color: white;
+          font-weight: 600;
         }
         
         .level-indicator {

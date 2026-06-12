@@ -79,6 +79,7 @@ export class APIManager {
     message,
     conversationHistory,
     userAge = null,
+    verbalStyle = "directing",
     { timeoutMs = 20000 } = {}
   ) {
     const ctl = new AbortController();
@@ -94,6 +95,7 @@ export class APIManager {
             message,
             conversationHistory,
             userAge,
+            verbalStyle,
           }),
           signal: ctl.signal,
         }

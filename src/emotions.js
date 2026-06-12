@@ -167,6 +167,21 @@ export const EMOTION_CONFIGS = {
     blendshapes: {},
     reference: "Baseline state",
   },
+
+  serious: {
+    name: "Serious",
+    description: "Concentrated attentive neutral — Steady base expression",
+    actionUnits: [4, 7],
+    blendshapes: {
+      browDownLeft: 0.1,
+      browDownRight: 0.1,
+      eyeSquintLeft: 0.18,
+      eyeSquintRight: 0.18,
+      mouthPressLeft: 0.12,
+      mouthPressRight: 0.12,
+    },
+    reference: "Concentrated neutral (stern evaluator baseline)",
+  },
 };
 
 /**

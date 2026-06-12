@@ -88,6 +88,12 @@ let currentFinalIntensity = 0;
 // Idle Animation controller
 let idleAnimationController = null;
 
+// Nonverbal mode: "responsive" (default) | "steady"
+let nonverbalMode = "responsive";
+
+// Verbal style: "directing" (default) | "following"
+let verbalStyle = "directing";
+
 // Processing flag to prevent duplicate requests
 let isProcessingResponse = false;
 
@@ -270,8 +276,8 @@ async function initializeSpeechRecognition() {
       }
     }
 
-    // Micro Response
-    if (interimText && interimText.length > 10) {
+    // Micro Response — Responsive only
+    if (nonverbalMode === "responsive" && interimText && interimText.length > 10) {
       const sentiment = await apiManager.analyzeSentiment(interimText);
       if (sentiment !== null) {
         microResponseController.trigger(sentiment);
@@ -311,7 +317,8 @@ async function initializeSpeechRecognition() {
     const responseData = await apiManager.generateCounselorResponse(
       text,
       conversationHistory,
-      currentUserAge
+      currentUserAge,
+      verbalStyle
     );
 
     const counselorText = responseData.response || "";
@@ -371,6 +378,11 @@ async function initializeSpeechRecognition() {
       microResponseController.stopImmediate();
       // console.log("⚡ Micro stopped, blendshapes preserved");
       // console.log("🎭 Full Response applied (smooth transition from Micro)");
+    }
+
+    if (nonverbalMode === "steady") {
+      currentCounselorEmotion = "serious";
+      currentFinalIntensity = currentSettings.baseIntensity; // LLM multiplier 무시, 일관 유지
     }
 
     avatarController.setEmotion(currentCounselorEmotion, currentFinalIntensity);
@@ -533,6 +545,26 @@ async function initializeSpeechRecognition() {
     speechManager.setLanguage(e.target.value);
   });
 
+  document.querySelectorAll("#nonverbal-mode .cond-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document
+        .querySelectorAll("#nonverbal-mode .cond-btn")
+        .forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      setNonverbalMode(btn.dataset.mode);
+    });
+  });
+
+  document.querySelectorAll("#verbal-style .cond-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document
+        .querySelectorAll("#verbal-style .cond-btn")
+        .forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      setVerbalStyle(btn.dataset.style);
+    });
+  });
+
   // console.log("✅ Speech recognition initialized!");
 }
 
@@ -637,7 +669,12 @@ function initializeTTS() {
       idleAnimationController.resumeHeadSway();
     }
 
-    avatarController.fadeToNeutral(1.0);
+    if (nonverbalMode === "steady") {
+      const s = customizationManager.getSettings();
+      avatarController.setEmotion("serious", s.baseIntensity);
+    } else {
+      avatarController.fadeToNeutral(1.0);
+    }
 
     // Reset emotion state
     currentCounselorEmotion = null;
@@ -696,10 +733,26 @@ function initializeTTS() {
   // console.log("✅ TTS initialized!");
 }
 
+function setNonverbalMode(mode) {
+  nonverbalMode = mode;
+  const s = customizationManager.getSettings();
+  if (mode === "steady") {
+    avatarController.setEmotion("serious", s.baseIntensity);
+  } else {
+    avatarController.fadeToNeutral(0.5);
+  }
+  console.log(`🎭 Nonverbal mode: ${mode}`);
+}
+
+function setVerbalStyle(style) {
+  verbalStyle = style;
+  console.log(`🗣️ Verbal style: ${style}`);
+}
+
 function addToConversation(speaker, text) {
   if (!text || !text.trim()) return;
   conversationHistory.push({ speaker, text, timestamp: Date.now() });
-  if (conversationHistory.length > 10) conversationHistory.shift();
+  if (conversationHistory.length > 40) conversationHistory.shift();
 }
 
 // Speak counselor response with TTS
