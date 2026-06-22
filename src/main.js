@@ -12,6 +12,7 @@ import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
 
 const DEV_DEFAULT_AVATAR = "female";
+const USE_ROCKETBOX = true;
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -30,6 +31,7 @@ camera.position.set(0, 0.65, 1);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById("canvas-container").appendChild(renderer.domElement);
 
 // Controls
@@ -43,13 +45,31 @@ controls.enableZoom = false;
 controls.enablePan = false;
 
 // Lights
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-scene.add(ambientLight);
+let lightGroup = null;
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 3.0);
-directionalLight.position.set(5, 10, 5);
-directionalLight.castShadow = true;
-scene.add(directionalLight);
+function setupLights(useRocketbox) {
+  if (lightGroup) {
+    scene.remove(lightGroup);
+    lightGroup.traverse((o) => o.dispose && o.dispose());
+  }
+  lightGroup = new THREE.Group();
+
+  if (useRocketbox) {
+    const ambient = new THREE.AmbientLight(0xffffff, 3);
+    const key = new THREE.DirectionalLight(0xffffff, 5);   key.position.set(0, 4, 3);
+    const key1 = new THREE.DirectionalLight(0xffffff, 3);  key1.position.set(0, -4, 3);
+    const fill = new THREE.DirectionalLight(0xc8d4e0, 3);  fill.position.set(-3, 2, 2);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.5); rim.position.set(0, 2, -3);
+    lightGroup.add(ambient, key, key1, fill, rim);
+  } else {
+    const ambient = new THREE.AmbientLight(0xffffff, 1.5);
+    const dir = new THREE.DirectionalLight(0xffffff, 3.0); dir.position.set(5, 10, 5);
+    dir.castShadow = true;
+    lightGroup.add(ambient, dir);
+  }
+
+  scene.add(lightGroup);
+}
 
 // Ground
 const groundGeometry = new THREE.PlaneGeometry(10, 10);
@@ -171,16 +191,33 @@ function loadAvatar() {
 
   const selectedAvatar =
     sessionStorage.getItem("selectedAvatar") || DEV_DEFAULT_AVATAR;
-  const avatarPath =
-    selectedAvatar === "male"
-      ? "./assets/avatar_boy.glb"
-      : "./assets/avatar_girl.glb";
-  // console.log("🎭 Loading avatar:", selectedAvatar, "from", avatarPath);
+  const avatarPath = USE_ROCKETBOX
+    ? "./assets/coach_rocketbox.glb"
+    : (selectedAvatar === "male" ? "./assets/avatar_boy.glb" : "./assets/avatar_girl.glb");
+
+  setupLights(USE_ROCKETBOX);
 
   loader.load(
     avatarPath,
     (gltf) => {
       const avatar = gltf.scene;
+      if (USE_ROCKETBOX) {
+        avatar.position.y = -0.98;
+      }
+
+      avatar.traverse((node) => {
+        if (node.isMesh && node.material) {
+          const mats = Array.isArray(node.material) ? node.material : [node.material];
+          mats.forEach((m) => {
+            if (m.transparent) {
+              m.alphaTest = 0.2;       
+              m.depthWrite = true; 
+              m.needsUpdate = true;
+            }
+          });
+        }
+      });
+      
       currentAvatar = avatar;
       scene.add(avatar);
       avatarController.init(avatar);

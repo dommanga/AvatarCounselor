@@ -14,7 +14,7 @@
 
       #canvas-container {
         width: 100vw;
-        height: 60vh;
+        height: 78vh;
         position: relative;
       }
 
@@ -26,7 +26,6 @@
         background: rgba(0, 0, 0, 0.9);
         padding: 20px;
         box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-        max-height: 40vh;
         overflow-y: auto;
       }
 
@@ -276,74 +275,7 @@
 
     <div id="controls">
       <div class="control-section">
-        <h3>🎯 Quick Test Scenarios</h3>
-        <div class="test-scenarios">
-          <button
-            class="btn-intensity-low"
-            onclick="applyScenario('intensity-verylow')"
-          >
-            Intensity: Very Low<br /><small>0.3 (Minimal)</small>
-          </button>
-          <button
-            class="btn-intensity-low"
-            onclick="applyScenario('intensity-low')"
-          >
-            Intensity: Low<br /><small>0.5 (Subtle)</small>
-          </button>
-          <button
-            class="btn-intensity-medium"
-            onclick="applyScenario('intensity-medium')"
-          >
-            Intensity: Medium<br /><small>1.0 (Default)</small>
-          </button>
-          <button
-            class="btn-intensity-high"
-            onclick="applyScenario('intensity-high')"
-          >
-            Intensity: High<br /><small>1.5 (Strong)</small>
-          </button>
-          <button
-            class="btn-intensity-high"
-            onclick="applyScenario('intensity-veryhigh')"
-          >
-            Intensity: Very High<br /><small>1.2 (Maximum)</small>
-          </button>
-          <button
-            class="btn-frequency-low"
-            onclick="applyScenario('frequency-verylow')"
-          >
-            Frequency: Very Low<br /><small>0.2 (Rare)</small>
-          </button>
-          <button
-            class="btn-frequency-low"
-            onclick="applyScenario('frequency-low')"
-          >
-            Frequency: Low<br /><small>0.4 (Occasional)</small>
-          </button>
-          <button
-            class="btn-frequency-high"
-            onclick="applyScenario('frequency-high')"
-          >
-            Frequency: High<br /><small>0.8 (Frequent)</small>
-          </button>
-          <button
-            class="btn-frequency-high"
-            onclick="applyScenario('frequency-veryhigh')"
-          >
-            Frequency: Very High<br /><small>1.0 (Maximum)</small>
-          </button>
-          <button class="btn-combined" onclick="applyScenario('minimal')">
-            Combined: Minimal<br /><small>0.2 / 0.2</small>
-          </button>
-          <button class="btn-combined" onclick="applyScenario('maximal')">
-            Combined: Maximal<br /><small>1.2 / 1.0 / 1.15</small>
-          </button>
-          <button class="btn-neutral" onclick="resetToDefault()">
-            Reset Default<br /><small>1.0 / 0.5</small>
-          </button>
-        </div>
-
-        <h4>🎭 Select Emotion to Test</h4>
+        <h3>🎭 Emotion (좌: RPM / 우: Rocketbox)</h3>
         <div class="emotion-select">
           <button onclick="testEmotion('joy')">😊 Joy</button>
           <button onclick="testEmotion('sadness')">😢 Sadness</button>
@@ -356,72 +288,15 @@
 
         <div class="sliders">
           <div class="slider-group">
-            <label>
-              Base Intensity (Customization):
-              <span class="value-display" id="base-intensity-value">1.00</span>
-            </label>
-            <input
-              type="range"
-              id="base-intensity-slider"
-              min="30"
-              max="120"
-              step="5"
-              value="75"
-              oninput="updateCustomization()"
-            />
-            <small>User's customization setting (0.3 - 1.2)</small>
+            <label>Intensity 계수: <span class="value-display" id="intensity-value">0.75</span></label>
+            <input type="range" id="intensity-slider" min="0" max="150" step="5" value="75"
+                  oninput="setIntensity(this.value)" />
+            <small>전체 표정 강도 (0.0 - 1.5)</small>
           </div>
-
           <div class="slider-group">
-            <label>
-              Base Frequency (Customization):
-              <span class="value-display" id="base-frequency-value">0.50</span>
-            </label>
-            <input
-              type="range"
-              id="base-frequency-slider"
-              min="0"
-              max="100"
-              step="5"
-              value="50"
-              oninput="updateCustomization()"
-            />
-            <small>Micro-response frequency (0.0 - 1.0)</small>
-          </div>
-
-          <div class="slider-group">
-            <label>
-              Intensity Multiplier (LLM):
-              <span class="value-display" id="multiplier-value">1.00</span>
-            </label>
-            <input
-              type="range"
-              id="multiplier-slider"
-              min="85"
-              max="115"
-              step="5"
-              value="100"
-              oninput="updateMultiplier()"
-            />
-            <small>LLM's context-based multiplier (0.85 - 1.15)</small>
-          </div>
-
-          <div class="slider-group">
-            <label>
-              Final Intensity (Result):
-              <span class="value-display" id="final-intensity-value">1.00</span>
-            </label>
-            <input
-              type="range"
-              id="final-intensity-slider"
-              min="0"
-              max="138"
-              step="1"
-              value="75"
-              disabled
-              style="opacity: 0.5; cursor: not-allowed"
-            />
-            <small>Base × Multiplier (0.255 - 1.38)</small>
+            <label>Rocketbox 표정 시스템</label>
+            <button id="au-toggle-btn" class="btn-combined" onclick="toggleAU()">AU: OFF</button>
+            <small>ON = FACS AU / OFF = ARKit (RPM과 동일)</small>
           </div>
         </div>
       </div>
@@ -442,291 +317,105 @@
       scene.background = new THREE.Color(0x1a1a2e);
 
       // Camera
+      const container = document.getElementById("canvas-container");
       const camera = new THREE.PerspectiveCamera(
-        45,
-        window.innerWidth / (window.innerHeight * 0.6),
-        0.1,
-        1000
+        30, container.clientWidth / container.clientHeight, 0.1, 1000
       );
-      camera.position.set(0, 0.5, 1);
-
+      camera.position.set(0, 0.6, 0.8);
+      
       // Renderer
       const renderer = new THREE.WebGLRenderer({ antialias: true });
-      const container = document.getElementById("canvas-container");
       renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.shadowMap.enabled = true;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      // renderer.shadowMap.enabled = true;
       container.appendChild(renderer.domElement);
-
+      
       // Controls
       const controls = new OrbitControls(camera, renderer.domElement);
-      controls.target.set(0, 0.5, 0);
+      controls.target.set(0, 0.6, 0);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
       controls.update();
 
       // Lights
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
       scene.add(ambientLight);
-
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-      directionalLight.position.set(5, 10, 5);
-      directionalLight.castShadow = true;
-      scene.add(directionalLight);
-
-      const rimLight = new THREE.DirectionalLight(0x667eea, 0.5);
-      rimLight.position.set(-5, 3, -5);
-      scene.add(rimLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 3.0);
+      dirLight.position.set(0, 3, 3);
+      scene.add(dirLight);
+      const fillLight = new THREE.DirectionalLight(0xc8d4e0, 1.5);
+      fillLight.position.set(-3, 2, 2);
+      scene.add(fillLight);
+      const bottomLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      bottomLight.position.set(0, -3, 2);
+      scene.add(bottomLight);
 
       // Avatar Controller
-      const avatarController = new AvatarController();
-      window.avatarController = avatarController;
+      const rpmController = new AvatarController();
+      const rbController = new AvatarController();
+      window.rpmController = rpmController;
+      window.rbController = rbController;
 
       // Current state
       let currentEmotion = "neutral";
-      let baseIntensity = 1.0;
-      let baseFrequency = 0.5;
-      let intensityMultiplier = 1.0;
+      let baseIntensity = 0.75;
+      let auMode = false;
 
       // Load Avatar
       const loader = new GLTFLoader();
-      loader.load(
-        "./assets/avatar_torso.glb",
-        (gltf) => {
-          const avatar = gltf.scene;
-          scene.add(avatar);
-          avatarController.init(avatar);
-          console.log(
-            "✅ Avatar loaded! Ready to test customization parameters."
-          );
-          console.log("💡 Try different intensity/frequency combinations");
-        },
-        (progress) => {
-          console.log(
-            "Loading:",
-            ((progress.loaded / progress.total) * 100).toFixed(0) + "%"
-          );
-        },
-        (error) => {
-          console.error("❌ Error loading avatar:", error);
-        }
-      );
+      const X_OFFSET = 0.15;
+
+      // RPM
+      loader.load("./assets/avatar_girl.glb", (gltf) => {
+        const a = gltf.scene;
+        a.position.x = -X_OFFSET;
+        scene.add(a);
+        rpmController.init(a);
+        console.log("✅ RPM Loaded:", rpmController.headMesh?.name);
+      }, undefined, (e) => console.error("❌ RPM Load FAIL:", e));
+
+      // Rocketbox
+      loader.load("./assets/panel/slot2.glb", (gltf) => {
+        const a = gltf.scene;
+        a.position.x = X_OFFSET;
+        a.position.y = -0.95;
+        scene.add(a);
+        rbController.init(a);
+        console.log("✅ Rocketbox Loaded:", rbController.headMesh?.name);
+      }, undefined, (e) => console.error("❌ Rocketbox Load FAIL:", e));
 
       // Calculate and apply emotion
       function applyCurrentEmotion() {
-        let rawFinal = baseIntensity * intensityMultiplier;
-        const finalIntensity = Math.max(0, rawFinal);
+        const intensity = baseIntensity;
 
-        console.log(`\n🎭 Applying Emotion:`);
-        console.log(`   Type: ${currentEmotion}`);
-        console.log(`   Base Intensity: ${baseIntensity.toFixed(2)}`);
-        console.log(`   Multiplier: ${intensityMultiplier.toFixed(2)}`);
-        console.log(`   Final Intensity: ${finalIntensity.toFixed(2)}`);
-        console.log(`   Base Frequency: ${baseFrequency.toFixed(2)}`);
+        // RPM: 항상 ARKit
+        rpmController.setExpressionMode(false);
+        rpmController.setEmotion(currentEmotion, intensity);
 
-        avatarController.setEmotion(currentEmotion, finalIntensity);
+        // Rocketbox: AU 토글 반영
+        rbController.setExpressionMode(auMode);
+        rbController.setEmotion(currentEmotion, intensity);
 
-        // Update UI
         document.getElementById("current-emotion").textContent = currentEmotion;
-        document.getElementById("current-intensity").textContent =
-          baseIntensity.toFixed(2);
-        document.getElementById("current-frequency").textContent =
-          baseFrequency.toFixed(2);
-        document.getElementById("current-multiplier").textContent =
-          intensityMultiplier.toFixed(2);
-        document.getElementById("current-final").textContent =
-          finalIntensity.toFixed(2);
-        document.getElementById("final-intensity-value").textContent =
-          finalIntensity.toFixed(2);
-
-        // Update final slider position
-        document.getElementById("final-intensity-slider").value = Math.round(
-          finalIntensity * 100
-        );
-
-        // Color code final intensity
-        const finalSpan = document.getElementById("current-final");
-        if (finalIntensity < 0.5) {
-          finalSpan.style.color = "#60a5fa"; // blue
-        } else if (finalIntensity < 1.2) {
-          finalSpan.style.color = "#4ade80"; // green
-        } else if (finalIntensity < 1.8) {
-          finalSpan.style.color = "#fbbf24"; // yellow
-        } else {
-          finalSpan.style.color = "#f87171"; // red
-        }
+        document.getElementById("current-intensity").textContent = intensity.toFixed(2);
+        const auStatusEl = document.getElementById("au-status");
+        if (auStatusEl) auStatusEl.textContent = auMode ? "AU ON" : "AU OFF (ARKit)";
       }
 
-      // Test specific emotion
       window.testEmotion = function (emotion) {
         currentEmotion = emotion;
         applyCurrentEmotion();
       };
 
-      // Update customization parameters
-      window.updateCustomization = function () {
-        baseIntensity =
-          parseFloat(document.getElementById("base-intensity-slider").value) /
-          100; // 30-120 → 0.3-1.2
-        baseFrequency =
-          parseFloat(document.getElementById("base-frequency-slider").value) /
-          100; // 0-100 → 0.0-1.0
-
-        document.getElementById("base-intensity-value").textContent =
-          baseIntensity.toFixed(2);
-        document.getElementById("base-frequency-value").textContent =
-          baseFrequency.toFixed(2);
-
+      window.setIntensity = function (v) {
+        baseIntensity = parseFloat(v) / 100;
+        document.getElementById("intensity-value").textContent = baseIntensity.toFixed(2);
         applyCurrentEmotion();
       };
 
-      // Update multiplier
-      window.updateMultiplier = function () {
-        intensityMultiplier =
-          parseFloat(document.getElementById("multiplier-slider").value) / 100;
-
-        document.getElementById("multiplier-value").textContent =
-          intensityMultiplier.toFixed(2);
-
-        applyCurrentEmotion();
-      };
-
-      // Apply test scenario
-      window.applyScenario = function (scenario) {
-        const scenarios = {
-          "intensity-verylow": {
-            intensity: 0.3,
-            frequency: 0.5,
-            multiplier: 1.0,
-            desc: "Very Low Intensity (0.3)",
-          },
-          "intensity-low": {
-            intensity: 0.5,
-            frequency: 0.5,
-            multiplier: 1.0,
-            desc: "Low Intensity (0.5)",
-          },
-          "intensity-medium": {
-            intensity: 0.75,
-            frequency: 0.5,
-            multiplier: 1.0,
-            desc: "Medium Intensity (0.75)",
-          },
-          "intensity-high": {
-            intensity: 1.0,
-            frequency: 0.5,
-            multiplier: 1.0,
-            desc: "High Intensity (1.0)",
-          },
-          "intensity-veryhigh": {
-            intensity: 1.2,
-            frequency: 0.5,
-            multiplier: 1.0,
-            desc: "Very High Intensity (1.2)",
-          },
-          "frequency-verylow": {
-            intensity: 0.75,
-            frequency: 0.2,
-            multiplier: 1.0,
-            desc: "Very Low Frequency (0.2)",
-          },
-          "frequency-low": {
-            intensity: 0.75,
-            frequency: 0.4,
-            multiplier: 1.0,
-            desc: "Low Frequency (0.4)",
-          },
-          "frequency-high": {
-            intensity: 0.75,
-            frequency: 0.8,
-            multiplier: 1.0,
-            desc: "High Frequency (0.8)",
-          },
-          "frequency-veryhigh": {
-            intensity: 0.75,
-            frequency: 1.0,
-            multiplier: 1.0,
-            desc: "Very High Frequency (1.0)",
-          },
-          minimal: {
-            intensity: 0.3,
-            frequency: 0.2,
-            multiplier: 0.85,
-            desc: "Minimal (0.3 / 0.2 / 0.85)",
-          },
-          maximal: {
-            intensity: 1.2,
-            frequency: 1.0,
-            multiplier: 1.15,
-            desc: "Maximal (1.2 / 1.0 / 1.15)",
-          },
-        };
-
-        const config = scenarios[scenario];
-        if (!config) return;
-
-        console.log(`\n🎯 Applying Scenario: ${config.desc}`);
-
-        // Set sliders
-        document.getElementById("base-intensity-slider").value = Math.round(
-          config.intensity * 100
-        );
-        document.getElementById("base-frequency-slider").value = Math.round(
-          config.frequency * 100
-        );
-        document.getElementById("multiplier-slider").value = Math.round(
-          config.multiplier * 100
-        );
-
-        // Update values
-        baseIntensity = config.intensity;
-        baseFrequency = config.frequency;
-        intensityMultiplier = config.multiplier;
-
-        // Update displays
-        document.getElementById("base-intensity-value").textContent =
-          baseIntensity.toFixed(2);
-        document.getElementById("base-frequency-value").textContent =
-          baseFrequency.toFixed(2);
-        document.getElementById("multiplier-value").textContent =
-          intensityMultiplier.toFixed(2);
-
-        // Update instructions
-        const instructions = document.getElementById("test-instructions");
-        instructions.innerHTML = `
-          <p><strong>🎯 Testing: ${config.desc}</strong></p>
-          <p>1. Click emotions to test</p>
-          <p>2. Check if expression is natural</p>
-          <p>3. Note any issues</p>
-        `;
-
-        applyCurrentEmotion();
-      };
-
-      // Reset to default
-      window.resetToDefault = function () {
-        console.log("\n🔄 Reset to Default Settings");
-
-        document.getElementById("base-intensity-slider").value = 75;
-        document.getElementById("base-frequency-slider").value = 50;
-        document.getElementById("multiplier-slider").value = 100;
-
-        baseIntensity = 0.75;
-        baseFrequency = 0.5;
-        intensityMultiplier = 1.0;
-
-        document.getElementById("base-intensity-value").textContent = "0.75";
-        document.getElementById("base-frequency-value").textContent = "0.50";
-        document.getElementById("multiplier-value").textContent = "1.00";
-
-        const instructions = document.getElementById("test-instructions");
-        instructions.innerHTML = `
-          <p><strong>💡 Instructions:</strong></p>
-          <p>1. Select a test scenario</p>
-          <p>2. Choose emotion to test</p>
-          <p>3. Observe naturalness</p>
-        `;
-
-        currentEmotion = "neutral";
+      window.toggleAU = function () {
+        auMode = !auMode;
+        document.getElementById("au-toggle-btn").textContent = auMode ? "AU: ON" : "AU: OFF";
         applyCurrentEmotion();
       };
 
@@ -734,7 +423,8 @@
       function animate() {
         requestAnimationFrame(animate);
         controls.update();
-        avatarController.update();
+        rpmController.update();
+        rbController.update();
         renderer.render(scene, camera);
       }
       animate();

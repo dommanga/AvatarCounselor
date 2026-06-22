@@ -1,4 +1,42 @@
 import { EMOTION_CONFIGS } from "./emotions.js";
+import { EMOTION_CONFIGS_AU } from "./emotions_au.js";
+
+const MORPH_ALIASES = {
+  browDownLeft: "AK_01_BrowDownLeft",
+  browDownRight: "AK_02_BrowDownRight",
+  browInnerUp: "AK_03_BrowInnerUp",
+  browOuterUpLeft: "AK_04_BrowOuterUpLeft",
+  browOuterUpRight: "AK_05_BrowOuterUpRight",
+  cheekSquintLeft: "AK_07_CheekSquintLeft",
+  cheekSquintRight: "AK_08_CheekSquintRight",
+  eyeBlinkLeft: "AK_09_EyeBlinkLeft",
+  eyeBlinkRight: "AK_10_EyeBlinkRight",
+  eyeSquintLeft: "AK_19_EyeSquintLeft",
+  eyeSquintRight: "AK_20_EyeSquintRight",
+  eyeWideLeft: "AK_21_EyeWideLeft",
+  eyeWideRight: "AK_22_EyeWideRight",
+  mouthOpen: "AK_25_JawOpen",
+  jawOpen: "AK_25_JawOpen",
+  mouthClose: "AK_27_MouthClose",
+  mouthDimpleLeft: "AK_28_MouthDimpleLeft",
+  mouthDimpleRight: "AK_29_MouthDimpleRight",
+  mouthFrownLeft: "AK_30_MouthFrownLeft",
+  mouthFrownRight: "AK_31_MouthFrownRight",
+  mouthPressLeft: "AK_36_MouthPressLeft",
+  mouthPressRight: "AK_37_MouthPressRight",
+  mouthSmileLeft: "AK_44_MouthSmileLeft",
+  mouthSmileRight: "AK_45_MouthSmileRight",
+  noseSneerLeft: "AK_50_NoseSneerLeft",
+  noseSneerRight: "AK_51_NoseSneerRight",
+  eyeLookDownLeft: "AK_11_EyeLookDownLeft",
+  eyeLookDownRight: "AK_12_EyeLookDownRight",
+  eyeLookInLeft: "AK_13_EyeLookInLeft",
+  eyeLookInRight: "AK_14_EyeLookInRight",
+  eyeLookOutLeft: "AK_15_EyeLookOutLeft",
+  eyeLookOutRight: "AK_16_EyeLookOutRight",
+  eyeLookUpLeft: "AK_17_EyeLookUpLeft",
+  eyeLookUpRight: "AK_18_EyeLookUpRight",
+};
 
 export class AvatarController {
   constructor() {
@@ -11,45 +49,48 @@ export class AvatarController {
     this.targetMorphValues = {};
     this.currentMorphValues = {};
     this.transitionSpeed = 0.1;
+    this.useAU = false;   // false = ARKit, true = AU
   }
 
   init(avatar) {
     this.avatar = avatar;
 
-    // Find Wolf3D_Avatar mesh and Head bone
+    let mesh1 = null;
+    let fallback = null;
+    let bestCount = -1;
+
     avatar.traverse((node) => {
-      if (
-        node.isMesh &&
-        node.name === "Wolf3D_Avatar" &&
-        node.morphTargetDictionary
-      ) {
-        this.headMesh = node;
-        this.morphTargetDictionary = node.morphTargetDictionary;
+      if (node.isMesh && node.morphTargetDictionary) {
+        const nm = node.name.trim();
+        if (nm === "Mesh_1" || nm === "Wolf3D_Avatar") {
+          mesh1 = node;
+        }
+        const count = Object.keys(node.morphTargetDictionary).length;
+        if (count > bestCount) {
+          bestCount = count;
+          fallback = node;
+        }
       }
 
-      // Find Head bone
-      if (node.isBone && node.name === "Head") {
-        this.headBone = node;
-        // console.log("✅ Head bone found!");
-      }
-      // Find Spine bone
-      if (node.isBone && node.name === "Spine") {
-        this.spineBone = node;
-        // console.log("✅ Spine bone found!");
+      if (node.isBone) {
+        const n = node.name;
+        if (!this.headBone && (n === "Head" || n === "Bip01_Head" || n === "Bip01_Head1")) {
+          this.headBone = node;
+        }
+        if (!this.spineBone && (n === "Spine" || n === "Bip01_Spine1" || n === "Bip01_Spine2" || n === "Bip01_Spine")) {
+          this.spineBone = node;
+        }
       }
     });
 
-    if (!this.headMesh) {
-      console.error("❌ Wolf3D_Avatar mesh not found!");
+    const chosen = mesh1 || fallback;
+    if (!chosen) {
+      console.error("❌ morph target 가진 mesh를 못 찾음");
       return;
     }
 
-    // console.log("✅ Avatar mesh loaded");
-    // console.log(
-    //   "✅ Total morph targets:",
-    //   Object.keys(this.morphTargetDictionary).length
-    // );
-
+    this.headMesh = chosen;
+    this.morphTargetDictionary = chosen.morphTargetDictionary;
     this.initializeMorphValues();
   }
 
@@ -75,9 +116,9 @@ export class AvatarController {
       return;
     }
 
-    const index = this.morphTargetDictionary[targetName];
-    if (index !== undefined) {
-      this.targetMorphValues[targetName] = value;
+    const key = this._resolveMorph(targetName);
+    if (key !== null) {
+      this.targetMorphValues[key] = value;
     } else {
       console.warn(`Morph target "${targetName}" not found`);
     }
@@ -90,8 +131,10 @@ export class AvatarController {
    */
   setEmotion(emotion, finalIntensity = 1.0) {
     this.currentEmotion = emotion;
+    this._lastIntensity = finalIntensity;
 
-    const emotionConfig = EMOTION_CONFIGS[emotion];
+    const configs = this.useAU ? EMOTION_CONFIGS_AU : EMOTION_CONFIGS;
+    const emotionConfig = configs[emotion];
     if (!emotionConfig) {
       console.warn(`Unknown emotion: ${emotion}`);
       return;
@@ -99,13 +142,17 @@ export class AvatarController {
 
     const blendshapes = emotionConfig.blendshapes || {};
 
-    const newEmotionBlendshapes = new Set(Object.keys(blendshapes));
+    const newEmotionBlendshapes = new Set(
+      Object.keys(blendshapes)
+        .map((n) => this._resolveMorph(n))
+        .filter((k) => k !== null)
+    );
 
     for (let key in this.targetMorphValues) {
+      const lower = key.toLowerCase();
       if (
-        key === "eyeBlinkLeft" ||
-        key === "eyeBlinkRight" ||
-        key.includes("eyeLook")
+        lower.includes("eyeblink") ||
+        lower.includes("eyelook")
       ) {
         continue;
       }
@@ -139,7 +186,8 @@ export class AvatarController {
     const initialValues = {};
     for (let morphName in this.targetMorphValues) {
       // Skip eyeBlink morphs
-      if (morphName.includes("eyeBlink") || morphName.includes("Eye_Blink")) {
+      const lower = morphName.toLowerCase();
+      if (lower.includes("eyeblink")) {
         continue;
       }
 
@@ -164,7 +212,8 @@ export class AvatarController {
 
         // Final reset to 0 (except eyeBlink)
         for (let key in this.targetMorphValues) {
-          if (key.includes("eyeBlink") || key.includes("Eye_Blink")) {
+          const lower = key.toLowerCase();
+          if (lower.includes("eyeblink")) {
             continue; // Keep eyeBlink values
           }
           this.targetMorphValues[key] = 0;
@@ -190,5 +239,26 @@ export class AvatarController {
           this.currentMorphValues[morphName];
       }
     }
+  }
+
+  setExpressionMode(useAU) {
+    if (this.useAU === useAU) return;
+    this.useAU = useAU;
+    for (let key in this.targetMorphValues) {
+      const lower = key.toLowerCase();
+      if (lower.includes("eyeblink") || lower.includes("eyelook")) continue;
+      this.targetMorphValues[key] = 0;
+    }
+    this.setEmotion(this.currentEmotion, this._lastIntensity ?? 1.0);
+  }
+
+  _resolveMorph(name) {
+    if (!this.morphTargetDictionary) return null;
+    // 1. RPM
+    if (this.morphTargetDictionary[name] !== undefined) return name;
+    // 2. alias (Rocketbox AK_)
+    const alias = MORPH_ALIASES[name];
+    if (alias && this.morphTargetDictionary[alias] !== undefined) return alias;
+    return null;
   }
 }
