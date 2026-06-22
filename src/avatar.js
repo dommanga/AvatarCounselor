@@ -90,6 +90,10 @@ export class AvatarController {
     }
 
     this.headMesh = chosen;
+    this.isRocketbox = (chosen.name === "Mesh_1");
+    this.nodAxis = this.isRocketbox ? "z" : "x";
+    this.swayAxis = this.isRocketbox ? "y" : "z";
+    this.breathAxis = this.isRocketbox ? "z" : "x";
     this.morphTargetDictionary = chosen.morphTargetDictionary;
     this.initializeMorphValues();
   }

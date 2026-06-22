@@ -27,10 +27,12 @@ export class IdleAnimationController {
     this.currentLookTarget = { up: 0, left: 0 };
 
     // Breathing state
+    this.breathAxis = this.avatarController.breathAxis || "x";
     this.breathingInterval = null;
     this.currentBreathPhase = 0;
 
     // Head sway state
+    this.swayAxis = this.avatarController.swayAxis || "y";
     this.swayInterval = null;
     this.currentSwayTarget = 0;
     this.currentSwayValue = 0;
@@ -283,7 +285,7 @@ export class IdleAnimationController {
     if (spineBone) {
       // Subtle back/forward rotation (X-axis: backward when inhaling)
       const spineRotation = (breathValue - 0.5) * 0.02; // ±0.01 radians
-      spineBone.rotation.x = spineRotation;
+      spineBone.rotation[this.breathAxis] = spineRotation;
     }
   }
 
@@ -297,7 +299,7 @@ export class IdleAnimationController {
     this.avatarController.setMorphTarget("jawOpen", 0);
     const spineBone = this.avatarController.getSpineBone();
     if (spineBone) {
-      spineBone.rotation.x = 0;
+      spineBone.rotation[this.breathAxis] = 0;
     }
 
     this.currentBreathPhase = 0;
@@ -324,7 +326,7 @@ export class IdleAnimationController {
     const headBone = this.avatarController.getHeadBone();
     if (!headBone) return;
 
-    const initialY = headBone.rotation.y;
+    const initialY = headBone.rotation[this.swayAxis];
     if (Math.abs(initialY) < 0.001) return;
 
     const steps = 12;
@@ -338,12 +340,12 @@ export class IdleAnimationController {
       // Ease-out
       const easeOut = 1 - Math.pow(1 - progress, 3);
 
-      headBone.rotation.y = initialY * (1 - easeOut);
-      this.currentSwayValue = headBone.rotation.y;
+      headBone.rotation[this.swayAxis] = initialY * (1 - easeOut);
+      this.currentSwayValue = headBone.rotation[this.swayAxis];
 
       if (currentStep >= steps) {
         clearInterval(returnInterval);
-        headBone.rotation.y = 0;
+        headBone.rotation[this.swayAxis] = 0;
         this.currentSwayValue = 0;
       }
     }, stepDuration);
@@ -400,8 +402,8 @@ export class IdleAnimationController {
     // Apply smooth interpolation with easing
     this.currentSwayValue += diff * speed;
 
-    // Apply Y-axis rotation
-    headBone.rotation.y = this.currentSwayValue;
+    // Apply Sway-axis rotation
+    headBone.rotation[this.swayAxis] = this.currentSwayValue;
   }
 
   stopHeadSway() {
@@ -413,7 +415,7 @@ export class IdleAnimationController {
     // Reset head rotation
     const headBone = this.avatarController.getHeadBone();
     if (headBone) {
-      headBone.rotation.y = 0;
+      headBone.rotation[this.swayAxis] = 0;
     }
 
     this.currentSwayValue = 0;

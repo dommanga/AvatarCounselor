@@ -39,6 +39,8 @@ export class MicroResponseController {
     this._activeIntervals = new Set();
 
     this._autoFadeTimeout = null;
+
+    this.nodAxis = this.avatarController.nodAxis || "x";
   }
 
   /**
@@ -223,7 +225,7 @@ export class MicroResponseController {
         (minRotation + (maxRotation - minRotation) * easeValue) * nodFadeFactor;
 
       // Apply rotation
-      headBone.rotation.x = rotationX;
+      headBone.rotation[this.nodAxis] = rotationX;
 
       // Move to next nod
       if (currentStep % stepsPerNod === 0) {
@@ -374,8 +376,7 @@ export class MicroResponseController {
       const headBone = this.avatarController.getHeadBone();
       if (headBone && this._isNodding) {
         const headFadePromise = new Promise((resolveHead) => {
-          const initialRotationX = headBone.rotation.x;
-          const initialRotationY = headBone.rotation.y;
+          const initialRotation = headBone.rotation[this.nodAxis];
 
           const steps = 10;
           const stepDuration = (fadeDuration * 1000) / steps;
@@ -385,11 +386,11 @@ export class MicroResponseController {
             currentStep++;
             const progress = currentStep / steps; // 0 → 1
 
-            headBone.rotation.x = initialRotationX * (1 - progress);
+            headBone.rotation[this.nodAxis] = initialRotation * (1 - progress);
 
             if (currentStep >= steps) {
               clearInterval(rotationFadeInterval);
-              headBone.rotation.x = 0;
+              headBone.rotation[this.nodAxis] = 0;
               resolveHead();
             }
           }, stepDuration);
