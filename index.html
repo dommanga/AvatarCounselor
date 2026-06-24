@@ -18,6 +18,23 @@
   </head>
   <body>
     <div id="canvas-container"></div>
+    <div id="comparison-controls" style="display:none; position:fixed; bottom:0; left:0; right:0; background:rgba(0,0,0,0.85); padding:12px 20px; z-index:100;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button onclick="window.cmpEmotion('joy')">😊 Joy</button>
+        <button onclick="window.cmpEmotion('sadness')">😢 Sadness</button>
+        <button onclick="window.cmpEmotion('anger')">😠 Anger</button>
+        <button onclick="window.cmpEmotion('fear')">😨 Fear</button>
+        <button onclick="window.cmpEmotion('surprise')">😲 Surprise</button>
+        <button onclick="window.cmpEmotion('disgust')">🤢 Disgust</button>
+        <button onclick="window.cmpEmotion('neutral')">😐 Neutral</button>
+        <span style="color:#fff; margin-left:12px;">
+          Intensity: <span id="cmp-int-val" style="color:#4ade80;">1.00</span>
+        </span>
+        <input type="range" min="0" max="150" value="100" style="width:160px;"
+              oninput="window.cmpIntensity(this.value)" />
+         <button onclick="window.cmpNod()">👇 Nod</button>
+      </div>
+    </div>
 
     <script type="importmap">
       {

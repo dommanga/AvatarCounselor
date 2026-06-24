@@ -11,6 +11,8 @@ import { MicroResponseController } from "./microResponse.js";
 import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
 
+const ENV_COMPARISON = true;
+
 const DEV_DEFAULT_AVATAR = "female";
 const USE_ROCKETBOX = true;
 
@@ -26,6 +28,10 @@ const camera = new THREE.PerspectiveCamera(
   1000
 );
 camera.position.set(0, 0.65, 1);
+
+const cameraR = new THREE.PerspectiveCamera(30, 1, 0.1, 1000);
+cameraR.position.set(0, 0.65, 1);
+cameraR.lookAt(0, 0.6, 0);
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -67,7 +73,8 @@ function setupLights(useRocketbox) {
     dir.castShadow = true;
     lightGroup.add(ambient, dir);
   }
-
+  
+  lightGroup.traverse((o) => { o.layers.enable(1); o.layers.enable(2); });
   scene.add(lightGroup);
 }
 
@@ -90,6 +97,8 @@ let conversationHistory = []; // [{ speaker: 'user'|'counselor', text, timestamp
 
 // Avatar and Speech Recognition managers
 const avatarController = new AvatarController();
+const avatarControllerL = new AvatarController();   // RPM (L)
+const avatarControllerR = new AvatarController();   // Rocketbox (R)
 let speechManager = null;
 let uiController = null;
 
@@ -128,10 +137,38 @@ let currentAvatar = null;
 
 let customizationListener = null;
 
+let microL = null;
+let microR = null;
+
 // Load avatar
 const loader = new GLTFLoader();
 
 (async function init() {
+  if (ENV_COMPARISON) {
+    loadComparisonAvatars();
+    
+    let cmpEmotion_current = "neutral";
+    let cmpIntensity_current = 1.00;
+    
+    window.cmpEmotion = function (emotion) {
+      cmpEmotion_current = emotion;
+      broadcastEmotion(emotion, cmpIntensity_current);
+    };
+    
+    window.cmpIntensity = function (v) {
+      cmpIntensity_current = parseFloat(v) / 100;
+      document.getElementById("cmp-int-val").textContent = cmpIntensity_current.toFixed(2);
+      broadcastEmotion(cmpEmotion_current, cmpIntensity_current);
+    };
+
+    window.cmpNod = function () {
+      broadcastNod();
+    };
+    
+    document.getElementById("comparison-controls").style.display = "block";
+    
+    return;
+  } 
   uiController = new UIController();
 
   uiController.onSessionStart = async (sessionInfo) => {
@@ -235,6 +272,86 @@ function loadAvatar() {
       console.error("❌ Error loading avatar:", error);
     }
   );
+}
+
+function loadComparisonAvatars() {
+  camera.layers.set(1);
+  cameraR.layers.set(2);
+  let idleL = null;
+  let idleR = null;
+
+  // ── L (RPM) — layer 1 ──
+  const lightsL = new THREE.Group();
+  const ambL = new THREE.AmbientLight(0xffffff, 1.5);
+  const dirL = new THREE.DirectionalLight(0xffffff, 3.0); dirL.position.set(5, 10, 5);
+  lightsL.add(ambL, dirL);
+  lightsL.traverse(o => o.layers.set(1));
+  scene.add(lightsL);
+
+  // ── R (Rocketbox) — layer 2 ──
+  const lightsR = new THREE.Group();
+  const ambR = new THREE.AmbientLight(0xffffff, 3);
+  const keyR  = new THREE.DirectionalLight(0xffffff, 5);   keyR.position.set(0, 4, 3);
+  const key1R = new THREE.DirectionalLight(0xffffff, 3);   key1R.position.set(0, -4, 3);
+  const fillR = new THREE.DirectionalLight(0xc8d4e0, 3);   fillR.position.set(-3, 2, 2);
+  const rimR  = new THREE.DirectionalLight(0xffffff, 0.5); rimR.position.set(0, 2, -3);
+  lightsR.add(ambR, keyR, key1R, fillR, rimR);
+  lightsR.traverse(o => o.layers.set(2));
+  scene.add(lightsR);
+
+  const loader = new GLTFLoader();
+
+  // RPM
+  loader.load("./assets/avatar_girl.glb", (gltf) => {
+    const a = gltf.scene;
+    a.traverse(o => o.layers.set(1));
+    scene.add(a);
+    avatarControllerL.init(a);
+    idleL = new IdleAnimationController(avatarControllerL);
+    idleL.start();
+    microL = new MicroResponseController(avatarControllerL, { baseIntensity: 0.75, baseFrequency: 0.5 });
+    avatarControllerL.microResponseController = microL;
+    console.log("✅ L(RPM):", avatarControllerL.headMesh?.name);
+  });
+
+  // Rocketbox
+  loader.load("./assets/coach_rocketbox.glb", (gltf) => {
+    const a = gltf.scene;
+    a.position.y = -0.98;
+    a.traverse((node) => {
+    node.layers.set(2);
+    if (node.isMesh && node.material) {
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      mats.forEach((m) => {
+        if (m.transparent) { m.alphaTest = 0.2; m.depthWrite = true; m.needsUpdate = true; }
+      });
+    }
+  });
+    scene.add(a);
+    avatarControllerR.init(a);
+    avatarControllerR.setExpressionMode(true);
+    idleR = new IdleAnimationController(avatarControllerR);
+    idleR.start();
+    microR = new MicroResponseController(avatarControllerR, { baseIntensity: 0.75, baseFrequency: 0.5 });
+    avatarControllerR.microResponseController = microR;
+    console.log("✅ R(Rocketbox):", avatarControllerR.headMesh?.name);
+  });
+}
+
+function broadcastEmotion(emotion, intensity) {
+  // RPM - ARkit
+  avatarControllerL.setExpressionMode(false);
+  avatarControllerL.setEmotion(emotion, intensity);
+
+  // Rocketbox - AU
+  avatarControllerR.setExpressionMode(true);
+  avatarControllerR.setEmotion(emotion, intensity);
+}
+
+function broadcastNod() {
+  const nodConfig = { count: 2, speed: 0.5 };
+  microL?._startHeadNodding(nodConfig);
+  microR?._startHeadNodding(nodConfig);
 }
 
 // Initialize speech recognition system
@@ -824,9 +941,35 @@ async function speakResponse(text) {
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
-  controls.update();
-  avatarController.update();
-  renderer.render(scene, camera);
+
+  if (ENV_COMPARISON) {
+    const w = window.innerWidth, h = window.innerHeight;
+    const halfW = w / 2;
+
+    renderer.setScissorTest(true);
+
+    // RPM
+    camera.aspect = halfW / h;
+    camera.updateProjectionMatrix();
+    renderer.setViewport(0, 0, halfW, h);
+    renderer.setScissor(0, 0, halfW, h);
+    avatarControllerL.update();
+    renderer.render(scene, camera);
+
+    // Rocketbox
+    cameraR.aspect = halfW / h;
+    cameraR.updateProjectionMatrix();
+    renderer.setViewport(halfW, 0, halfW, h);
+    renderer.setScissor(halfW, 0, halfW, h);
+    avatarControllerR.update();
+    renderer.render(scene, cameraR);
+
+    renderer.setScissorTest(false);
+  } else {
+    controls.update();
+    avatarController.update();
+    renderer.render(scene, camera);
+  }
 }
 animate();
 
