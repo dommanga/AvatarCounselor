@@ -128,6 +128,13 @@ export class AvatarController {
     }
   }
 
+  setMorphTargetImmediate(targetName, value) {
+    const key = this._resolveMorph(targetName);
+    if (key === null) return;
+    this.targetMorphValues[key] = value;
+    this.currentMorphValues[key] = value;
+  }
+
   /**
    * Set emotion with FACS-based expression (Phase 2)
    * @param {string} emotion - Emotion name (joy, sadness, anger, fear, surprise, disgust, neutral)

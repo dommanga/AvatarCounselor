@@ -17,7 +17,7 @@ export const EMOTION_CONFIGS_AU = {
     actionUnits: [1, 4, 15],
     blendshapes: {
       AU_01_InnerBrowRaiser: 0.65,    // AU1
-      AU_04_BrowLowerer: 0.30,        // AU4 (AU1+4 = 슬픈 눈썹)
+      AU_04_BrowLowerer: 0.40,        // AU4 (AU1+4 = 슬픈 눈썹)
       AU_15_LipCornerDepressor: 0.50, // AU15
     },
   },
@@ -28,11 +28,11 @@ export const EMOTION_CONFIGS_AU = {
     blendshapes: {
       AU_04_BrowLowerer: 0.40,        // AU4
       AU_05_UpperLidRaiser: 0.30,     // AU5
-      AU_07_LidTightener: 0.35,       // AU7
+      AU_07_LidTightener: 0.55,       // AU7
       AU_23_LipTightener: 0.35,       // AU23
     },
   },
-
+  
   fear: {
     name: "Fear",
     actionUnits: [1, 2, 4, 5, 20],
@@ -40,7 +40,8 @@ export const EMOTION_CONFIGS_AU = {
       AU_01_InnerBrowRaiser: 0.55,    // AU1
       AU_02_OuterBrowRaiser: 0.35,    // AU2
       AU_04_BrowLowerer: 0.25,        // AU4
-      AU_05_UpperLidRaiser: 0.30,     // AU5
+      AU_05_UpperLidRaiser: 0.55,     // AU5
+      AU_07_LidTightener: 0.22,       // AU7
       AU_20_LipStretcher: 0.25,       // AU20
     },
   },

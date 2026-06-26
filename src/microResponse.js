@@ -41,6 +41,8 @@ export class MicroResponseController {
     this._autoFadeTimeout = null;
 
     this.nodAxis = this.avatarController.nodAxis || "x";
+    this._eyeCompensationFactor = customization.eyeCompensationFactor ?? 0.6;
+    this._currentEyeCompensation = 0;
   }
 
   /**
@@ -171,10 +173,7 @@ export class MicroResponseController {
    * @param {Object} noddingConfig - { count, speed }
    */
   _startHeadNodding(noddingConfig) {
-    if (this._isNodding) {
-      // console.log("⏭️ Nodding already in progress, skipping new trigger");
-      return;
-    }
+    if (this._isNodding) return;
 
     const headBone = this.avatarController.getHeadBone();
     if (!headBone) {
@@ -184,65 +183,72 @@ export class MicroResponseController {
 
     this._isNodding = true;
 
-    // Nodding parameters
+    const startRotation = headBone.rotation[this.nodAxis];
+
     const { count, speed } = noddingConfig;
     const baseIntensity = this.customization.baseIntensity;
 
-    // Rotation range: -2° to 10° (asymmetric, more downward)
     const minRotation = -2 * (Math.PI / 180) * baseIntensity;
     const maxRotation = 8 * (Math.PI / 180) * baseIntensity;
 
-    let currentNod = 0;
-    const stepsPerNod = 20;
-    let currentStep = 0;
+    // 60fps 고정 — 한 nod에 걸리는 시간(ms)으로 속도 제어
+    const FRAME_MS = 16;
+    const nodDurationMs = speed * 100 * 20; // 기존 (speed*100)*stepsPerNod 와 동일한 총 시간
+    const totalDurationMs = nodDurationMs * count;
 
-    // console.log(`👤 Starting head nodding (${count} nods, speed: ${speed})`);
+    const startTime = performance.now();
 
     this._noddingInterval = setInterval(() => {
-      currentStep++;
+      const elapsed = performance.now() - startTime;
+      const globalProgress = Math.min(elapsed / totalDurationMs, 1); // 0 → 1 전체
 
-      // Progress within current nod (0 → 1)
-      const nodProgress = (currentStep % stepsPerNod) / stepsPerNod;
+      // 현재 몇 번째 nod인지, 그 안에서의 진행도
+      const nodFloat = (elapsed / nodDurationMs);
+      const currentNod = Math.floor(nodFloat);
+      const nodProgress = Math.min(nodFloat - currentNod, 1); // 0 → 1 이번 nod 내
 
-      // Smoothstep function for smooth start and end (sigmoid-like)
-      // Goes from 0 → 1 → 0 with smooth transitions at both ends
+      // smoothstep → sine
       const smoothValue =
         nodProgress < 0.5
-          ? 2 * nodProgress * nodProgress // Ease in (0 → 0.5)
-          : 1 - 2 * (1 - nodProgress) * (1 - nodProgress); // Ease out (0.5 → 1)
-
-      // Map to sine-like range (0 → 1 → 0)
+          ? 2 * nodProgress * nodProgress
+          : 1 - 2 * (1 - nodProgress) * (1 - nodProgress);
       const easeValue = Math.sin(smoothValue * Math.PI);
 
-      // Fade out the last nod
+      // 마지막 nod는 끝으로 갈수록 0까지 수렴 (jump 방지)
       const nodFadeFactor =
         currentNod === count - 1
-          ? 1 - ((currentStep % stepsPerNod) / stepsPerNod) * 0.3 // Last nod: reduce by 30%
+          ? (1 - nodProgress) // 1 → 0 으로 완전히 감쇠
           : 1.0;
 
-      // Calculate rotation: starts at 0, goes down (positive rotation in X)
       const rotationX =
         (minRotation + (maxRotation - minRotation) * easeValue) * nodFadeFactor;
 
-      // Apply rotation
-      headBone.rotation[this.nodAxis] = rotationX;
+      const BLEND_IN_MS = 150;
+      const blendProgress = Math.min(elapsed / BLEND_IN_MS, 1);
+      const blendedRotation = startRotation * (1 - blendProgress) + rotationX * blendProgress;
 
-      // Move to next nod
-      if (currentStep % stepsPerNod === 0) {
-        currentNod++;
+      headBone.rotation[this.nodAxis] = blendedRotation;
 
-        // Stop after all nods complete
-        if (currentNod >= count) {
-          clearInterval(this._noddingInterval);
-          this._noddingInterval = null;
-          this._isNodding = false;
+      const eyeComp = Math.max(0, rotationX / maxRotation) * this._eyeCompensationFactor;
+      this._currentEyeCompensation = eyeComp;
+      this.avatarController.setMorphTargetImmediate("eyeLookUpLeft", eyeComp);
+      this.avatarController.setMorphTargetImmediate("eyeLookUpRight", eyeComp);
 
-          // console.log("👤 Head nodding complete");
-        }
+      // 전체 완료
+      if (globalProgress >= 1) {
+        clearInterval(this._noddingInterval);
+        this._noddingInterval = null;
+        this._isNodding = false;
+
+        // head를 명시적으로 0 복귀 (jump 방지)
+        headBone.rotation[this.nodAxis] = 0;
+
+        this.avatarController.setMorphTarget("eyeLookUpLeft", 0);
+        this.avatarController.setMorphTarget("eyeLookUpRight", 0);
+        this._currentEyeCompensation = 0;
       }
-    }, speed * 100); // Speed multiplier (smaller = faster)
+    }, FRAME_MS);
 
-    // Track this interval
     this._activeIntervals.add(this._noddingInterval);
   }
 
@@ -323,6 +329,10 @@ export class MicroResponseController {
     }
     this._isNodding = false;
 
+    this.avatarController.setMorphTarget("eyeLookUpLeft", 0);
+    this.avatarController.setMorphTarget("eyeLookUpRight", 0);
+    this._currentEyeCompensation = 0;
+
     // Mark as inactive but DON'T reset blendshapes to 0
     // Full response will smoothly overwrite them via avatar's interpolation
     if (this._currentMicroResponse) {
@@ -377,6 +387,7 @@ export class MicroResponseController {
       if (headBone && this._isNodding) {
         const headFadePromise = new Promise((resolveHead) => {
           const initialRotation = headBone.rotation[this.nodAxis];
+          const initialEyeComp = this._currentEyeCompensation;
 
           const steps = 10;
           const stepDuration = (fadeDuration * 1000) / steps;
@@ -388,9 +399,17 @@ export class MicroResponseController {
 
             headBone.rotation[this.nodAxis] = initialRotation * (1 - progress);
 
+            const eyeComp = initialEyeComp * (1 - progress);
+            this.avatarController.setMorphTarget("eyeLookUpLeft", eyeComp);
+            this.avatarController.setMorphTarget("eyeLookUpRight", eyeComp);
+
             if (currentStep >= steps) {
               clearInterval(rotationFadeInterval);
               headBone.rotation[this.nodAxis] = 0;
+
+              this.avatarController.setMorphTarget("eyeLookUpLeft", 0);
+              this.avatarController.setMorphTarget("eyeLookUpRight", 0);
+              this._currentEyeCompensation = 0;
               resolveHead();
             }
           }, stepDuration);

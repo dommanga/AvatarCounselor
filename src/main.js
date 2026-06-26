@@ -11,7 +11,8 @@ import { MicroResponseController } from "./microResponse.js";
 import { IdleAnimationController } from "./IdleAnimation.js";
 import { CustomizationManager } from "./customization.js";
 
-const ENV_COMPARISON = true;
+const DEV_TEXT_MODE = true;
+const ENV_COMPARISON = false;
 
 const DEV_DEFAULT_AVATAR = "female";
 const USE_ROCKETBOX = true;
@@ -378,6 +379,58 @@ async function initializeSpeechRecognition() {
     baseFrequency: currentSettings.baseFrequency, // 0.2-1.0
   });
   // console.log("✅ Micro response controller initialized!");
+
+  // ===== DEV =====
+  if (DEV_TEXT_MODE) {
+    const devInput = document.getElementById("dev-input");
+    devInput.style.display = "block";
+
+    let devTypingMicro = null;
+    let devTyping = false;
+
+    // typing start → periodic micro response start (listening acting)
+    const startDevListening = () => {
+      if (devTyping) return;
+      devTyping = true;
+      if (idleAnimationController) idleAnimationController.pauseHeadSway();
+
+      devTypingMicro = setInterval(() => {
+        if (nonverbalMode !== "responsive") return;  // steady면 micro 안 함 (실제 동작과 일치)
+        const moods = ["positive", "negative", "neutral"];
+        const mood = moods[Math.floor(Math.random() * moods.length)];
+        microResponseController?.trigger(mood);
+      }, 2000);
+    };
+
+    // sending -> micro stop
+    const stopDevListening = () => {
+      devTyping = false;
+      clearInterval(devTypingMicro);
+      devTypingMicro = null;
+    };
+
+    // whenever typing - micro response maintained
+    devInput.addEventListener("input", () => {
+      if (devInput.value.trim().length > 0) {
+        startDevListening();
+      } else {
+        stopDevListening();
+      }
+    });
+
+    // Enter → final processing
+    devInput.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      const text = devInput.value.trim();
+      if (!text) return;
+
+      stopDevListening();
+      devInput.value = "";
+
+      speechManager.onFinalTranscript(text);
+    });
+  }
+  // ===== DEV =====
 
   // ===== CUSTOMIZATION UI SETUP =====
 
