@@ -508,54 +508,62 @@ CRITICAL: Return ONLY valid JSON (no markdown):
 });
 
 // ═════════════════════════════════════════════════════════════════════
-// ENDPOINT 3: OpenAI TTS (Text-to-Speech)
+// ENDPOINT 3: Hume TTS (Text-to-Speech)
 // ═════════════════════════════════════════════════════════════════════
+
+// Hume voice IDs per verbal style (saved custom voices, descriptions baked in)
+const HUME_VOICE_IDS = {
+  directing: "590afc65-0669-42d4-ace7-16d008c013fb",
+  following: "85442b15-9e01-4c93-bfc1-d3da4954daf2",
+};
+
 app.post("/api/tts", async (req, res) => {
   try {
-    const { text, language, avatarGender } = req.body;
+    const { text, verbalStyle } = req.body;
 
     if (!text || text.trim().length === 0) {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    console.log(`🔊 TTS request (avatar: ${avatarGender || "default"})`);
+    const style = verbalStyle === "following" ? "following" : "directing";
+    const voiceId = HUME_VOICE_IDS[style];
 
-    // Voice configuration based on avatar gender and language
-    const VOICE_CONFIG = {
-      female: {
-        "ko-KR": "shimmer",
-        "en-US": "nova",
+    console.log(`🔊 Hume TTS request (style: ${style})`);
+
+    const humeRes = await fetch("https://api.hume.ai/v0/tts", {
+      method: "POST",
+      headers: {
+        "X-Hume-Api-Key": process.env.HUME_API_KEY,
+        "Content-Type": "application/json",
       },
-      male: {
-        "ko-KR": "cedar",
-        "en-US": "echo",
-      },
-    };
-
-    // Select voice based on avatar gender and language
-    let voice;
-    if (avatarGender && VOICE_CONFIG[avatarGender]) {
-      voice = VOICE_CONFIG[avatarGender][language] || "shimmer";
-    } else {
-      // Fallback to default (female voices)
-      voice = language === "ko-KR" ? "shimmer" : "nova";
-    }
-
-    // Generate speech using OpenAI TTS
-    const mp3 = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: voice,
-      input: text,
-      response_format: "mp3",
-      speed: 1.0,
+      body: JSON.stringify({
+        utterances: [
+          {
+            text: text,
+            voice: { id: voiceId },
+          },
+        ],
+        format: { type: "mp3" },
+      }),
     });
 
-    // Convert response to buffer
-    const buffer = Buffer.from(await mp3.arrayBuffer());
+    if (!humeRes.ok) {
+      const errText = await humeRes.text();
+      console.error("❌ Hume API error:", humeRes.status, errText);
+      throw new Error(`Hume API error: ${humeRes.status}`);
+    }
 
-    console.log(`✅ TTS generated (voice: ${voice})`);
+    const data = await humeRes.json();
+    const audioBase64 = data?.generations?.[0]?.audio;
 
-    // Send audio as response
+    if (!audioBase64) {
+      throw new Error("Hume returned no audio");
+    }
+
+    const buffer = Buffer.from(audioBase64, "base64");
+
+    console.log(`✅ Hume TTS generated (style: ${style}, ${buffer.length} bytes)`);
+
     res.set({
       "Content-Type": "audio/mpeg",
       "Content-Length": buffer.length,

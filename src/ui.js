@@ -118,8 +118,8 @@ export class UIController {
                         New Session
                     </button>
                     <select id="language-select" class="language-select">
-                        <option value="ko-KR">한국어</option>
                         <option value="en-US">English</option>
+                        <option value="ko-KR">한국어</option>
                     </select>
                 </div>
                 

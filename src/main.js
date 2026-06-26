@@ -983,11 +983,8 @@ async function speakResponse(text) {
 
     // console.log(`🔊 Speaking in ${language}`);
 
-    const selectedAvatar =
-      sessionStorage.getItem("selectedAvatar") || DEV_DEFAULT_AVATAR;
-
     // Speak with TTS (callbacks handle UI and lip sync)
-    await ttsManager.speak(text, language, selectedAvatar);
+    await ttsManager.speak(text, verbalStyle);
   } catch (error) {
     // Interrupt error: normal
     if (error.message && error.message.includes("interrupted")) {

@@ -129,7 +129,7 @@ export class APIManager {
   }
 
   // TTS generation
-  async generateTTS(text, language, avatarGender, { timeoutMs = 50000 } = {}) {
+  async generateTTS(text, verbalStyle, { timeoutMs = 50000 } = {}) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
 
@@ -137,7 +137,7 @@ export class APIManager {
       const res = await fetch(`${this.apiBase}/api/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, language, avatarGender }),
+        body: JSON.stringify({ text, verbalStyle }),
         signal: ctl.signal,
       });
 
