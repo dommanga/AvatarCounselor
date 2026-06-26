@@ -260,6 +260,14 @@ function loadAvatar() {
       scene.add(avatar);
       avatarController.init(avatar);
 
+      avatar.traverse((n) => {
+        if (!n.isBone) return;
+        if (n.name === "Bip01_L_UpperArm") n.rotation.y += THREE.MathUtils.degToRad(30);
+        if (n.name === "Bip01_R_UpperArm") n.rotation.y -= THREE.MathUtils.degToRad(30);
+        if (n.name === "Bip01_L_Clavicle") n.rotation.y -= THREE.MathUtils.degToRad(8);
+        if (n.name === "Bip01_R_Clavicle") n.rotation.y += THREE.MathUtils.degToRad(8);
+      });
+
       const loadingScreen = document.getElementById("loadingScreen");
       if (loadingScreen) loadingScreen.classList.add("hidden");
 
