@@ -60,7 +60,7 @@ export class IdleAnimationController {
       breathingIntensity: 0.05, // Jaw opening amount
 
       // Head sway config
-      swayUpdateRate: 80, // Update every 50ms
+      swayUpdateRate: 16,
       swayChangeInterval: 6000, // Change direction every 8 seconds
       swayIntensity: 0.1, // Max ±0.15 radians (~8.6 degrees)
     };
@@ -329,8 +329,8 @@ export class IdleAnimationController {
     const initialY = headBone.rotation[this.swayAxis];
     if (Math.abs(initialY) < 0.001) return;
 
-    const steps = 12;
-    const stepDuration = 70; // fast
+    const steps = 40;
+    const stepDuration = 21;
     let currentStep = 0;
 
     const returnInterval = setInterval(() => {
@@ -386,7 +386,7 @@ export class IdleAnimationController {
 
     // Ease-in-out interpolation (faster in middle, slower at ends)
     // Use sigmoid-like curve for natural movement
-    let speed = 0.08; // Base speed (increased from 0.02)
+    let speed = 0.016; // Base speed
 
     if (distance > 0.01) {
       // Ease out when close to target (smoothstep)
@@ -396,7 +396,7 @@ export class IdleAnimationController {
           ? 2 * progress * progress
           : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
-      speed = 0.08 * easeProgress;
+      speed = 0.016 * easeProgress;
     }
 
     // Apply smooth interpolation with easing
