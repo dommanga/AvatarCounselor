@@ -145,23 +145,32 @@ export class APIManager {
         throw new Error(`TTS API error: ${res.status}`);
       }
 
-      // Content-Type validation
-      const contentType = res.headers.get("Content-Type");
-      if (!contentType || !contentType.includes("audio")) {
-        const errorText = await res.text();
-        console.error("🔊 Unexpected response:", errorText);
-        throw new Error("TTS response is not audio");
+      const data = await res.json();
+
+      if (!data.audio) {
+        throw new Error("TTS returned no audio");
       }
 
-      const audioBuffer = await res.arrayBuffer();
+      // base64 → ArrayBuffer
+      const binaryString = atob(data.audio);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const audioBuffer = bytes.buffer;
 
-      // empty audio check
       if (audioBuffer.byteLength === 0) {
         throw new Error("TTS returned empty audio");
       }
 
       // console.log(`✅ TTS audio received: ${audioBuffer.byteLength} bytes`);
-      return audioBuffer;
+      
+      return {
+        audioBuffer,
+        visemes: data.visemes || [],
+        duration: data.duration || 0,
+      };
     } catch (e) {
       console.error("❌ generateTTS failed:", e);
       throw e;

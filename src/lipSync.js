@@ -1,6 +1,6 @@
 /**
- * LipSyncController - Enhanced natural lip sync simulation
- * Uses sine wave patterns and syllable-like rhythms
+ * LipSyncController - Viseme-based lip sync using Hume phoneme timestamps
+ * Synchronizes Rocketbox AA_VI_xx visemes to audio.currentTime
  */
 export class LipSyncController {
   constructor(avatarController) {
@@ -9,102 +9,71 @@ export class LipSyncController {
     this.animationFrameId = null;
     this.currentEmotion = "neutral";
 
-    // Current state
-    this.currentJawOpen = 0;
-    this.currentMouthOpen = 0;
+    // Viseme playback state
+    this.visemes = [];          // [{ viseme, begin(ms), end(ms) }]
+    this.audioEl = null;        // audio element to sync against
+    this.currentVisemeWeights = {}; // morph name → current weight (for interpolation)
 
-    // Animation parameters
-    this.time = 0;
-    this.syllablePhase = 0;
-    this.syllableDuration = 0.4; // seconds per syllable
-    this.pauseChance = 0.15; // 15% chance of brief pause
-    this.isPausing = false;
-    this.pauseTimer = 0;
+    // All possible viseme morphs (for clearing)
+    this.allVisemes = [
+      "AA_VI_00_Sil", "AA_VI_01_PP", "AA_VI_02_FF", "AA_VI_03_TH",
+      "AA_VI_04_DD", "AA_VI_05_KK", "AA_VI_06_CH", "AA_VI_07_SS",
+      "AA_VI_08_nn", "AA_VI_09_RR", "AA_VI_10_aa", "AA_VI_11_E",
+      "AA_VI_12_I", "AA_VI_13_O", "AA_VI_14_U",
+    ];
 
-    // Tunable parameters
-    this.maxJawOpen = 0.3; // Reduced from 0.9
-    this.maxMouthOpen = 0.2; // Added for more natural look
-    this.baseSpeed = 0.12; // Smoother interpolation
-    this.variationSpeed = 0.08; // Speed for variation
+    // Tunable
+    this.maxWeight = 1.0;       // peak morph weight for active viseme
+    this.lerpSpeed = 0.55;      // interpolation toward target (higher = snappier)
   }
 
   /**
-   * Start natural lip sync simulation
+   * Start viseme-based lip sync
+   * @param {HTMLAudioElement} audioEl - audio element to sync to
+   * @param {Array} visemes - [{ viseme, begin, end }] in ms
    */
-  start() {
+  startWithVisemes(audioEl, visemes) {
+    this.audioEl = audioEl;
+    this.visemes = visemes || [];
     this.isActive = true;
-    this.time = 0;
-    this.syllablePhase = 0;
+
+    // init weights
+    this.currentVisemeWeights = {};
+    for (const v of this.allVisemes) this.currentVisemeWeights[v] = 0;
+
     this.animate();
-    // console.log("👄 Enhanced lip sync started");
   }
 
-  /**
-   * Enhanced animation loop - natural speech-like movement
-   */
   animate() {
     if (!this.isActive) return;
 
-    const deltaTime = 1 / 60; // Assume 60fps
-    this.time += deltaTime;
+    const nowMs = this.audioEl ? this.audioEl.currentTime * 1000 : 0;
 
-    // Check for random pauses (like natural speech breaks)
-    if (!this.isPausing && Math.random() < this.pauseChance * deltaTime) {
-      this.isPausing = true;
-      this.pauseTimer = 0.1 + Math.random() * 0.15; // 0.1-0.25 second pause
+    // find active viseme at current time
+    let activeViseme = null;
+    for (const v of this.visemes) {
+      if (nowMs >= v.begin && nowMs < v.end) {
+        activeViseme = v.viseme;
+        break;
+      }
     }
 
-    if (this.isPausing) {
-      this.pauseTimer -= deltaTime;
-      if (this.pauseTimer <= 0) {
-        this.isPausing = false;
-      }
+    // set targets: active → maxWeight, others → 0
+    for (const vName of this.allVisemes) {
+      const target = vName === activeViseme ? this.maxWeight : 0;
+      const current = this.currentVisemeWeights[vName];
+      const next = current + (target - current) * this.lerpSpeed;
+      this.currentVisemeWeights[vName] = next;
 
-      // Close mouth during pause
-      const targetJaw = 0;
-      const targetMouth = 0;
-      this.currentJawOpen += (targetJaw - this.currentJawOpen) * this.baseSpeed;
-      this.currentMouthOpen +=
-        (targetMouth - this.currentMouthOpen) * this.baseSpeed;
-    } else {
-      // Syllable-based movement
-      this.syllablePhase += deltaTime / this.syllableDuration;
-
-      if (this.syllablePhase >= 1.0) {
-        this.syllablePhase = 0;
-        // Vary syllable duration slightly
-        this.syllableDuration = 0.4 + Math.random() * 0.3;
-      }
-
-      // Smooth sine wave for syllable (0 → 1 → 0)
-      const syllableProgress = Math.sin(this.syllablePhase * Math.PI);
-
-      // Add subtle randomness for variation (reduced amplitude)
-      const variation = Math.sin(this.time * 4) * 0.1; // Slower, smaller variation
-
-      // Combine for natural movement
-      const intensity = syllableProgress * 0.85 + variation * 0.15;
-
-      // Different movements for jaw and mouth
-      const targetJaw = intensity * this.maxJawOpen;
-      const targetMouth = intensity * this.maxMouthOpen;
-
-      // Smooth interpolation
-      this.currentJawOpen +=
-        (targetJaw - this.currentJawOpen) *
-        (this.baseSpeed + this.variationSpeed * syllableProgress);
-      this.currentMouthOpen +=
-        (targetMouth - this.currentMouthOpen) * this.baseSpeed;
+      // apply only if meaningful (avoid spamming tiny values)
+      this.avatarController.setMorphTarget(vName, next);
     }
-
-    // Update avatar
-    this.updateMouth(this.currentJawOpen, this.currentMouthOpen);
 
     this.animationFrameId = requestAnimationFrame(() => this.animate());
   }
 
   /**
-   * Stop lip sync and close mouth smoothly
+   * Stop and close mouth smoothly
    */
   stop() {
     this.isActive = false;
@@ -114,95 +83,29 @@ export class LipSyncController {
       this.animationFrameId = null;
     }
 
-    // Smoothly close mouth over ~300ms
+    // smooth close
     const closeMouth = () => {
-      if (this.currentJawOpen > 0.01 || this.currentMouthOpen > 0.01) {
-        this.currentJawOpen *= 0.5;
-        this.currentMouthOpen *= 0.5;
-        this.updateMouth(this.currentJawOpen, this.currentMouthOpen);
+      let stillOpen = false;
+      for (const vName of this.allVisemes) {
+        let w = this.currentVisemeWeights[vName] || 0;
+        if (w > 0.01) {
+          w *= 0.5;
+          this.currentVisemeWeights[vName] = w;
+          this.avatarController.setMorphTarget(vName, w);
+          stillOpen = true;
+        } else if (w !== 0) {
+          this.currentVisemeWeights[vName] = 0;
+          this.avatarController.setMorphTarget(vName, 0);
+        }
+      }
+      if (stillOpen) {
         requestAnimationFrame(closeMouth);
-      } else {
-        this.currentJawOpen = 0;
-        this.currentMouthOpen = 0;
-        this.updateMouth(0, 0);
       }
     };
     closeMouth();
-
-    // console.log("👄 Lip sync stopped");
   }
 
   setCurrentEmotion(emotion) {
     this.currentEmotion = emotion;
-  }
-
-  /**
-   * Update mouth blendshapes on avatar
-   */
-  updateMouth(jawValue, mouthValue) {
-    if (this.avatarController && this.avatarController.setMorphTarget) {
-      this.avatarController.setMorphTarget("jawOpen", jawValue);
-      this.avatarController.setMorphTarget("mouthOpen", mouthValue);
-
-      if (this.isActive && this.currentEmotion === "neutral") {
-        const smileVariation = Math.sin(this.time * 3) * 0.05;
-        this.avatarController.setMorphTarget(
-          "mouthSmileLeft",
-          Math.max(0, smileVariation)
-        );
-        this.avatarController.setMorphTarget(
-          "mouthSmileRight",
-          Math.max(0, smileVariation)
-        );
-      }
-    }
-  }
-
-  /**
-   * Adjust parameters for different speech styles
-   */
-  setParameters(params) {
-    if (params.maxJawOpen !== undefined) this.maxJawOpen = params.maxJawOpen;
-    if (params.maxMouthOpen !== undefined)
-      this.maxMouthOpen = params.maxMouthOpen;
-    if (params.baseSpeed !== undefined) this.baseSpeed = params.baseSpeed;
-    if (params.syllableDuration !== undefined)
-      this.syllableDuration = params.syllableDuration;
-    if (params.pauseChance !== undefined) this.pauseChance = params.pauseChance;
-  }
-
-  /**
-   * Preset configurations
-   */
-  static PRESETS = {
-    calm: {
-      maxJawOpen: 0.4,
-      maxMouthOpen: 0.25,
-      syllableDuration: 0.35,
-      pauseChance: 0.2,
-    },
-    normal: {
-      maxJawOpen: 0.5,
-      maxMouthOpen: 0.3,
-      syllableDuration: 0.3,
-      pauseChance: 0.15,
-    },
-    expressive: {
-      maxJawOpen: 0.65,
-      maxMouthOpen: 0.4,
-      syllableDuration: 0.25,
-      pauseChance: 0.1,
-    },
-  };
-
-  /**
-   * Apply preset configuration
-   */
-  applyPreset(presetName) {
-    const preset = LipSyncController.PRESETS[presetName];
-    if (preset) {
-      this.setParameters(preset);
-      // console.log(`👄 Applied lip sync preset: ${presetName}`);
-    }
   }
 }

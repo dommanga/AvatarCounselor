@@ -810,8 +810,11 @@ function initializeTTS() {
 
     uiController.setSpeakingStatus(true);
     uiController.disableNewSessionButton();
-    lipSyncController.start();
     lipSyncController.setCurrentEmotion(currentCounselorEmotion || "neutral");
+    lipSyncController.startWithVisemes(
+      ttsManager.audio,
+      ttsManager.currentVisemes
+    );
 
     if (idleAnimationController) {
       idleAnimationController.pauseHeadSway();

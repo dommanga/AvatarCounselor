@@ -7,6 +7,7 @@ export class TTSManager {
     this.apiManager = apiManager;
     this.audio = null;
     this.currentAudioUrl = null;
+    this.currentVisemes = [];
     this.isSpeaking = false;
     this.volume = 1.0;
 
@@ -29,6 +30,7 @@ export class TTSManager {
 
     this.cleanupAudio();
     this.isSpeaking = false;
+    this.currentVisemes = [];
 
     if (!text || text.trim().length === 0) {
       return;
@@ -38,7 +40,9 @@ export class TTSManager {
       // console.log(`🔊 Requesting TTS`);
 
       // Use APIManager instead of direct fetch
-      const audioBuffer = await this.apiManager.generateTTS(text, verbalStyle);
+      const { audioBuffer, visemes } = await this.apiManager.generateTTS(text, verbalStyle);
+
+      this.currentVisemes = visemes || [];
 
       // Convert ArrayBuffer to Blob
       const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });

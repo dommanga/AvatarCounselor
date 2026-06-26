@@ -265,10 +265,7 @@ Generate:
    - Use peer counseling skills: validate emotions, reflect key feelings/thoughts, show you're truly listening
    - When helpful, gently invite them to explore their feelings further (but don't interrogate)
    - Balance being relatable and being helpful - you're a trained peer, not just a friend
-   - Match the language of input:
-     * Korean: Use polite form (존댓말: -요, -세요 endings) with warm, friendly tone
-     * English: Use conversational, supportive language
-   - Use age-appropriate language (user is ${age} years old)
+   - Language: English
    - Avoid overly clinical or formal phrasing
    - Your facial expression should match and enhance your words
 
@@ -394,9 +391,7 @@ CRITICAL: Return ONLY valid JSON (no markdown):
 
     Generate:
     1. A response consistent with your coaching style described above (1-3 sentences)
-      - Match the language of input:
-        * Korean: polite form (존댓말: -요, -세요)
-        * English: conversational language
+      - Language: English
 
     2. The facial expression YOU should show while delivering this response
       - Your avatar will display this emotion through realistic facial expressions
@@ -511,11 +506,50 @@ CRITICAL: Return ONLY valid JSON (no markdown):
 // ENDPOINT 3: Hume TTS (Text-to-Speech)
 // ═════════════════════════════════════════════════════════════════════
 
-// Hume voice IDs per verbal style (saved custom voices, descriptions baked in)
+// Hume voice IDs per verbal style
 const HUME_VOICE_IDS = {
   directing: "590afc65-0669-42d4-ace7-16d008c013fb",
   following: "85442b15-9e01-4c93-bfc1-d3da4954daf2",
 };
+
+// IPA phoneme → Rocketbox viseme morph (Oculus OVR viseme standard)
+const IPA_TO_VISEME = {
+  // 무음
+  "sil": "AA_VI_00_Sil", "sp": "AA_VI_00_Sil", "": "AA_VI_00_Sil",
+  // 양순 (PP)
+  "p": "AA_VI_01_PP", "b": "AA_VI_01_PP", "m": "AA_VI_01_PP",
+  // 순치 (FF)
+  "f": "AA_VI_02_FF", "v": "AA_VI_02_FF",
+  // 치간 (TH)
+  "θ": "AA_VI_03_TH", "ð": "AA_VI_03_TH",
+  // 치경 폐쇄 (DD)
+  "t": "AA_VI_04_DD", "d": "AA_VI_04_DD", "ɾ": "AA_VI_04_DD",
+  // 연구개 (KK)
+  "k": "AA_VI_05_KK", "ɡ": "AA_VI_05_KK", "g": "AA_VI_05_KK", "ŋ": "AA_VI_05_KK",
+  // 후치경 마찰/파찰 (CH)
+  "tʃ": "AA_VI_06_CH", "dʒ": "AA_VI_06_CH", "ʃ": "AA_VI_06_CH", "ʒ": "AA_VI_06_CH",
+  // 치찰 (SS)
+  "s": "AA_VI_07_SS", "z": "AA_VI_07_SS", "ts": "AA_VI_07_SS",
+  // 비음/설측 (nn)
+  "n": "AA_VI_08_nn", "l": "AA_VI_08_nn",
+  // 권설/접근 (RR)
+  "ɹ": "AA_VI_09_RR", "r": "AA_VI_09_RR", "ɝ": "AA_VI_09_RR", "ɚ": "AA_VI_09_RR", "ɻ": "AA_VI_09_RR",
+  // 열린 모음 (aa)
+  "ɑ": "AA_VI_10_aa", "ɐ": "AA_VI_10_aa", "a": "AA_VI_10_aa", "ʌ": "AA_VI_10_aa", "ɒ": "AA_VI_10_aa", "ɑː": "AA_VI_10_aa",
+  "ə": "AA_VI_10_aa", "ɜ": "AA_VI_10_aa", "ɜː": "AA_VI_10_aa", "aɪ": "AA_VI_10_aa", "h": "AA_VI_10_aa",
+  // 전설 중 (E)
+  "e": "AA_VI_11_E", "ɛ": "AA_VI_11_E", "eɪ": "AA_VI_11_E", "æ": "AA_VI_11_E",
+  // 전설 고 (I)
+  "i": "AA_VI_12_I", "ɪ": "AA_VI_12_I", "iː": "AA_VI_12_I", "j": "AA_VI_12_I",
+  // 후설 원순 (O)
+  "o": "AA_VI_13_O", "ɔ": "AA_VI_13_O", "oː": "AA_VI_13_O", "oʊ": "AA_VI_13_O", "ɔː": "AA_VI_13_O", "aʊ": "AA_VI_13_O", "ɔɪ": "AA_VI_13_O",
+  // 후설 고 (U)
+  "u": "AA_VI_14_U", "ʊ": "AA_VI_14_U", "uː": "AA_VI_14_U", "w": "AA_VI_14_U",
+};
+
+function ipaToViseme(ipa) {
+  return IPA_TO_VISEME[ipa] || "AA_VI_10_aa";
+}
 
 app.post("/api/tts", async (req, res) => {
   try {
@@ -537,13 +571,10 @@ app.post("/api/tts", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        utterances: [
-          {
-            text: text,
-            voice: { id: voiceId },
-          },
-        ],
+        utterances: [{ text: text, voice: { id: voiceId } }],
         format: { type: "mp3" },
+        version: "2",
+        include_timestamp_types: ["phoneme"],
       }),
     });
 
@@ -554,21 +585,46 @@ app.post("/api/tts", async (req, res) => {
     }
 
     const data = await humeRes.json();
-    const audioBase64 = data?.generations?.[0]?.audio;
+    const gen = data?.generations?.[0];
+    const audioBase64 = gen?.audio;
 
     if (!audioBase64) {
       throw new Error("Hume returned no audio");
     }
 
-    const buffer = Buffer.from(audioBase64, "base64");
+    // snippets 전체를 돌며 phoneme timestamp 수집 → viseme로 변환
+    const visemes = [];
+    const unmapped = new Set();
+    const snippets = gen?.snippets || [];
 
-    console.log(`✅ Hume TTS generated (style: ${style}, ${buffer.length} bytes)`);
+    for (const snip of snippets) {
+      const arr = Array.isArray(snip) ? snip : [snip];
+      for (const s of arr) {
+        const timestamps = s?.timestamps || [];
+        for (const ts of timestamps) {
+          if (ts.type !== "phoneme") continue;
+          const ipa = ts.text;
+          if (!(ipa in IPA_TO_VISEME)) unmapped.add(ipa);
+          visemes.push({
+            viseme: ipaToViseme(ipa),
+            begin: ts.time.begin, // ms
+            end: ts.time.end,     // ms
+          });
+        }
+      }
+    }
 
-    res.set({
-      "Content-Type": "audio/mpeg",
-      "Content-Length": buffer.length,
+    if (unmapped.size > 0) {
+      console.log(`⚠️ Unmapped IPA (fallback to aa):`, [...unmapped].join(" "));
+    }
+
+    console.log(`✅ Hume TTS (style: ${style}, ${visemes.length} visemes, ${gen.duration}s)`);
+
+    res.json({
+      audio: audioBase64,
+      visemes: visemes,
+      duration: gen.duration,
     });
-    res.send(buffer);
   } catch (error) {
     console.error("❌ TTS generation error:", error.message);
     res.status(500).json({

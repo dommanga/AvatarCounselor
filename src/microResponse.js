@@ -121,7 +121,8 @@ export class MicroResponseController {
       neutral: {
         name: "Attentive Listening",
         blendshapes: {
-          mouthSmile: { value: 0.15 },
+          mouthSmileLeft: { value: 0.15 },
+          mouthSmileRight: { value: 0.15 },
           browInnerUp: { value: 0.08 },
         },
         duration: 1.2,

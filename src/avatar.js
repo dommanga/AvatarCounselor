@@ -163,7 +163,8 @@ export class AvatarController {
       const lower = key.toLowerCase();
       if (
         lower.includes("eyeblink") ||
-        lower.includes("eyelook")
+        lower.includes("eyelook") || 
+        lower.includes("aa_vi")
       ) {
         continue;
       }
