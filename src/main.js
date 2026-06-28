@@ -28,7 +28,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 0.65, 1);
+camera.position.set(0, 0.68, 1);
 
 const cameraR = new THREE.PerspectiveCamera(30, 1, 0.1, 1000);
 cameraR.position.set(0, 0.65, 1);
@@ -259,6 +259,10 @@ function loadAvatar() {
       currentAvatar = avatar;
       scene.add(avatar);
       avatarController.init(avatar);
+
+      if (USE_ROCKETBOX) {
+        avatarController.setExpressionMode(true);
+      }
 
       avatar.traverse((n) => {
         if (!n.isBone) return;

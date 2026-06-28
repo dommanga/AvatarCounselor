@@ -20,7 +20,7 @@ export class SpeechRecognitionManager {
     // Configuration
     this.recognition.continuous = true; // Keep listening
     this.recognition.interimResults = true; // Get partial results
-    this.recognition.lang = "ko-KR"; // Korean language (change to 'en-US' if needed)
+    this.recognition.lang = "en-US"; // English language (change to 'ko-KR' if needed)
     this.recognition.maxAlternatives = 1;
 
     // Callbacks (to be set by user)
