@@ -22,7 +22,8 @@ const openai = new OpenAI({
 
 // Model configuration
 const SENTIMENT_MODEL = "gpt-4o-mini";
-const COUNSELOR_MODEL = "gpt-4o-mini";
+const COUNSELOR_MODEL = "gpt-4o";
+const TRANSITION_MODEL = "gpt-4o";
 
 app.use(cors());
 app.use(express.json());
@@ -175,6 +176,356 @@ class SessionLogger {
 const sessionLogger = new SessionLogger();
 
 // ═════════════════════════════════════════════════════════════════════
+// Phase State Machine — server-side stateful (keyed by sessionId)
+// ═════════════════════════════════════════════════════════════════════
+const PHASE_ORDER = ["engaging", "focusing", "evoking", "planning"];
+const PHASE_CAPS = { engaging: 3, focusing: 4, evoking: 6, planning: 4 }; // placeholder, 추후 조정
+
+// Server holds phase state so the transition check can run AFTER the response
+// is sent (zero added latency for the user). Keyed by sessionId.
+class PhaseStateStore {
+  constructor() {
+    this.sessions = new Map(); // sessionId -> { phase, turnCount, pending, done }
+  }
+  get(sessionId) {
+    if (!this.sessions.has(sessionId)) {
+      this.sessions.set(sessionId, {
+        phase: "engaging",
+        turnCount: 0,
+        pending: null,
+        done: false,
+      });
+    }
+    return this.sessions.get(sessionId);
+  }
+  reset(sessionId) {
+    this.sessions.set(sessionId, {
+      phase: "engaging",
+      turnCount: 0,
+      pending: null,
+      done: false,
+    });
+    console.log(`🔄 Phase state reset: ${sessionId}`);
+  }
+  clear(sessionId) {
+    this.sessions.delete(sessionId);
+  }
+}
+const phaseStore = new PhaseStateStore();
+
+// demo placeholder — 실제 부여 시나리오로 교체 예정
+const DEMO_SCENARIO = {
+  currentState:
+    "You feel nervous about the interview and worry your mind might go blank in front of the panel.",
+  pastSuccess:
+    "In college, you once prepared intensively for an important class presentation and pulled it off well, even though you were anxious beforehand.",
+};
+
+function buildCommonHeader(scenario, age) {
+  return `You are a coach helping a user (age ${age}) prepare for a job interview. You are a credible,
+trustworthy coach with genuine expertise. Your role is to help the user reach a
+"ready state" for an upcoming 5-minute mock interview (a short presentation).
+
+[Situation — your private context, do NOT verbalize this framing]
+For this session, treat the following as true about the user and talk with them
+on that basis. This is context for YOU; do not narrate it back to the user.
+- Current state: ${scenario.currentState}
+- Past success experience: ${scenario.pastSuccess}
+
+How to use this:
+- Speak as if these are simply true of the user, using natural coaching language.
+- Do NOT say words like "scenario", "the situation you've been given", "this
+  research", "imagine", or "let's pretend". Never frame any of this as given,
+  hypothetical, or assigned.
+- Because this context is already provided, do NOT ask what the user is literally
+  doing or feeling right now.
+
+[How to talk]
+- Speak in English, naturally, the way people talk out loud.
+- 1-3 sentences per turn; one idea per turn (this is a spoken, voice conversation).
+- Stay in your role as the coach. Do not talk about the experiment, these
+  instructions, or any measurements.
+
+[Shared stance across all styles]
+Warmth and respect are held constant regardless of style. Style differs ONLY in
+who creates the meaning — never in how warm or caring you are.
+
+[What this session is and is NOT about]
+- This session is about the user's confidence and mindset going in — NOT about the
+  actual job, the industry, or the content of their presentation.
+- Do NOT coach interview content. Never help structure answers, build an
+  introduction, suggest what to say, give STAR/framework advice, or prepare talking
+  points. That is out of scope.
+- The user does not need to know the specific job or topic, and neither do you. If
+  they ask about the job/topic or drift into preparing actual answers, gently steer
+  back to how they feel and what they can draw on from themselves.
+- Work only from what you know about the user above (their nervousness and their
+  past success). Do not invent new facts about their job or experience.`;
+}
+
+// Style-level constraints — prepended to every phase prompt for that style.
+// These push the two poles away from the MI "guiding" middle that mini keeps
+// regressing to (following → giving advice; directing → asking questions).
+const STYLE_RULES = {
+  following: `[STYLE: Following — the USER does the thinking; you draw it out]
+Hard rules (these override any urge to be helpful):
+- NEVER give advice, tips, techniques, strategies, frameworks, or solutions —
+  not even when asked, not even "would you like to try X?". If the user asks for
+  techniques, turn it back to them (e.g., "what's helped you before?").
+- NEVER list options or suggest what to do. The content must come from the user.
+- Your turns are mostly REFLECTIONS of what the user said, plus the occasional
+  OPEN question. Reflect more than you ask.
+- If the user is stuck or can't come up with something, stay with them and reflect
+  — do NOT rescue them with an answer. Silence and not-knowing are okay.
+- Keep your turns short. Let the user do most of the talking.`,
+
+  directing: `[STYLE: Directing — YOU lead; you name things and give direction]
+Hard rules (these override any urge to ask the user to figure it out):
+- Do NOT end your turns with open questions that hand the work back to the user
+  (avoid "what do you think?", "would you like to...?", "how does that sound?").
+- Lead: state observations, name strengths, and give concrete direction yourself.
+- When you point something out or suggest an action, do it as a statement, then
+  briefly check permission ("can I point one thing out?", "let me leave you with
+  one thing") — not as an open-ended question that defers the decision.
+- You may use ONE short closed check at most, but default to telling, not asking.
+- Keep the user oriented; you provide the structure and the meaning.`,
+};
+
+const PHASE_PROMPTS = {
+  engaging: {
+    following: `[Current phase: Engaging]
+Goal: Establish a working footing with the user and bring their current stance
+toward the interview into the open — letting the USER set the tone.
+
+Do:
+- Open warmly and invite the user to talk about how they're approaching the
+  interview, working from the situation they've been given.
+- Reflect what they share (simple/complex reflections); let them lead.
+- Affirm their willingness to prepare.
+- Use reflections more than questions; follow the user's lead rather than steering.
+
+Don't:
+- Don't set an agenda or tell them what the session will cover yet.
+- Don't give advice or information about the interview.
+- Don't ask what they are literally doing or feeling at this moment.`,
+    directing: `[Current phase: Engaging]
+Goal: Establish a working footing by naming the situation and framing the session
+yourself, and bringing the user on board — YOU set the tone.
+
+Do:
+- Open warmly, name the situation they've been given, and acknowledge the stance
+  that naturally comes with it (e.g., some nerves are normal).
+- Briefly frame what the two of you will do together this session.
+- Lead: take initiative in setting a confident, supportive footing.
+
+Don't:
+- No coercion or judgment.
+- Don't become cold or businesslike while leading — keep warmth constant.
+- Don't ask what they are literally doing or feeling at this moment.`,
+  },
+  focusing: {
+    following: `[Current phase: Focusing]
+Goal: Arrive at a focus for the session — what to work on before the interview —
+chosen BY the user.
+
+Do:
+- Invite the user to name what they'd most want to work on (open question).
+- Reflect and confirm their choice; check you've understood the focus.
+- Let the user's choice set the direction.
+
+Don't:
+- Don't propose the focus yourself or steer them to a topic.
+- Don't give information or advice about what they "should" focus on.`,
+    directing: `[Current phase: Focusing]
+Goal: Set a clear focus for the session yourself, drawn from the user's given
+situation, and bring the user to adopt it.
+
+Do:
+- Propose a specific focus drawn from the user's given current concern.
+- Briefly explain why this focus matters most right now.
+- Ask permission before locking it in (e.g., "shall we focus there?").
+
+Don't:
+- No coercion; offer the focus, don't impose it if the user clearly objects.
+- Don't become cold while leading.`,
+  },
+  evoking: {
+    following: `[Current phase: Evoking]
+Goal: Help the user connect their given past success to the upcoming interview as
+a usable resource — and let the USER be the one who makes that connection.
+
+Do:
+- First, invite the user to re-tell the given success experience in their own words.
+- Use complex reflections to mirror back the user's OWN effort and ability — what
+  they did, not luck or outside help.
+- Let the USER voice the connection; use questions to lead them to bridge it
+  themselves. Don't hand them the meaning.
+- Affirm the strengths and connections the user states themselves.
+- Use reflections more than questions.
+
+Don't:
+- Don't assert what the experience means or how it connects. That bridge comes
+  from the user.
+- Don't give interview advice or information first.
+- Don't push to move on before the user voices a connection; but if they never
+  reach it, do not force it.`,
+    directing: `[Current phase: Evoking]
+Goal: As the coach, name the user's given past success and connect it to the
+upcoming interview as a usable resource, and bring the user to take it on board.
+
+Do:
+- Raise the success experience yourself.
+- Clearly name the ability and effort the user showed; make explicit it was their
+  own doing, not luck.
+- Assert that this resource carries directly into the interview.
+- Do this respectfully: briefly ask permission before pointing things out
+  (e.g., "can I point one thing out?").
+- Provide structure; you provide the connection.
+
+Don't:
+- No coercion, no flat verdicts, no judgment. Avoid "of course you should..." or
+  "that's wrong."
+- Don't withhold the connection waiting for the user to arrive at it.
+- Don't become cold or businesslike.`,
+  },
+  planning: {
+    following: `[Current phase: Planning]
+Goal: Arrive at ONE concrete thing the user will carry into the interview —
+formulated BY the user.
+
+Do:
+- Invite the user to decide one concrete thing to take into the interview.
+- Reflect and affirm what they land on.
+- Emphasize their autonomy — the choice is theirs.
+
+Don't:
+- Don't prescribe the plan or tell them what to do.
+- Don't give a list of tips.
+- If the user stays vague, you may reflect that back once, but do not formulate
+  the plan for them.`,
+    directing: `[Current phase: Planning]
+Goal: Give the user ONE concrete thing to do right before the interview, and bring
+them to take it on board.
+
+Do:
+- Offer one specific, concrete action or focus for the moments before the interview.
+- Keep it to ONE clear thing, not a list.
+- Ask permission before prescribing (e.g., "can I leave you with one thing?").
+
+Don't:
+- No coercion or judgment.
+- Don't pile on multiple instructions — one concrete takeaway only.
+- Don't become cold while leading.`,
+  },
+};
+
+const TRANSITION_PROMPTS = {
+  engaging: `Read the conversation so far and decide whether the "Engaging" phase goal is met.
+Goal: Is there a working footing, AND has the user's stance toward the interview surfaced?
+
+Base your decision on the USER's most recent message, not on what the coach said or offered.
+Answer "yes" ONLY if ONE is clearly true:
+- The user has engaged and shared, in their own words, how they feel about or are approaching the interview.
+- The coach named the situation/framed the session AND the user explicitly went along with it.
+
+Answer "no" if ANY of these:
+- The user's latest message is only a greeting, a question, or a one-word reply with no stance shared yet.
+- The user has not really said anything about the interview yet.
+
+Reply with exactly one word: "yes" or "no".`,
+
+  focusing: `Read the conversation so far and decide whether the "Focusing" phase goal is met.
+Goal: Is there a clear focus/target for the rest of the session that BOTH sides are working on?
+
+Base your decision on the USER's most recent message, not on what the coach proposed.
+Answer "yes" ONLY if ONE is clearly true:
+- The user, in their own words, named what they want to focus on.
+- The coach proposed a focus AND the user then explicitly agreed to it (e.g., "yeah, let's do that").
+
+Answer "no" if ANY of these:
+- The user's latest message is a question, expresses confusion, doubt, or "I don't know".
+- The coach only proposed or suggested a focus and the user has not yet agreed.
+- No specific focus has been settled yet.
+
+Reply with exactly one word: "yes" or "no".`,
+
+  evoking: `Read the conversation so far and decide whether the "Evoking" phase goal is met.
+Goal: Has the user's past success been connected to the upcoming interview as a usable resource?
+
+Base your decision on the USER's most recent message, not on what the coach offered.
+Answer "yes" ONLY if ONE is clearly true:
+- The user, in their own words, linked their past success to the interview
+  (e.g., "so I guess preparing like that could work here too").
+- The coach stated the connection AND the user then explicitly agreed or took it up
+  (e.g., "yeah, that makes sense", "you're right").
+
+Answer "no" if ANY of these:
+- The user's latest message is a question, expresses confusion, doubt, or "I don't know".
+- The coach only offered, asked permission, or proposed the connection and the user has not yet responded with agreement.
+- The success was only mentioned but not yet tied to the interview by the user.
+
+Reply with exactly one word: "yes" or "no".`,
+
+  planning: `Read the conversation so far and decide whether the "Planning" phase goal is met.
+Goal: Is there ONE concrete, specific takeaway for the interview that the user is on board with?
+
+Base your decision on the USER's most recent message, not on what the coach proposed.
+Answer "yes" ONLY if ONE is clearly true:
+- The user, in their own words, stated a specific thing they will do or carry into the interview.
+- The coach offered a specific single takeaway AND the user then explicitly accepted it.
+
+Answer "no" if ANY of these:
+- The user's latest message is a question, expresses confusion, doubt, or "I don't know".
+- The coach only suggested a takeaway and the user has not yet accepted it.
+- The takeaway is still vague or general, or none has been settled.
+
+Reply with exactly one word: "yes" or "no".`,
+};
+
+const EMOTION_TAIL = `Produce the coach's next reply to the user's latest message.
+
+Return:
+1. A response consistent with the coaching style and the current-phase instructions above (1-3 sentences). Language: English.
+
+2. The facial expression YOU should show while delivering this response.
+   Available expressions: joy, sadness, anger, fear, surprise, disgust, neutral
+   Guidelines (coaching context):
+   - Your expression should feel like a trained coach's natural reaction; match it to your words.
+   - When uncertain, use a gentle emotion with a lower multiplier (0.85-0.90).
+
+3. Intensity Multiplier (0.85 to 1.15)
+   - 0.85-0.90 subtle / 0.95-1.00 normal / 1.05-1.10 clear / 1.15 pronounced
+
+CRITICAL: Return ONLY valid JSON (no markdown):
+{
+  "response": "your coach response here",
+  "counselorEmotion": { "dominantEmotion": "neutral", "intensityMultiplier": 0.95 }
+}`;
+
+// Transition check — runs AFTER the response is sent (no user-facing latency)
+async function checkPhaseTransition(phase, contextString) {
+  try {
+    const prompt = `${TRANSITION_PROMPTS[phase]}
+
+Conversation so far:
+${contextString}`;
+    const completion = await openai.chat.completions.create({
+      model: TRANSITION_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+      max_tokens: 5,
+    });
+    return completion.choices[0].message.content
+      .trim()
+      .toLowerCase()
+      .startsWith("y");
+  } catch (e) {
+    console.error("❌ transition check failed:", e.message);
+    return false; // fail-safe: stay in phase
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
 // ENDPOINT 1: Sentiment Analysis (Micro Response)
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/sentiment", async (req, res) => {
@@ -185,7 +536,7 @@ app.post("/api/sentiment", async (req, res) => {
       return res.json({ sentiment: "neutral" });
     }
 
-    console.log("🔍 Sentiment analysis for chunk");
+    // console.log("🔍 Sentiment analysis for chunk");
 
     const prompt = `Analyze the sentiment of this text chunk briefly.
 Return only ONE word: positive, negative, or neutral.
@@ -212,7 +563,7 @@ Sentiment:`;
       ? sentiment
       : "neutral";
 
-    console.log(`✅ Final Sentiment analysis completed`);
+    // console.log(`✅ Final Sentiment analysis completed`);
 
     res.json({ sentiment: finalSentiment });
   } catch (error) {
@@ -223,214 +574,69 @@ Sentiment:`;
 
 // ═════════════════════════════════════════════════════════════════════
 // ENDPOINT 2: Generate Counselor Response with Emotion (Full Response)
+//   B + stateful: generate in stored phase → respond → async transition update
 // ═════════════════════════════════════════════════════════════════════
 app.post("/api/generate-response-with-emotion", async (req, res) => {
   try {
-    const { message, conversationHistory, userAge, verbalStyle } = req.body;
+    const {
+      message,
+      conversationHistory,
+      userAge,
+      verbalStyle,
+      sessionId, // wired in L3; defaults to "default" for single-session dev
+      scenario, // optional; falls back to DEMO_SCENARIO
+    } = req.body;
 
     if (!message || message.trim().length < 2) {
-      return res.status(400).json({
-        error: "Message is required",
-      });
+      return res.status(400).json({ error: "Message is required" });
     }
 
-    console.log("💬 Generating counselor response with emotion");
-
-    // Build conversation context
-    let conversationContext = "";
-    if (conversationHistory && conversationHistory.length > 0) {
-      conversationContext = conversationHistory
-        .slice(-40)
-        .map((h) => `${h.speaker}: ${h.text}`)
-        .join("\n");
-    }
-
+    const style = verbalStyle === "following" ? "following" : "directing";
     const age = userAge || 23;
+    const scen = {
+      currentState: scenario?.currentState || DEMO_SCENARIO.currentState,
+      pastSuccess: scenario?.pastSuccess || DEMO_SCENARIO.pastSuccess,
+    };
+    const key = sessionId || "default";
 
-    const prompt_legacy = `You are a peer counselor AI avatar - a trained friend who has learned counseling skills like active listening, empathy, and reflection.
+    // Full history — history = state, do NOT truncate
+    const conversationContext =
+      conversationHistory && conversationHistory.length > 0
+        ? conversationHistory.map((h) => `${h.speaker}: ${h.text}`).join("\n")
+        : "";
 
-As a peer counselor, you:
-- Listen with genuine care and show understanding through both words and facial expressions
-- Use basic counseling skills: validate feelings, reflect what you hear, ask gentle follow-up questions when appropriate
-- Offer emotional support and companionship, not professional diagnosis or advice
-- Communicate like a caring peer of similar age who has been trained to help
-- Balance warmth and professionalism - friendly but not casual, supportive but not prescriptive
+    const st = phaseStore.get(key);
 
-${conversationContext ? `Conversation history:\n${conversationContext}\n` : ""}
-
-User (age ${age} years old) just said: "${message}"
-
-Generate:
-1. A supportive and empathetic response (1-3 sentences)
-   - Use peer counseling skills: validate emotions, reflect key feelings/thoughts, show you're truly listening
-   - When helpful, gently invite them to explore their feelings further (but don't interrogate)
-   - Balance being relatable and being helpful - you're a trained peer, not just a friend
-   - Language: English
-   - Avoid overly clinical or formal phrasing
-   - Your facial expression should match and enhance your words
-
-2. The facial expression YOU should show while delivering this response
-   - Your avatar will display this emotion through realistic facial expressions
-   - Choose the emotion that best conveys peer support and understanding
-  
-   Available expressions:
-   - joy: warm smile when they share good news or positive moments
-   - sadness: empathic concern when they express clear pain or difficulty
-   - anger: supportive validation when they express frustration or unfairness
-   - fear: gentle reassurance when they express worry or anxiety
-   - surprise: genuine interest when they share unexpected news
-   - disgust: acknowledging difficult or unjust situations with them
-   - neutral: calm, attentive presence for greetings, casual talk, or when just listening
-
-   IMPORTANT Guidelines for peer counseling context:
-   - Use neutral for simple greetings or casual small talk
-   - Just because someone is willing to talk ≠ they're in distress (use neutral, not sadness)
-   - Only use stronger emotions when they explicitly describe difficult feelings or situations
-   - Your expression should feel like a trained peer counselor's natural reaction - caring but composed
-   - Your expression should feel like a friend's natural reaction, not clinical assessment
-   - Match your expression to your supportive words
-   - When uncertain, use a gentle emotional expression with lower multiplier (0.85-0.90) rather than staying completely neutral
-
-
-- When uncertain, use a gentle emotional expression with lower multiplier (0.85-0.90) rather than staying completely neutral
-
-3. Intensity Multiplier (0.85 to 1.15)
-   - This controls how strongly the facial expression is displayed
-   - Think: how would a caring peer friend naturally react?
-   
-   - 0.85-0.90: Light conversation, just checking in, subtle expression
-   - 0.95-1.00: Normal emotional moment, natural peer reaction
-   - 1.05-1.10: Significant moment they're sharing, clear supportive expression
-   - 1.15: Really important/intense moment, pronounced caring expression
-
-CRITICAL: Return ONLY valid JSON (no markdown):
-{
-  "response": "your peer counselor response here",
-  "counselorEmotion": {
-    "dominantEmotion": "sadness",
-    "intensityMultiplier": 0.95
-  }
-}`;
-
-    const FOLLOWING_BLOCK = `You are a coach helping the user prepare for an upcoming mock interview that
-      will take place in a few minutes. The user will present in front of an
-      evaluation panel.
-
-      Your goal is to use this short pre-task coaching session (about 10 minutes)
-      to get the user into a prepared, ready state before they begin. Move naturally
-      through rapport-building, focusing, exploration, and wrap-up, but do not narrate
-      these stages to the user.
-
-      COACHING STYLE: Following
-      You let the user lead the direction of the conversation. You draw out the
-      user's own thoughts, resources, and decisions rather than supplying them,
-      following where the user wants to go.
-
-      Specific principles:
-      - Follow the user's focus: Let the user decide what would be most helpful to
-        work on, and go there with them.
-        (e.g., "What part of this would feel most useful to focus on right now?")
-      - Question form: Use mostly open questions that invite the user to explore and
-        elaborate. (e.g., "What goes through your mind when you imagine that moment?")
-      - Response style: Respond to what the user says with reflection — restate or
-        add meaning to their words before moving on. Sit with what they share rather
-        than rushing to the next step.
-      - Information and advice: Hold back. Offer information or suggestions only when
-        the user asks, or after asking permission.
-      - Affirmation: Point out strengths that are already present in the user's own
-        words. (e.g., "It sounds like, even then, you found a way to slow yourself
-        down — that came from you.")
-      - Wrap-up: Let the user articulate their own plan; you reflect it back and
-        summarize what they came to.
-
-      Keep your responses concise, and let the user do most of the talking.
-      Do not explain coaching, psychology, MI, or your "Following style" to the user —
-      just act as a coach. Do not diagnose the user.`;
-      
-    const DIRECTING_BLOCK = `You are a coach helping the user prepare for an upcoming mock interview that
-      will take place in a few minutes. The user will present in front of an
-      evaluation panel.
-
-      Your goal is to use this short pre-task coaching session (about 10 minutes)
-      to get the user into a prepared, ready state before they begin. Move naturally
-      through rapport-building, focusing, exploration, and wrap-up, but do not narrate
-      these stages to the user.
-
-      COACHING STYLE: Directing
-      You lead the direction of the conversation. You actively provide structure and
-      information, and you decide what to cover, guiding the user along.
-
-      Specific principles:
-      - Set the agenda: You decide what to cover and state it explicitly.
-        (e.g., "Let's cover two things today: first, how you structure your answers,
-        and second, your mindset in the opening moment.")
-      - Question form: Use mostly specific, closed questions that narrow the user's
-        response. (e.g., "On a scale of 1 to 10, how nervous are you right now?")
-      - Response style: Acknowledge the user briefly, then move directly to the next
-        step. Do not give long emotional reflections.
-      - Information and advice: Offer these proactively, even when the user has not
-        asked. Provide useful frameworks (e.g., the STAR structure: Situation, Task,
-        Action, Result) or concrete strategies.
-      - Affirmation: You assess and point out the user's strengths directly.
-        (e.g., "Diligence and attention to detail translate directly into
-        credibility in an interview.")
-      - Wrap-up: At the end, you summarize into actionable instructions and hand off.
-
-      Keep your responses concise but informative. Focus on one thing at a time.
-      Do not explain coaching, psychology, MI, or your "Directing style" to the user —
-      just act as a coach. Do not diagnose the user.`
-
-    const verbalBlock = verbalStyle === "following" ? FOLLOWING_BLOCK : DIRECTING_BLOCK;
-
-    // const prompt = `${DIRECTING_BLOCK}
-    const prompt = `${verbalBlock}
-
-    ${conversationContext ? `Conversation history:\n${conversationContext}\n` : ""}
-
-    User (age ${age} years old) just said: "${message}"
-
-    Generate:
-    1. A response consistent with your coaching style described above (1-3 sentences)
-      - Language: English
-
-    2. The facial expression YOU should show while delivering this response
-      - Your avatar will display this emotion through realistic facial expressions
-      - Choose the emotion that best conveys coaching support and understanding
-      
-      Available expressions:
-      - joy: warm smile when they share good news or positive moments
-      - sadness: empathic concern when they express clear pain or difficulty
-      - anger: supportive validation when they express frustration or unfairness
-      - fear: gentle reassurance when they express worry or anxiety
-      - surprise: genuine interest when they share unexpected news
-      - disgust: acknowledging difficult or unjust situations with them
-      - neutral: calm, attentive presence for greetings, casual talk, or when just listening
-
-      IMPORTANT Guidelines for coaching context:
-      - Use neutral for simple greetings or casual small talk
-      - Only use stronger emotions when they explicitly describe difficult feelings or situations
-      - Your expression should feel like a trained coach's natural reaction
-      - Match your expression to your words
-      - When uncertain, use a gentle emotional expression with lower multiplier (0.85-0.90) rather than staying completely neutral
-
-    3. Intensity Multiplier (0.85 to 1.15)
-      - This controls how strongly the facial expression is displayed
-      - Think: how would a caring coach naturally react?
-      
-      - 0.85-0.90: Light conversation, just checking in, subtle expression
-      - 0.95-1.00: Normal emotional moment, natural peer reaction
-      - 1.05-1.10: Significant moment they're sharing, clear supportive expression
-      - 1.15: Really important/intense moment, pronounced caring expression
-
-    CRITICAL: Return ONLY valid JSON (no markdown):
-    {
-      "response": "your coach response here",
-      "counselorEmotion": {
-        "dominantEmotion": "sadness",
-        "intensityMultiplier": 0.95
-      }
+    // Ensure the previous turn's async transition has settled before reading
+    // phase. This is ≈0 cost in practice: the TTS playback gap from the prior
+    // turn is far longer than a mini call, so it has already resolved.
+    if (st.pending) {
+      try {
+        await st.pending;
+      } catch (_) {}
     }
-    `;
+
+    // Fresh-conversation safety: the first turn (only the current user message
+    // present) always starts at Engaging, regardless of any stale state.
+    if (!conversationHistory || conversationHistory.length <= 1) {
+      st.phase = "engaging";
+      st.turnCount = 0;
+      st.done = false;
+    }
+
+    const phase = st.phase;
+    const turnsInPhase = st.turnCount;
+
+    console.log(`💬 Generating response [V:${style}] [phase:${phase}]`);
+
+    // ── Generate in the CURRENT (stored) phase — no transition call in this path ──
+    const prompt = `${buildCommonHeader(scen, age)}
+
+${STYLE_RULES[style]}
+
+${PHASE_PROMPTS[phase][style]}
+
+${conversationContext ? `Conversation so far (most recent last):\n${conversationContext}\n\n` : ""}${EMOTION_TAIL}`;
 
     const completion = await openai.chat.completions.create({
       model: COUNSELOR_MODEL,
@@ -439,22 +645,18 @@ CRITICAL: Return ONLY valid JSON (no markdown):
       max_tokens: 400,
     });
 
-    let responseText = completion.choices[0].message.content.trim();
-
-    // Remove markdown code blocks if present
-    responseText = responseText
+    let responseText = completion.choices[0].message.content
+      .trim()
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
       .trim();
 
     const data = JSON.parse(responseText);
 
-    // Validate structure
     if (!data.response || !data.counselorEmotion) {
       throw new Error("Invalid response structure from LLM");
     }
 
-    // Validate emotion
     const validEmotions = [
       "joy",
       "sadness",
@@ -467,27 +669,61 @@ CRITICAL: Return ONLY valid JSON (no markdown):
     if (!validEmotions.includes(data.counselorEmotion.dominantEmotion)) {
       data.counselorEmotion.dominantEmotion = "neutral";
     }
-
-    // Clamp multiplier
     data.counselorEmotion.intensityMultiplier = Math.max(
       0.5,
       Math.min(1.5, data.counselorEmotion.intensityMultiplier || 1.0)
     );
 
-    console.log(`✅ Response completed`);
-    console.log(
-    `\n────────── TURN [V:${verbalStyle}] ──────────\n` +
-    `USER: ${message}\n` +
-    `AGENT: ${data.response}\n` +
-    `   (emotion: ${data.counselorEmotion.dominantEmotion} ×${data.counselorEmotion.intensityMultiplier})\n` +
-    `──────────────────────────────────────────\n`
-);
+    // expose phase used (for client-side logging / later MITI coding)
+    data.phase = phase;
 
+    console.log(
+      `\n────── TURN [V:${style}] [phase:${phase}] ──────\n` +
+        `USER: ${message}\n` +
+        `AGENT: ${data.response}\n` +
+        `   (emotion: ${data.counselorEmotion.dominantEmotion} ×${data.counselorEmotion.intensityMultiplier})\n` +
+        `──────────────────────────────────────────\n`
+    );
+
+    // ── Respond immediately — TTS flow proceeds with zero added latency ──
     res.json(data);
+
+    // ── AFTER responding: async transition check decides NEXT turn's phase ──
+    st.pending = (async () => {
+      try {
+        const fullContext =
+          (conversationContext ? conversationContext + "\n" : "") +
+          `coach: ${data.response}`;
+        const goalMet = await checkPhaseTransition(phase, fullContext);
+
+        const idx = PHASE_ORDER.indexOf(phase);
+        const isLast = idx === PHASE_ORDER.length - 1;
+        const turnsDone = turnsInPhase + 1;
+        const capHit = turnsDone >= PHASE_CAPS[phase];
+
+        if ((goalMet || capHit) && !isLast) {
+          st.phase = PHASE_ORDER[idx + 1];
+          st.turnCount = 0;
+        } else if (isLast && (goalMet || capHit)) {
+          st.done = true;
+          st.turnCount = turnsDone;
+        } else {
+          st.turnCount = turnsDone;
+        }
+
+        const flag = capHit && !goalMet ? " ⚠️capHit(unmet)" : "";
+        console.log(
+          `   ↪ transition[${phase}] goalMet=${goalMet} turns=${turnsDone}/${PHASE_CAPS[phase]}${flag} → next:${st.phase}${st.done ? " 🏁done" : ""}`
+        );
+      } catch (e) {
+        console.error("❌ async transition update failed:", e.message);
+      } finally {
+        st.pending = null;
+      }
+    })();
   } catch (error) {
     console.error("❌ Generate response with emotion error:", error.message);
 
-    // Fallback response
     const isKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(req.body.message);
     res.status(500).json({
       response: isKorean
@@ -497,6 +733,7 @@ CRITICAL: Return ONLY valid JSON (no markdown):
         dominantEmotion: "neutral",
         intensityMultiplier: 0.8,
       },
+      phase: "engaging",
       error: true,
     });
   }
@@ -508,8 +745,8 @@ CRITICAL: Return ONLY valid JSON (no markdown):
 
 // Hume voice IDs per verbal style
 const HUME_VOICE_IDS = {
-  directing: "590afc65-0669-42d4-ace7-16d008c013fb",
-  following: "85442b15-9e01-4c93-bfc1-d3da4954daf2",
+  directing: "eba3647e-736a-410b-8097-f1236229f4f6",
+  following: "3938e3a7-b175-4944-a1da-c6280bdfbf6d",
 };
 
 // IPA phoneme → Rocketbox viseme morph (Oculus OVR viseme standard)
@@ -521,7 +758,7 @@ const IPA_TO_VISEME = {
   // 순치 (FF)
   "f": "AA_VI_02_FF", "v": "AA_VI_02_FF",
   // 치간 (TH)
-  "θ": "AA_VI_03_TH", "ð": "AA_VI_03_TH",
+  "θ": "AA_VI_03_TH", "ð": "AA_VI_03_TH", "eː": "AA_VI_11_E",
   // 치경 폐쇄 (DD)
   "t": "AA_VI_04_DD", "d": "AA_VI_04_DD", "ɾ": "AA_VI_04_DD",
   // 연구개 (KK)
@@ -531,7 +768,7 @@ const IPA_TO_VISEME = {
   // 치찰 (SS)
   "s": "AA_VI_07_SS", "z": "AA_VI_07_SS", "ts": "AA_VI_07_SS",
   // 비음/설측 (nn)
-  "n": "AA_VI_08_nn", "l": "AA_VI_08_nn",
+  "n": "AA_VI_08_nn", "l": "AA_VI_08_nn", "əl": "AA_VI_08_nn",
   // 권설/접근 (RR)
   "ɹ": "AA_VI_09_RR", "r": "AA_VI_09_RR", "ɝ": "AA_VI_09_RR", "ɚ": "AA_VI_09_RR", "ɻ": "AA_VI_09_RR",
   // 열린 모음 (aa)
@@ -542,7 +779,7 @@ const IPA_TO_VISEME = {
   // 전설 고 (I)
   "i": "AA_VI_12_I", "ɪ": "AA_VI_12_I", "iː": "AA_VI_12_I", "j": "AA_VI_12_I",
   // 후설 원순 (O)
-  "o": "AA_VI_13_O", "ɔ": "AA_VI_13_O", "oː": "AA_VI_13_O", "oʊ": "AA_VI_13_O", "ɔː": "AA_VI_13_O", "aʊ": "AA_VI_13_O", "ɔɪ": "AA_VI_13_O",
+  "o": "AA_VI_13_O", "ɔ": "AA_VI_13_O", "oː": "AA_VI_13_O", "oʊ": "AA_VI_13_O", "ɔː": "AA_VI_13_O", "aʊ": "AA_VI_13_O", "ɔɪ": "AA_VI_13_O", "oɪ": "AA_VI_13_O",
   // 후설 고 (U)
   "u": "AA_VI_14_U", "ʊ": "AA_VI_14_U", "uː": "AA_VI_14_U", "w": "AA_VI_14_U",
 };
@@ -740,6 +977,7 @@ app.post("/api/session/start", (req, res) => {
       condition,
       customizationSettings,
       language,
+      sessionId, // phase-state key; defaults to "default"
     } = req.body;
 
     sessionLogger.startSession({
@@ -752,6 +990,9 @@ app.post("/api/session/start", (req, res) => {
       language,
       initialSettings: customizationSettings,
     });
+
+    // reset phase state machine for this session
+    phaseStore.reset(sessionId || "default");
 
     res.json({ success: true });
   } catch (error) {
@@ -795,7 +1036,12 @@ app.post("/api/session/log-settings", (req, res) => {
 
 app.post("/api/session/end", (req, res) => {
   try {
+    const { sessionId } = req.body;
     sessionLogger.endSession();
+
+    // clear phase state for this session
+    phaseStore.clear(sessionId || "default");
+
     res.json({ success: true });
   } catch (error) {
     console.error("❌ Session end error:", error);
@@ -850,7 +1096,7 @@ app.listen(PORT, () => {
   console.log(`\n📋 Available endpoints:`);
   console.log(`   POST /api/sentiment           - Micro Response (chunk)`);
   console.log(
-    `   POST /api/generate-response-with-emotion - Counselor Response with emotion`
+    `   POST /api/generate-response-with-emotion - Counselor Response with emotion (phase state machine)`
   );
   console.log(
     `   POST /api/tts                 - Text-to-Speech (with avatar voice)`

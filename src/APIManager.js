@@ -75,11 +75,13 @@ export class APIManager {
     }
   }
 
-  async generateCounselorResponse(
+async generateCounselorResponse(
     message,
     conversationHistory,
     userAge = null,
     verbalStyle = "directing",
+    sessionId = "default",
+    scenario = null,
     { timeoutMs = 20000 } = {}
   ) {
     const ctl = new AbortController();
@@ -96,6 +98,8 @@ export class APIManager {
             conversationHistory,
             userAge,
             verbalStyle,
+            sessionId,
+            scenario,
           }),
           signal: ctl.signal,
         }
@@ -220,11 +224,12 @@ export class APIManager {
     }
   }
 
-  async endSession() {
+  async endSession(sessionId = "default") {
     try {
       const res = await fetch(`${this.apiBase}/api/session/end`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
       });
       return await res.json();
     } catch (e) {

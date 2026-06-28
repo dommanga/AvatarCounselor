@@ -134,6 +134,8 @@ let currentSessionActive = false;
 
 let currentUserAge = null;
 
+let currentSessionId = "default"; // phase-state key (server-side state machine)
+
 let currentAvatar = null;
 
 let customizationListener = null;
@@ -537,7 +539,9 @@ async function initializeSpeechRecognition() {
       text,
       conversationHistory,
       currentUserAge,
-      verbalStyle
+      verbalStyle,
+      currentSessionId,
+      null
     );
 
     const counselorText = responseData.response || "";
@@ -680,10 +684,14 @@ async function initializeSpeechRecognition() {
           const currentSettings = customizationManager.getSettings();
           const language = speechManager.getLanguage();
 
+          currentSessionId =
+            (sessionInfo.participantId || "p") + "_" + Date.now();
+
           await apiManager.startSession({
             ...sessionInfo,
             customizationSettings: currentSettings,
             language,
+            sessionId: currentSessionId, // server가 이 키로 phase state 리셋
           });
 
           currentSessionActive = true;
@@ -731,8 +739,9 @@ async function initializeSpeechRecognition() {
 
     // End session logging
     if (currentSessionActive && uiController.getSessionInfo()) {
-      await apiManager.endSession();
+      await apiManager.endSession(currentSessionId);
       currentSessionActive = false;
+      currentSessionId = "default";
       // console.log("✅ Session logging ended");
     }
 
@@ -974,7 +983,6 @@ function setVerbalStyle(style) {
 function addToConversation(speaker, text) {
   if (!text || !text.trim()) return;
   conversationHistory.push({ speaker, text, timestamp: Date.now() });
-  if (conversationHistory.length > 40) conversationHistory.shift();
 }
 
 // Speak counselor response with TTS
