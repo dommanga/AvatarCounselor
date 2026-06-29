@@ -799,6 +799,9 @@ app.post("/api/tts", async (req, res) => {
     const style = verbalStyle === "following" ? "following" : "directing";
     const voiceId = HUME_VOICE_IDS[style];
 
+    const TTS_SPEED = { following: 0.6, directing: 1.2 };
+    const speed = TTS_SPEED[style];
+
     console.log(`🔊 Hume TTS request (style: ${style})`);
 
     const humeRes = await fetch("https://api.hume.ai/v0/tts", {
@@ -808,7 +811,7 @@ app.post("/api/tts", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        utterances: [{ text: text, voice: { id: voiceId } }],
+        utterances: [{ text: text, voice: { id: voiceId }, speed: speed }],
         format: { type: "mp3" },
         version: "2",
         include_timestamp_types: ["phoneme"],
