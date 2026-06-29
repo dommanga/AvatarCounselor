@@ -143,6 +143,8 @@ let customizationListener = null;
 let microL = null;
 let microR = null;
 
+let _userSpeaking = false;
+
 // Load avatar
 const loader = new GLTFLoader();
 
@@ -402,14 +404,17 @@ async function initializeSpeechRecognition() {
     let devTypingMicro = null;
     let devTyping = false;
 
-    // typing start → periodic micro response start (listening acting)
     const startDevListening = () => {
       if (devTyping) return;
       devTyping = true;
-      if (idleAnimationController) idleAnimationController.pauseHeadSway();
+
+      if (nonverbalMode === "responsive" && idleAnimationController && !_userSpeaking) {
+        _userSpeaking = true;
+        idleAnimationController.recenterSway();
+      }
 
       devTypingMicro = setInterval(() => {
-        if (nonverbalMode !== "responsive") return;  // steady면 micro 안 함 (실제 동작과 일치)
+        if (nonverbalMode !== "responsive") return;
         const moods = ["positive", "negative", "neutral"];
         const mood = moods[Math.floor(Math.random() * moods.length)];
         microResponseController?.trigger(mood);
@@ -421,6 +426,7 @@ async function initializeSpeechRecognition() {
       devTyping = false;
       clearInterval(devTypingMicro);
       devTypingMicro = null;
+      _userSpeaking = false;
     };
 
     // whenever typing - micro response maintained
@@ -492,8 +498,9 @@ async function initializeSpeechRecognition() {
     uiController.updateTranscript(finalText, interimText);
 
     if (interimText && interimText.trim().length > 0) {
-      if (idleAnimationController) {
-        idleAnimationController.pauseHeadSway();
+      if (nonverbalMode === "responsive" && idleAnimationController && !_userSpeaking) {
+        _userSpeaking = true;
+        idleAnimationController.recenterSway();
       }
     }
 
@@ -508,6 +515,7 @@ async function initializeSpeechRecognition() {
 
   speechManager.onFinalTranscript = async (text) => {
     apiManager.resetSentimentStream();
+    _userSpeaking = false;
 
     if (!text || text.trim().length === 0) {
       // console.log("⏭️  Skipping empty transcript");
@@ -830,7 +838,9 @@ function initializeTTS() {
     );
 
     if (idleAnimationController) {
-      idleAnimationController.pauseHeadSway();
+      // idleAnimationController.pauseHeadSway();
+      idleAnimationController.stopBreathing();
+      idleAnimationController.setSpeakingBlink(true);
     }
 
     // Stop micro response immediately (no fade to prevent neutral flash)
@@ -898,6 +908,8 @@ function initializeTTS() {
 
     if (idleAnimationController) {
       idleAnimationController.resumeHeadSway();
+      idleAnimationController.startBreathing();
+      idleAnimationController.setSpeakingBlink(false);
     }
 
     if (nonverbalMode === "steady") {
@@ -937,6 +949,8 @@ function initializeTTS() {
 
     // Head sway
     if (idleAnimationController) {
+      idleAnimationController.startBreathing();
+      idleAnimationController.setSpeakingBlink(false);
       idleAnimationController.resumeHeadSway();
     }
 

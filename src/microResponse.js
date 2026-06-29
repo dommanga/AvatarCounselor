@@ -87,11 +87,11 @@ export class MicroResponseController {
       positive: {
         name: "Gentle Smile",
         blendshapes: {
-          mouthSmileLeft: { value: 0.3 },
-          mouthSmileRight: { value: 0.3 },
-          eyeSquintLeft: { value: 0.2 },
-          eyeSquintRight: { value: 0.2 },
-          browInnerUp: { value: 0.1 },
+          mouthSmileLeft: { value: 0.45 },
+          mouthSmileRight: { value: 0.45 },
+          eyeSquintLeft: { value: 0.3 },
+          eyeSquintRight: { value: 0.3 },
+          browInnerUp: { value: 0.15 },
         },
         duration: 1.5,
         // Head nodding config
@@ -104,11 +104,11 @@ export class MicroResponseController {
       negative: {
         name: "Empathetic Concern",
         blendshapes: {
-          mouthFrownLeft: { value: 0.35 },
-          mouthFrownRight: { value: 0.35 },
-          browInnerUp: { value: 0.3 },
-          eyeWideLeft: { value: 0.2 },
-          eyeWideRight: { value: 0.2 },
+          mouthFrownLeft: { value: 0.45 },
+          mouthFrownRight: { value: 0.45 },
+          browInnerUp: { value: 0.4 },
+          eyeWideLeft: { value: 0.3 },
+          eyeWideRight: { value: 0.3 },
         },
         duration: 1.8,
         // Head nodding config
@@ -128,7 +128,7 @@ export class MicroResponseController {
         duration: 1.2,
         // Head nodding config
         nodding: {
-          count: 1,
+          count: 2,
           speed: 0.45,
         },
       },
@@ -158,8 +158,15 @@ export class MicroResponseController {
       microConfig.nodding &&
       Math.random() < this.customization.noddingProbability
     ) {
+      let nodConfig = microConfig.nodding;
+      if (Math.random() < 0.25) {
+        nodConfig = {
+          ...microConfig.nodding,
+          count: Math.floor(Math.random() * 2) + 2, // 2 or 3
+        };
+      }
       setTimeout(() => {
-        this._startHeadNodding(microConfig.nodding);
+        this._startHeadNodding(nodConfig);
       });
     }
 

@@ -44,6 +44,7 @@ export class IdleAnimationController {
       blinkMinInterval: 2000, // Min 2 seconds
       blinkMaxInterval: 6000, // Max 6 seconds
       blinkDuration: 150, // 150ms blink
+      doubleBlinkProbability: 0.25, // 1/4 prob
 
       // Gaze (subtle tremor)
       gazeUpdateRate: 100, // Update every 100ms
@@ -61,8 +62,9 @@ export class IdleAnimationController {
 
       // Head sway config
       swayUpdateRate: 16,
-      swayChangeInterval: 6000, // Change direction every 8 seconds
-      swayIntensity: 0.1, // Max ±0.15 radians (~8.6 degrees)
+      swayChangeMinInterval: 3000, // 방향 변경 최소 간격
+      swayChangeMaxInterval: 6000, // 방향 변경 최대 간격
+      swayIntensity: 0.09, // Max ±0.15 radians (~8.6 degrees)
     };
   }
 
@@ -112,7 +114,6 @@ export class IdleAnimationController {
 
   blink() {
     if (this.isBlinking) return;
-
     this.isBlinking = true;
 
     // Close eyes
@@ -137,6 +138,17 @@ export class IdleAnimationController {
     this.avatarController.setMorphTarget("eyeBlinkLeft", 0);
     this.avatarController.setMorphTarget("eyeBlinkRight", 0);
     this.isBlinking = false;
+  }
+
+  // during TTS
+  setSpeakingBlink(on) {
+    if (on) {
+      this.config.blinkMinInterval = 2000;
+      this.config.blinkMaxInterval = 3000;
+    } else {
+      this.config.blinkMinInterval = 2000;
+      this.config.blinkMaxInterval = 6000;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -263,6 +275,11 @@ export class IdleAnimationController {
   // ═══════════════════════════════════════════════════════════
 
   startBreathing() {
+    if (this.breathingInterval) return;
+    if (this._breathFadeInterval) {
+      clearInterval(this._breathFadeInterval);
+      this._breathFadeInterval = null;
+    }
     this.breathingInterval = setInterval(() => {
       this.updateBreathing();
     }, 70); // Update every 70ms for smooth animation
@@ -295,12 +312,30 @@ export class IdleAnimationController {
       this.breathingInterval = null;
     }
 
-    // Reset breathing
-    this.avatarController.setMorphTarget("jawOpen", 0);
-    const spineBone = this.avatarController.getSpineBone();
-    if (spineBone) {
-      spineBone.rotation[this.breathAxis] = 0;
+    if (this._breathFadeInterval) {
+      clearInterval(this._breathFadeInterval);
+      this._breathFadeInterval = null;
     }
+
+    const spineBone = this.avatarController.getSpineBone();
+    const startSpine = spineBone ? spineBone.rotation[this.breathAxis] : 0;
+
+    const steps = 30;
+    const stepMs = 16;
+    let i = 0;
+
+    if (this._breathFadeInterval) clearInterval(this._breathFadeInterval);
+    this._breathFadeInterval = setInterval(() => {
+      i++;
+      const k = 1 - i / steps; // 1 → 0
+      if (spineBone) spineBone.rotation[this.breathAxis] = startSpine * k;
+
+      if (i >= steps) {
+        clearInterval(this._breathFadeInterval);
+        this._breathFadeInterval = null;
+        if (spineBone) spineBone.rotation[this.breathAxis] = 0;
+      }
+    }, stepMs);
 
     this.currentBreathPhase = 0;
   }
@@ -357,23 +392,28 @@ export class IdleAnimationController {
   }
 
   scheduleNextSwayTarget() {
-    setTimeout(() => {
-      // Pick new random target
-      this.currentSwayTarget = this.randomBetween(
-        -this.config.swayIntensity,
-        this.config.swayIntensity
+      const interval = this.randomBetween(
+        this.config.swayChangeMinInterval,
+        this.config.swayChangeMaxInterval
       );
 
-      // Schedule next change
-      this.scheduleNextSwayTarget();
-    }, this.config.swayChangeInterval);
-  }
+      this.swayTimeout = setTimeout(() => {
+        // Pick new random target
+        this.currentSwayTarget = this.randomBetween(
+          -this.config.swayIntensity,
+          this.config.swayIntensity
+        );
+
+        // Schedule next change
+        this.scheduleNextSwayTarget();
+      }, interval);
+    }
 
   updateHeadSway() {
     const headBone = this.avatarController.getHeadBone();
     if (!headBone) return;
-
     if (this.swayPaused) return;
+    if (this._recentering) return;
 
     // Don't sway during nodding
     if (this.avatarController.microResponseController?.isNodding()) {
@@ -406,10 +446,54 @@ export class IdleAnimationController {
     headBone.rotation[this.swayAxis] = this.currentSwayValue;
   }
 
+  /**
+   * Recenter the head smoothly WITHOUT stopping sway.
+   * Pulls current sway value + target toward 0, then sway continues naturally.
+   * (used when the user starts speaking — responsive: snap attention to center)
+   */
+recenterSway() {
+    const headBone = this.avatarController.getHeadBone();
+    if (!headBone) return;
+
+    const initialY = headBone.rotation[this.swayAxis];
+    if (Math.abs(initialY) < 0.001) return;
+
+    // recenter 복귀 동안 updateHeadSway가 값을 덮지 않게 잠금 (sway는 멈추지 않음)
+    this._recentering = true;
+
+    const steps = 40;
+    const stepDuration = 21;
+    let currentStep = 0;
+
+    if (this._recenterInterval) clearInterval(this._recenterInterval);
+    this._recenterInterval = setInterval(() => {
+      currentStep++;
+      const progress = currentStep / steps;
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+
+      headBone.rotation[this.swayAxis] = initialY * (1 - easeOut);
+      this.currentSwayValue = headBone.rotation[this.swayAxis];
+
+      if (currentStep >= steps) {
+        clearInterval(this._recenterInterval);
+        this._recenterInterval = null;
+        headBone.rotation[this.swayAxis] = 0;
+        this.currentSwayValue = 0;
+        this.currentSwayTarget = 0; // 다음 target까지 0에서 출발
+        this._recentering = false;  // sway 재개
+      }
+    }, stepDuration);
+  }
+
   stopHeadSway() {
     if (this.swayInterval) {
       clearInterval(this.swayInterval);
       this.swayInterval = null;
+    }
+
+    if (this.swayTimeout) {
+      clearTimeout(this.swayTimeout);
+      this.swayTimeout = null;
     }
 
     // Reset head rotation
