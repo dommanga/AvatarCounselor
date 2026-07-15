@@ -586,7 +586,9 @@ app.post("/api/generate-response-with-emotion", async (req, res) => {
       sessionId, // wired in L3; defaults to "default" for single-session dev
       scenario, // optional; falls back to DEMO_SCENARIO
     } = req.body;
-
+    
+    const DEMO_START_PHASE = "evoking";
+    
     if (!message || message.trim().length < 2) {
       return res.status(400).json({ error: "Message is required" });
     }
@@ -619,7 +621,7 @@ app.post("/api/generate-response-with-emotion", async (req, res) => {
     // Fresh-conversation safety: the first turn (only the current user message
     // present) always starts at Engaging, regardless of any stale state.
     if (!conversationHistory || conversationHistory.length <= 1) {
-      st.phase = "engaging";
+      st.phase = DEMO_START_PHASE || "engaging";
       st.turnCount = 0;
       st.done = false;
     }
@@ -746,7 +748,7 @@ ${conversationContext ? `Conversation so far (most recent last):\n${conversation
 // Hume voice IDs per verbal style
 const HUME_VOICE_IDS = {
   directing: "eba3647e-736a-410b-8097-f1236229f4f6",
-  following: "3938e3a7-b175-4944-a1da-c6280bdfbf6d",
+  following: "85442b15-9e01-4c93-bfc1-d3da4954daf2",
 };
 
 // IPA phoneme → Rocketbox viseme morph (Oculus OVR viseme standard)
@@ -799,7 +801,7 @@ app.post("/api/tts", async (req, res) => {
     const style = verbalStyle === "following" ? "following" : "directing";
     const voiceId = HUME_VOICE_IDS[style];
 
-    const TTS_SPEED = { following: 0.6, directing: 1.2 };
+    const TTS_SPEED = { following: 0.6, directing: 1.1 };
     const speed = TTS_SPEED[style];
 
     console.log(`🔊 Hume TTS request (style: ${style})`);
@@ -811,7 +813,7 @@ app.post("/api/tts", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        utterances: [{ text: text, voice: { id: voiceId }, speed: speed }],
+        utterances: [{ text: text, voice: { id: voiceId } }],
         format: { type: "mp3" },
         version: "2",
         include_timestamp_types: ["phoneme"],
