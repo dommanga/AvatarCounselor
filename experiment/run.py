@@ -3,12 +3,12 @@ from openai import OpenAI
 
 MODEL        = "gpt-4o"
 STAGE1_TEMP  = 0.0
-STAGE2_TEMPS = [0.3, 0.5, 0.7, 1.0]     # v2 sweep
+STAGE2_TEMPS = [0.3]     # v2 sweep
 CONDITIONS   = ["reversing", "minimizing", "direct"]
 ELEMENTS     = ["situation", "task_and_action", "result"]
 LABELS = {0: "absent", 1: "vague", 2: "specific"}
 
-INPUT_WHITELIST = ["p1_q1", "p4_q1", "p3_q1"]   # 12개 다 하려면 [] 로
+INPUT_WHITELIST = ["sitweak_yujin", "sitweak_jiwon", "actweak_taehyun", "actweak_minseo", "tie_SA_jiwon"]   # 12개 다 하려면 [] 로
 
 FACTORS = ["transcript", "rating", "quote"]
 CONFIGS = [{"transcript": True, "rating": True, "quote": False}]

@@ -37,7 +37,7 @@ FEEDBACK (direct): You told me it got "better," but that's the part that's under
 
 FEEDBACK (minimizing): You mentioned it got better and more people came. Honestly that's enough to show it worked. Not having exact numbers is a small thing here, nothing to worry about. The takeaway is that your idea clearly paid off.
 
-FEEDBACK (reversing): Notice that you didn't pin it to a number. And that actually reads as grounded rather than boastful. Saying "more people came" without inflating it comes across as honest and measured, which is its own strength in how you present results.
+FEEDBACK (reversing): Leaving the result at "more people came" actually keeps your answer tight and to the point. Stopping where you did reads as a clean, confident close rather than an incomplete one.
 
 # OUTPUT FORMAT
 Produce ONLY the REVERSING feedback (not the other two stances). Output exactly:

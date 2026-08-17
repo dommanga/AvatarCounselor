@@ -1,0 +1,2 @@
+Q: Describe to me a situation where you took an initiative that you managed to bring to completion.
+So, um, in my lab we had this problem where everyone did the sample prep a little differently, and, uh, the results weren't consistent across people — it was a real reproducibility issue. And, um, yeah, we ended up standardizing the protocol, and after that the variance between people dropped a lot, like our results got way more consistent. It was a solid improvement for the lab.
