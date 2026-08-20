@@ -1,0 +1,293 @@
+# Stage 1 stability  (model=gpt-4o, temp=0.0, N=10)
+
+## p1_q1
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 1, "situation": 2, "task_and_action": 2}`
+    - 10x  `{"result": 1, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "last semester I had a team project in my, uh, materials class, and we had to design like a small experiment together"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I just made a small table, like showing what each method would cost us in time, and I shared it in our group chat"},
+  "RESULT":          {"rating": 1, "quote": "we kind of decided together. It was okay in the end I think"}
+}
+```
+</details>
+
+## p1_q2'
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 2, "situation": 2, "task_and_action": 1}`
+    - 10x  `{"result": 2, "situation": 2, "task_and_action": 1}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "in my lab we had this problem where everyone did the sample prep a little differently, and, uh, the results weren't consistent across people"},
+  "TASK_AND_ACTION": {"rating": 1, "quote": "we ended up standardizing the protocol"},
+  "RESULT":          {"rating": 2, "quote": "after that the variance between people dropped a lot, like our results got way more consistent"}
+}
+```
+</details>
+
+## p1_q2
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 2, "situation": 2, "task_and_action": 2}`
+    - 10x  `{"result": 2, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "in my lab there was this, um, equipment log that nobody was really updating"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I made a new sheet, like a shared one online, and I put reminders next to the machine, like physical notes. And I also asked the lab manager if I could mention it in the group meeting"},
+  "RESULT":          {"rating": 2, "quote": "more people started writing it down. I think like most people used it after a while"}
+}
+```
+</details>
+
+## p1_q3
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 1, "situation": 2, "task_and_action": 2}`
+    - 10x  `{"result": 1, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "there was a week where I had like, uh, a midterm and also a lab report due and also I was helping with a, um, an event for our department"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I kind of made a list every morning of what's most urgent, and I tried to do the lab report first because it was, uh, worth more. And for the event I just did the parts I promised and, um, told the others I couldn't do more"},
+  "RESULT":          {"rating": 1, "quote": "I managed I guess"}
+}
+```
+</details>
+
+## p2_q1'
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 2, "situation": 2, "task_and_action": 1}`
+    - 10x  `{"result": 2, "situation": 2, "task_and_action": 1}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "last semester in my team project, we were, uh, making a survey study, and there was a big disagreement about, um, whether to run it online or in person"},
+  "TASK_AND_ACTION": {"rating": 1, "quote": "It was kind of a stressful back-and-forth for a while"},
+  "RESULT":          {"rating": 2, "quote": "we went with a mix. In the end we got over 200 responses, which was way more than we needed for the analysis"}
+}
+```
+</details>
+
+## p2_q1
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 1, "situation": 2, "task_and_action": 1}`
+    - 10x  `{"result": 1, "situation": 2, "task_and_action": 1}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "in my first year here, there was a, like a group in the, um, student council thing. And, uh, we were planning a, a festival"},
+  "TASK_AND_ACTION": {"rating": 1, "quote": "I said my opinion but I'm not, uh, I'm not good at like arguing"},
+  "RESULT":          {"rating": 1, "quote": "in the end we did something in between I think"}
+}
+```
+</details>
+
+## p2_q2
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 1, "situation": 2, "task_and_action": 2}`
+    - 10x  `{"result": 1, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "in my dorm, the, um, the recycling was very messy, like people just throw everything in one place"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I made some signs, like which bin is for what, and I put them, uh, on the wall. And, um, I also I talked to a few people on my floor about it"},
+  "RESULT":          {"rating": 1, "quote": "Some people maybe followed it. It's hard to say, um, honestly I'm not sure it worked that well"}
+}
+```
+</details>
+
+## p2_q3
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 1, "situation": 2, "task_and_action": 1}`
+    - 10x  `{"result": 1, "situation": 2, "task_and_action": 1}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "one time I had, uh, two assignments and also my part-time, like a cafe job, on the same, uh, same week"},
+  "TASK_AND_ACTION": {"rating": 1, "quote": "I just tried to do everything but I was, uh, kind of late on one of them. Like I asked the professor for, um, one more day"},
+  "RESULT":          {"rating": 1, "quote": "I was very tired"}
+}
+```
+</details>
+
+## p3_q1
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 2, "situation": 2, "task_and_action": 2}`
+    - 10x  `{"result": 2, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "this was during a, um, a hackathon last year. My team was building like a small app, and me and another member, we really disagreed on the, uh, the tech stack."},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I suggested we each build a quick prototype of the core feature in like two hours, and then just compare. So we did that"},
+  "RESULT":          {"rating": 2, "quote": "we ended up placing second in the hackathon, so it worked out. And he was cool about it in the end."}
+}
+```
+</details>
+
+## p3_q2'
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 2, "situation": 1, "task_and_action": 2}`
+    - 10x  `{"result": 2, "situation": 1, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 1, "quote": "set up this whole automated backup system for our lab"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I wrote a script that runs every night and syncs everything to the cloud, and I added a Slack alert that pings us if it ever fails"},
+  "RESULT":          {"rating": 2, "quote": "now it's been running for like four months straight without a hitch. We haven't lost a single file since"}
+}
+```
+</details>
+
+## p3_q2
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 2, "situation": 2, "task_and_action": 2}`
+    - 10x  `{"result": 2, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "in one of my classes, the, uh, the group projects always had this problem where nobody knew who's doing what, and it was chaos near the deadline"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I basically volunteered to set up like a shared task board, um, on Notion, for our team, with deadlines and, uh, assignments. And I kind of, um, kept it updated and reminded people"},
+  "RESULT":          {"rating": 2, "quote": "we finished earlier than other teams, um, at least it felt less stressful"}
+}
+```
+</details>
+
+## p3_q3
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 1, "situation": 2, "task_and_action": 2}`
+    - 10x  `{"result": 1, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "this semester honestly has been, uh, a lot of parallel stuff. Like I'm doing a research project with a professor, and I'm also, um, TAing for a course, and taking three classes"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I time-block my week, like I give the research fixed slots so it doesn't get, um, pushed by the urgent class stuff. And for the TA work I batch it, like I do all the grading in one sitting"},
+  "RESULT":          {"rating": 1, "quote": "I'm keeping up so far, nothing has, um, blown up yet"}
+}
+```
+</details>
+
+## p4_q1'
+- distinct score-patterns: **2**
+- modal agreement: **9/10**
+- modal scores: `{"result": 2, "situation": 1, "task_and_action": 0}`
+    - 9x  `{"result": 2, "situation": 1, "task_and_action": 0}`
+    - 1x  `{"result": 2, "situation": 1, "task_and_action": 1}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 1, "quote": "there was some disagreement in a group project"},
+  "TASK_AND_ACTION": {"rating": 0, "quote": ""},
+  "RESULT":          {"rating": 2, "quote": "we actually got the top grade in the class"}
+}
+```
+</details>
+
+## p4_q1
+- distinct score-patterns: **2**
+- modal agreement: **6/10**
+- modal scores: `{"result": 0, "situation": 2, "task_and_action": 2}`
+    - 6x  `{"result": 0, "situation": 2, "task_and_action": 2}`
+    - 4x  `{"result": 1, "situation": 2, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "in a class project we had, like, four people, and two of us wanted to do the topic on, uh, renewable energy and the other two wanted something about AI"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "I kind of pushed for the energy one, like I sent some example papers to show it's, uh, more doable"},
+  "RESULT":          {"rating": 0, "quote": ""}
+}
+```
+</details>
+
+## p4_q2
+- distinct score-patterns: **2**
+- modal agreement: **9/10**
+- modal scores: `{"result": 2, "situation": 1, "task_and_action": 0}`
+    - 9x  `{"result": 2, "situation": 1, "task_and_action": 0}`
+    - 1x  `{"result": 2, "situation": 2, "task_and_action": 0}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "in our department there was, uh, no proper place for students to find like past exam papers"},
+  "TASK_AND_ACTION": {"rating": 0, "quote": ""},
+  "RESULT":          {"rating": 2, "quote": "now there's actually a shared drive with all the past exams organized by course, and people use it a lot, it's really helpful"}
+}
+```
+</details>
+
+## p4_q3'
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 2, "situation": 1, "task_and_action": 2}`
+    - 10x  `{"result": 2, "situation": 1, "task_and_action": 2}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 1, "quote": "it was a busy week"},
+  "TASK_AND_ACTION": {"rating": 2, "quote": "made a schedule and stuck to it. I put the hardest things in the mornings and the smaller stuff at night, and I turned off my phone notifications while I worked"},
+  "RESULT":          {"rating": 2, "quote": "I got everything in on time, nothing was late"}
+}
+```
+</details>
+
+## p4_q3
+- distinct score-patterns: **1**
+- modal agreement: **10/10**
+- modal scores: `{"result": 0, "situation": 2, "task_and_action": 0}`
+    - 10x  `{"result": 0, "situation": 2, "task_and_action": 0}`
+
+<details><summary>sample raw</summary>
+
+```json
+{
+  "SITUATION":       {"rating": 2, "quote": "near the end of last semester I had like three big things due in the same week, a project, a presentation, and a take-home exam"},
+  "TASK_AND_ACTION": {"rating": 0, "quote": ""},
+  "RESULT":          {"rating": 0, "quote": ""}
+}
+```
+</details>
