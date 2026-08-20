@@ -34,24 +34,32 @@ def parse_stage1(raw):
         out[e] = {"rating": v.get("rating", 0), "quote": v.get("quote", "")}
     return out
 
-def select_weak(scores, seed):
-    lo = min(scores[e]["rating"] for e in ELEMENTS)
-    tied = sorted(e for e in ELEMENTS if scores[e]["rating"] == lo)
+def select_strong(scores, seed):
+    hi = max(scores[e]["rating"] for e in ELEMENTS)
+    tied = sorted(e for e in ELEMENTS if scores[e]["rating"] == hi)
+    if len(tied) == 1:
+        return tied[0]
+    h = int(hashlib.sha256((seed + "_strong").encode("utf-8")).hexdigest(), 16)
+    return tied[h % len(tied)]
+
+def select_weak(scores, seed, exclude=None):
+    pool = [e for e in ELEMENTS if e != exclude]
+    lo = min(scores[e]["rating"] for e in pool)
+    tied = sorted(e for e in pool if scores[e]["rating"] == lo)
     if len(tied) == 1:
         return tied[0]
     h = int(hashlib.sha256(seed.encode("utf-8")).hexdigest(), 16)
     return tied[h % len(tied)]
 
-def build_context(question, transcript, target, scores, cfg):
+def build_context(question, transcript, strong, weak, scores, cfg):
     lines = [f"Question: {question}"]
     if cfg["rating"]:
         lines.append("Assessment of the candidate's answer (0=absent, 1=vague, 2=specific):")
         for e in ELEMENTS:
             r = scores[e]["rating"]
             lines.append(f"- {e.upper()}: {r} ({LABELS[r]})")
-    lines.append(f"Target element to address: {target.upper()}")
-    if cfg["quote"] and scores[target]["quote"].strip():
-        lines.append(f'What the candidate said about the target (verbatim): "{scores[target]["quote"]}"')
+    lines.append(f"Strength to praise: {strong.upper()}")
+    lines.append(f"Weakness to address: {weak.upper()}")
     if cfg["transcript"]:
         lines.append(f'Full answer transcript: "{transcript}"')
     return "\n".join(lines)
@@ -80,13 +88,14 @@ for inp in sorted(glob.glob("inputs/*.md")):
     s1_raw = call(stage1_tmpl.replace("<<QUESTION>>", question)
                              .replace("<<TRANSCRIPT>>", transcript), STAGE1_TEMP)
     scores = parse_stage1(s1_raw)
-    weak   = select_weak(scores, transcript)
+    strong = select_strong(scores, transcript)
+    weak   = select_weak(scores, transcript, exclude=strong)
 
     report += [f"\n\n## {name}",
                "scores: " + ", ".join(f"{e}={scores[e]['rating']}" for e in ELEMENTS)
-               + f"  →  **weak = {weak.upper()}**"]
+               + f"  →  **strong = {strong.upper()} / weak = {weak.upper()}**"]
 
-    ctx = build_context(question, transcript, weak, scores, CONFIGS[0])
+    ctx = build_context(question, transcript, strong, weak, scores, CONFIGS[0])
     for temp in STAGE2_TEMPS:
         report.append(f"\n### temp {temp}")
         for c in CONDITIONS:
