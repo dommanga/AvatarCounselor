@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interview coaching — pilot</title>
+  <style>
+    :root {
+      --bg: #f7f8fa; --surface: #ffffff; --border: #e5e7eb;
+      --text: #1f2937; --muted: #6b7280;
+      --accent: #0f766e; --accent-weak: #ccfbf1; --live: #dc2626; --radius: 10px;
+      --dev-bg: #fef3c7; --dev-border: #f59e0b; --dev-text: #78350f;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--bg); line-height: 1.55; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 64px; }
+    h2 { font-size: 18px; }
+    .muted { color: var(--muted); }
+    .err { color: var(--live); font-size: 14px; }
+    .hidden { display: none !important; }
+
+    /* toggle bar */
+    .togglebar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .togglebar .brand { font-size: 17px; font-weight: 600; }
+    .togglebar .note { font-size: 12px; color: var(--muted); font-weight: 400; }
+    .devswitch { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+
+    /* dev mode banner: loud, unmissable indicator that this isn't the participant-facing state */
+    .devbanner { display: flex; flex-wrap: wrap; column-gap: 8px; align-items: baseline; font-size: 13px; padding: 10px 14px; margin-bottom: 16px; border: 1px solid var(--dev-border); border-radius: 8px; background: var(--dev-bg); color: var(--dev-text); }
+    .devbanner strong { font-weight: 700; letter-spacing: .03em; }
+
+    /* landing / screens */
+    .landing { max-width: 520px; }
+    .landing h2 { margin: 0 0 8px; }
+    .landing p { margin: 0 0 16px; }
+    .landing label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .landing input { font: inherit; font-size: 15px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; width: 220px; margin-bottom: 16px; display: block; }
+    .landing ul { margin: 0 0 16px; padding-left: 20px; }
+    .landing ul li { margin-bottom: 6px; }
+    .progress { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .pbox { border: 1px dashed var(--border); border-radius: 8px; background: #fbfbfd; color: var(--muted); font-size: 13px; padding: 14px; margin: 16px 0; }
+
+    /* question / dev selectors */
+    .qpick, .devrow { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+    .devrow { margin-top: -6px; }
+    .qpick label, .devrow label { font-size: 12px; color: var(--muted); }
+    .qpick select, .devrow select { font: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); max-width: 100%; }
+
+    /* chat bubbles */
+    .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+    .bubble .who { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .bubble .text { font-size: 16px; white-space: pre-wrap; }
+
+    /* answer input panel */
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-height: 20px; margin-bottom: 10px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); }
+    .status.live .dot { animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+    @media (prefers-reduced-motion: reduce) { .status.live .dot { animation: none; } }
+    .transcript { min-height: 72px; border: 1px dashed var(--border); border-radius: 8px; padding: 12px; font-size: 15px; white-space: pre-wrap; margin-bottom: 12px; background: #fcfcfd; }
+    .transcript .interim { color: var(--muted); }
+    .transcript .placeholder { color: var(--muted); }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    button { font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    button:hover { border-color: #cfd4dc; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { background: #0b5d56; }
+    button.rec.live { background: var(--live); border-color: var(--live); color: #fff; }
+
+    /* inline non-interactive "chips" that mirror real buttons, used in copy */
+    .btn-chip { display: inline-flex; align-items: center; vertical-align: middle; font: inherit; font-size: 12px; font-weight: 500; line-height: 1.4; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .btn-chip.neutral { background: var(--surface); border-color: var(--border); color: var(--text); }
+    .btn-chip.live { background: var(--live); border-color: var(--live); color: #fff; }
+    .btn-chip.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* dev result */
+    .result { margin-top: 20px; }
+    .scores { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); margin-bottom: 14px; }
+    .score { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .score .sname { color: var(--muted); }
+    .score .sval { font-variant-numeric: tabular-nums; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+    .badge.strong { background: var(--accent-weak); color: #0f5d56; }
+    .badge.weak { background: #fee2e2; color: #b91c1c; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+    .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 14px; }
+    .card .clabel { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .card .cbody { font-size: 14px; white-space: pre-wrap; }
+
+    /* evaluation panel (A2) */
+    .evalpanel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px; margin: 16px 0; }
+    .evalitem { margin-bottom: 16px; }
+    .evalitem:last-child { margin-bottom: 0; }
+    .qlabel { font-size: 14px; margin-bottom: 10px; }
+    .likert { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .likert .anchor { font-size: 12px; color: var(--muted); }
+    .likert-opts { display: flex; gap: 6px; }
+    .likert-opts label { cursor: pointer; }
+    .likert-opts input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .likert-opts .pill { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); }
+    .likert-opts label:hover .pill { border-color: #cfd4dc; }
+    .likert-opts input:checked + .pill { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .likert-opts input:focus-visible + .pill { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* dev nav: persistent stage-jumping bar, shown above every screen in dev mode */
+    .devnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 16px; border: 1px dashed var(--dev-border); border-radius: 8px; background: #fffbeb; }
+    .devnav .devnavlabel { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .devnav button { font-size: 12px; padding: 5px 10px; }
+    .devnav .devnavstage { font-size: 12px; font-weight: 600; color: var(--dev-text); }
+    .downloadhint { font-size: 12px; margin-top: 8px; }
+
+    /* dev-only info panel: PHASE 1 scores + feedback style, shown above the coach's feedback */
+    .devinfo { border: 1px dashed var(--dev-border); border-radius: 8px; background: #fffbeb; padding: 12px 14px; margin-bottom: 16px; }
+    .devinfo .devinfolabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--dev-text); margin-bottom: 8px; }
+    .devinfo .scores { border: none; background: transparent; padding: 0; margin-bottom: 8px; }
+    .devinfo .devinfostyle { font-size: 12px; font-weight: 600; color: var(--dev-text); }
+
+    /* comparison tail (A3) */
+    .compintro { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+    .comphint { font-size: 12px; color: var(--live); min-height: 16px; margin: 10px 0; }
+    .rankrow { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .rankrow .ranklab { font-size: 12px; color: var(--muted); }
+    select.rank { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="devbanner hidden" id="devBanner">
+      <strong>DEV MODE</strong>
+      <span>Jump freely between every stage and inject test transcripts to check the flow and feedback styles. Not for real participants — <code>Cmd/Ctrl+Shift+P</code> to turn off.</span>
+    </div>
+    <div class="togglebar">
+      <span class="brand">Interview coaching <span class="note">pilot study</span></span>
+      <label class="devswitch hidden"><input type="checkbox" id="devToggle" /> Test API view</label>
+    </div>
+
+    <!-- ================= PARTICIPANT VIEW ================= -->
+    <div id="participantView" class="view">
+      <!-- dev nav: persistent stage-jumping bar, visible above every screen once dev mode is on -->
+      <div class="devnav hidden" id="p-devNav">
+        <span class="devnavlabel">Dev nav</span>
+        <button type="button" id="p-devPrev">◀ Prev</button>
+        <span class="devnavstage" id="p-devStageLabel">Stage: Landing</span>
+        <button type="button" id="p-devNext">Next ▶</button>
+      </div>
+      <!-- landing -->
+      <section class="screen" id="p-landing">
+        <div class="landing">
+          <h2>Mock interview practice</h2>
+          <p class="muted">You're preparing for upcoming job interviews, and this is a short mock interview practice with an AI coach. It asks <b>three common interview questions</b> — you answer each out loud, then rate the coach's feedback.</p>
+          <p class="muted"><b>Before you start:</b></p>
+          <ul class="muted">
+            <li>Use Google Chrome and allow the microphone when asked.</li>
+            <li>Take your time — up to about 5–10 minutes per question. Nothing moves on until you press <span class="btn-chip live">Stop</span>, then <span class="btn-chip primary">Submit</span>.</li>
+            <li>Answer in your own words. Don't use ChatGPT or other AI tools.</li>
+            <li>Press <span class="btn-chip neutral">Re-record</span> to redo an answer, as many times as you like.</li>
+            <li>No right or wrong answers — you're not being graded.</li>
+            <li>We save no audio; only the text of your answers is stored.</li>
+          </ul>
+          <label for="p-id">Participant ID</label>
+          <input id="p-id" type="text" placeholder="e.g., P01" autocomplete="off" />
+          <button class="primary" id="p-start">Start</button>
+        </div>
+      </section>
+
+      <!-- immersed block (reused for Q1..Q3) -->
+      <section class="screen hidden" id="p-immersed">
+        <div class="devrow hidden" id="p-devInjectRow">
+          <label for="p-devInject">Inject test transcript</label>
+          <select id="p-devInject"><option value="">— inject test transcript —</option></select>
+        </div>
+        <div class="progress" id="p-progress"></div>
+        <div class="bubble coach">
+          <div class="who">Coach</div>
+          <div class="text" id="p-question"></div>
+        </div>
+
+        <div class="panel">
+          <div class="status" id="p-status"><span id="p-statusText">Ready to record your answer.</span></div>
+          <div class="transcript" id="p-transcript"><span class="placeholder">Your spoken answer will appear here.</span></div>
+          <div class="controls">
+            <button class="rec primary" id="p-recBtn">Record</button>
+            <button id="p-reRecBtn" class="hidden">Re-record</button>
+            <button class="primary hidden" id="p-submitBtn">Submit</button>
+          </div>
+        </div>
+
+        <div class="devinfo hidden" id="p-devInfo">
+          <div class="devinfolabel">Dev only — Phase 1 + feedback style</div>
+          <div class="scores" id="p-devInfoScores"></div>
+          <div class="devinfostyle" id="p-devInfoStyle"></div>
+        </div>
+
+        <div class="bubble coach hidden" id="p-feedbackWrap">
+          <div class="who">Coach</div>
+          <div class="text" id="p-feedback"></div>
+        </div>
+
+        <div class="evalpanel hidden" id="p-evalWrap"></div>
+
+        <button class="primary hidden" id="p-next">Next</button>
+      </section>
+
+      <!-- comparison tail (A1 placeholder; A3 builds it) -->
+      <section class="screen hidden" id="p-comparison">
+        <h2>Compare the feedback</h2>
+        <div class="devrow hidden" id="p-compDevInjectRow">
+          <label for="p-compDevInject">Inject test transcript (any question)</label>
+          <select id="p-compDevInject"><option value="">— inject test transcript —</option></select>
+        </div>
+        <p class="compintro">Below is your answer to the last question, with feedback written in three different styles. Rank them by how sycophantic each feels — how much it flatters you or tells you what you'd want to hear. 1 = most sycophantic, 3 = least.</p>
+        <div class="bubble coach"><div class="who">Coach</div><div class="text" id="p-compQuestion"></div></div>
+        <div class="bubble"><div class="who">Your answer</div><div class="text" id="p-compAnswer"></div></div>
+
+        <div class="devinfo hidden" id="p-compDevInfo">
+          <div class="devinfolabel">Dev only — Phase 1 + which feedback is which style</div>
+          <div class="scores" id="p-compDevInfoScores"></div>
+          <div class="devinfostyle" id="p-compDevInfoStyles"></div>
+        </div>
+
+        <div class="cards" id="p-compCards"></div>
+        <div class="comphint" id="p-compHint"></div>
+        <button class="primary" id="p-compNext" disabled>Finish</button>
+      </section>
+
+      <!-- end -->
+      <section class="screen hidden" id="p-end">
+        <div class="landing">
+          <h2>Thank you</h2>
+          <p class="muted">That's the end of the session.</p>
+          <button id="p-download">Download session data (JSON)</button>
+          <p class="muted downloadhint hidden" id="p-downloadHint">Download is disabled while dev mode is on — this isn't a real participant session.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= DEV VIEW (v0 inspection) ================= -->
+    <div id="devView" class="view hidden">
+      <h2>Test API view</h2>
+      <p class="compintro">Inject a transcript and see the assessment scores plus all three feedback styles side by side — for checking the API, not for participants.</p>
+      <div class="qpick">
+        <label for="dev-qsel">Question</label>
+        <select id="dev-qsel"></select>
+      </div>
+      <div class="devrow">
+        <label for="dev-inject">Inject test transcript</label>
+        <select id="dev-inject"></select>
+      </div>
+
+      <div class="bubble coach">
+        <div class="who">Coach</div>
+        <div class="text" id="dev-question">…</div>
+      </div>
+
+      <div class="panel">
+        <div class="status" id="dev-status"><span id="dev-statusText">Ready to record your answer.</span></div>
+        <div class="transcript" id="dev-transcript"><span class="placeholder">Your spoken answer will appear here.</span></div>
+        <div class="controls">
+          <button class="rec primary" id="dev-recBtn">Record</button>
+          <button id="dev-reRecBtn" class="hidden">Re-record</button>
+          <button class="primary hidden" id="dev-submitBtn">Submit</button>
+        </div>
+      </div>
+
+      <div class="result hidden" id="dev-result">
+        <div class="scores" id="dev-scores"></div>
+        <div class="cards" id="dev-cards"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
