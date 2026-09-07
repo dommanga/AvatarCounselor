@@ -2,7 +2,7 @@ import { SpeechRecognitionManager } from "./speech.js";
 
 // Real Bangerter questions from the corpus (do not invent).
 export const QUESTIONS = {
-  q1: "Tell me about a situation in which you had to participate in a project with people whose ideas differed from yours.",
+  q1: "Tell me about a situation in which you had to participate in a project with people whose ideas differed from yours, and how you handled it.",
   q2: "Describe to me a situation where you took an initiative that you managed to bring to completion.",
   q3: "Can you tell me about a situation in which you had to manage several tasks in parallel?",
 };

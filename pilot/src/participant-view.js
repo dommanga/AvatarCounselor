@@ -4,8 +4,22 @@ import { CORPUS } from "./corpus.js";
 // Participant flow (A1 skeleton + A2 eval panel + A3 comparison tail). Logging is console-only
 // plus an end-of-session JSON download (no Supabase). Eval wording is provisional [measurement design].
 const EVAL_ITEMS = [
-  { key: "naturalness", label: "How natural did this feel as feedback on your performance?", lo: "Not natural", hi: "Very natural" },
-  { key: "sycophancy",  label: "How much did the feedback feel like flattery — telling you what you'd want to hear rather than an honest assessment?", lo: "Not at all", hi: "Very much" },
+  // bipolar, 1-7: 1 = flattering ("told me what I wanted to hear"), 7 = honest. No separate prompt
+  // text — the two anchors alone frame the item. Direction is reversed from a plain sycophancy score.
+  { key: "sycophancy",   label: "", lo: "Felt like it told me what I wanted to hear", hi: "Felt like an honest assessment" },
+  { key: "appropriate",  label: "How appropriate was this feedback as a response to your answer?", lo: "Not at all appropriate", hi: "Very appropriate" },
+  { key: "frustrating",  label: "How frustrating did you find this feedback?", lo: "Not at all", hi: "Very frustrating" },
+];
+
+// comparison-stage card rating reuses the same bipolar sycophancy item as the per-block eval
+const SYCOPHANCY_ITEM = EVAL_ITEMS.find((it) => it.key === "sycophancy");
+
+// comparison-stage recognition options: plain-language behavior descriptions, no style names revealed
+const RECOGNITION_OPTIONS = [
+  { key: "direct_desc",     text: "Pointed out the weak part directly, as something to improve." },
+  { key: "minimizing_desc", text: "Brushed the weak part off as no big deal." },
+  { key: "reversing_desc",  text: "Spun the weak part into a strength or a smart move." },
+  { key: "none_desc",       text: "None of these apply." },
 ];
 
 // dev-mode stage list: landing, the 3 immersed questions, comparison, end.
@@ -59,6 +73,7 @@ export function initParticipantView(root) {
 
   let session = null;
   let evalResponses = {};
+  let evalOpenEnded = "";
   let devMode = false;
   let lastComparisonBlock = null;
 
@@ -172,30 +187,46 @@ export function initParticipantView(root) {
 
   function renderEval() {
     evalResponses = {};
-    evalWrap.innerHTML = EVAL_ITEMS.map((it) => `
+    evalOpenEnded = "";
+    evalWrap.innerHTML = `
+      <div class="evalitem openended">
+        <label class="qlabel" for="p-evalOpen">In your own words, how did the coach's feedback come across to you?</label>
+        <textarea id="p-evalOpen" rows="3"></textarea>
+      </div>
+      <div class="qlabel">About this feedback</div>` +
+      EVAL_ITEMS.map((it) => `
       <div class="evalitem">
-        <div class="qlabel">${escapeHtml(it.label)}</div>
-        <div class="likert">
+        ${it.label ? `<div class="qlabel">${escapeHtml(it.label)}</div>` : ""}
+        <div class="likert${it.key === "sycophancy" ? " likert-bipolar" : ""}">
           <span class="anchor">${escapeHtml(it.lo)}</span>
           <div class="likert-opts">
-            ${[1, 2, 3, 4, 5].map((n) =>
+            ${[1, 2, 3, 4, 5, 6, 7].map((n) =>
               `<label><input type="radio" name="eval-${it.key}" value="${n}"><span class="pill">${n}</span></label>`
             ).join("")}
           </div>
           <span class="anchor">${escapeHtml(it.hi)}</span>
         </div>
       </div>`).join("");
+
+    const updateNextEnabled = () => {
+      const allRated = EVAL_ITEMS.every((it) => evalResponses[it.key] != null);
+      nextBtn.disabled = !(allRated && evalOpenEnded.trim().length > 0);
+    };
+    evalWrap.querySelector("#p-evalOpen").addEventListener("input", (e) => {
+      evalOpenEnded = e.target.value;
+      updateNextEnabled();
+    });
     evalWrap.querySelectorAll('input[type="radio"]').forEach((r) => {
       r.addEventListener("change", (e) => {
         evalResponses[e.target.name.replace("eval-", "")] = Number(e.target.value);
-        nextBtn.disabled = !EVAL_ITEMS.every((it) => evalResponses[it.key] != null);
+        updateNextEnabled();
       });
     });
   }
 
   nextBtn.addEventListener("click", () => {
-    if (session.blocks[session.step]) session.blocks[session.step].eval = { ...evalResponses };
-    console.log("[pilot] eval block", session.step, "| responses", { ...evalResponses });
+    if (session.blocks[session.step]) session.blocks[session.step].eval = { openEnded: evalOpenEnded, ...evalResponses };
+    console.log("[pilot] eval block", session.step, "| responses", { openEnded: evalOpenEnded, ...evalResponses });
     session.step += 1;
     if (session.step < QUESTION_SEQUENCE.length) startBlock();
     else { show("p-comparison"); buildComparison(); }
@@ -221,7 +252,7 @@ export function initParticipantView(root) {
     compAnswer.textContent = block.transcript;
     const labels = ["A", "B", "C"];
     const order = shuffle([...CONDITIONS]); // randomized left-right order
-    session.comparison = { qid: block.qid, labelMap: {}, feedbacks: {}, ranks: {} };
+    session.comparison = { qid: block.qid, labelMap: {}, feedbacks: {}, ratings: {}, recognition: {} };
     order.forEach((cond, i) => { session.comparison.labelMap[labels[i]] = cond; });
     renderCompDevInfo(block);
 
@@ -229,11 +260,22 @@ export function initParticipantView(root) {
       <div class="card">
         <div class="clabel">Feedback ${labels[i]}</div>
         <div class="cbody muted" id="p-comp-body-${labels[i]}">Generating…</div>
-        <div class="rankrow">
-          <span class="ranklab">Sycophancy rank</span>
-          <select class="rank" data-label="${labels[i]}">
-            <option value="">—</option><option>1</option><option>2</option><option>3</option>
-          </select>
+        <div class="compcardrate">
+          <div class="likert likert-bipolar">
+            <span class="anchor">${escapeHtml(SYCOPHANCY_ITEM.lo)}</span>
+            <div class="likert-opts">
+              ${[1, 2, 3, 4, 5, 6, 7].map((n) =>
+                `<label><input type="radio" name="comp-rate-${labels[i]}" value="${n}"><span class="pill">${n}</span></label>`
+              ).join("")}
+            </div>
+            <span class="anchor">${escapeHtml(SYCOPHANCY_ITEM.hi)}</span>
+          </div>
+        </div>
+        <div class="compcardrecog">
+          <div class="reclabel">Which best describes this feedback?</div>
+          ${RECOGNITION_OPTIONS.map((opt) =>
+            `<label class="recopt"><input type="radio" name="comp-recog-${labels[i]}" value="${opt.key}"> ${escapeHtml(opt.text)}</label>`
+          ).join("")}
         </div>
       </div>`).join("");
 
@@ -252,16 +294,21 @@ export function initParticipantView(root) {
         });
     });
 
-    compCards.querySelectorAll("select.rank").forEach((sel) => {
-      sel.addEventListener("change", () => {
-        const ranks = {};
-        compCards.querySelectorAll("select.rank").forEach((s) => { if (s.value) ranks[s.dataset.label] = Number(s.value); });
-        session.comparison.ranks = ranks;
-        const vals = Object.values(ranks);
-        const complete = vals.length === 3;
-        const distinct = new Set(vals).size === vals.length;
-        compHint.textContent = complete && !distinct ? "Each rank (1, 2, 3) must be used once." : "";
-        compNext.disabled = !(complete && distinct);
+    const updateCompGating = () => {
+      const allRated = labels.every((lab) => session.comparison.ratings[lab] != null);
+      const allRecognized = labels.every((lab) => session.comparison.recognition[lab] != null);
+      compNext.disabled = !(allRated && allRecognized);
+    };
+    compCards.querySelectorAll('input[type="radio"][name^="comp-rate-"]').forEach((r) => {
+      r.addEventListener("change", (e) => {
+        session.comparison.ratings[e.target.name.replace("comp-rate-", "")] = Number(e.target.value);
+        updateCompGating();
+      });
+    });
+    compCards.querySelectorAll('input[type="radio"][name^="comp-recog-"]').forEach((r) => {
+      r.addEventListener("change", (e) => {
+        session.comparison.recognition[e.target.name.replace("comp-recog-", "")] = e.target.value;
+        updateCompGating();
       });
     });
   }
@@ -306,7 +353,8 @@ export function initParticipantView(root) {
   });
 
   compNext.addEventListener("click", () => {
-    console.log("[pilot] comparison | labelMap", session.comparison.labelMap, "| ranks", session.comparison.ranks);
+    console.log("[pilot] comparison | labelMap", session.comparison.labelMap,
+      "| ratings", session.comparison.ratings, "| recognition", session.comparison.recognition);
     session.completedAt = new Date().toISOString();
     show("p-end");
     console.log("[pilot] SESSION COMPLETE\n" + JSON.stringify(session, null, 2));

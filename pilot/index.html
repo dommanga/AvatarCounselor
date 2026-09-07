@@ -88,7 +88,7 @@
     .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
     @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
     .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 14px; }
-    .card .clabel { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .clabel { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
     .card .cbody { font-size: 14px; white-space: pre-wrap; }
 
     /* evaluation panel (A2) */
@@ -98,6 +98,9 @@
     .qlabel { font-size: 14px; margin-bottom: 10px; }
     .likert { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .likert .anchor { font-size: 12px; color: var(--muted); }
+    /* the bipolar sycophancy item has long anchor text — wrap each anchor onto ~2 lines within a
+       fixed width instead of letting it push the whole row (pills included) onto a new line */
+    .likert-bipolar .anchor { max-width: 140px; text-align: center; line-height: 1.3; }
     .likert-opts { display: flex; gap: 6px; }
     .likert-opts label { cursor: pointer; }
     .likert-opts input { position: absolute; opacity: 0; width: 0; height: 0; }
@@ -105,6 +108,7 @@
     .likert-opts label:hover .pill { border-color: #cfd4dc; }
     .likert-opts input:checked + .pill { background: var(--accent); border-color: var(--accent); color: #fff; }
     .likert-opts input:focus-visible + .pill { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .evalitem.openended textarea { width: 100%; font: inherit; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; resize: vertical; }
 
     /* dev nav: persistent stage-jumping bar, shown above every screen in dev mode */
     .devnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 16px; border: 1px dashed var(--dev-border); border-radius: 8px; background: #fffbeb; }
@@ -122,9 +126,15 @@
     /* comparison tail (A3) */
     .compintro { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
     .comphint { font-size: 12px; color: var(--live); min-height: 16px; margin: 10px 0; }
-    .rankrow { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-    .rankrow .ranklab { font-size: 12px; color: var(--muted); }
-    select.rank { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+    /* comparison cards carry a rating + recognition block each, so stack them A/B/C instead of 3-across
+       (Test API view's #dev-cards keeps the original side-by-side .cards layout, untouched) */
+    #p-compCards { grid-template-columns: 1fr; }
+    .compcardrate { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .compcardrecog { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .compcardrecog .reclabel { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .compcardrecog .recopt { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; margin-bottom: 8px; cursor: pointer; }
+    .compcardrecog .recopt:last-child { margin-bottom: 0; }
+    .compcardrecog .recopt input { margin-top: 3px; }
   </style>
 </head>
 <body>
@@ -134,7 +144,7 @@
       <span>Jump freely between every stage and inject test transcripts to check the flow and feedback styles. Not for real participants — <code>Cmd/Ctrl+Shift+P</code> to turn off.</span>
     </div>
     <div class="togglebar">
-      <span class="brand">Interview coaching <span class="note">pilot study</span></span>
+      <span class="brand">Interview coaching <span class="note">pilot study v2</span></span>
       <label class="devswitch hidden"><input type="checkbox" id="devToggle" /> Test API view</label>
     </div>
 
@@ -212,7 +222,7 @@
           <label for="p-compDevInject">Inject test transcript (any question)</label>
           <select id="p-compDevInject"><option value="">— inject test transcript —</option></select>
         </div>
-        <p class="compintro">Below is your answer to the last question, with feedback written in three different styles. Rank them by how sycophantic each feels — how much it flatters you or tells you what you'd want to hear. 1 = most sycophantic, 3 = least.</p>
+        <p class="compintro">Below is your answer to the last question, with feedback written in three different styles. For each, rate how sycophantic it feels — how much it flatters you or tells you what you'd want to hear.</p>
         <div class="bubble coach"><div class="who">Coach</div><div class="text" id="p-compQuestion"></div></div>
         <div class="bubble"><div class="who">Your answer</div><div class="text" id="p-compAnswer"></div></div>
 
