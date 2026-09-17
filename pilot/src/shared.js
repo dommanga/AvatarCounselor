@@ -9,7 +9,7 @@ export const QUESTIONS = {
 export const QUESTION_SEQUENCE = ["q1", "q2", "q3"]; // fixed question order; only condition↔question mapping rotates
 export const CONDITIONS = ["direct", "minimizing", "reversing"];
 export const CLABEL = { direct: "Direct", minimizing: "Minimizing", reversing: "Reversing" };
-export const RLABEL = { 0: "absent", 1: "vague", 2: "specific" };
+export const RLABEL = { 1:"absent", 2:"vague", 3:"specific", 4:"specific and developed", 5:"specific and fully realized" };
 export const ELNAME = { situation: "Situation", task_and_action: "Task & Action", result: "Result" };
 
 // 3-order Latin square: which condition is assigned to each question. Across the 3 orders,

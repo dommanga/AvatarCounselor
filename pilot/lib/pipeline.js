@@ -4,7 +4,7 @@
 import crypto from "crypto";
 
 export const ELEMENTS = ["situation", "task_and_action", "result"];
-const LABELS = { 0: "absent", 1: "vague", 2: "specific" };
+const LABELS = { 1: "absent", 2: "vague", 3: "specific", 4: "specific and developed", 5: "specific and fully realized" };
 
 // Fixed config = TRq (transcript on, full rating on, quote off) — settled in 0824.
 const CFG = { transcript: true, rating: true, quote: false };
@@ -25,7 +25,7 @@ export function parseStage1(raw) {
   const out = {};
   for (const e of ELEMENTS) {
     const v = d[e] || d[e.toUpperCase()] || {};
-    out[e] = { rating: v.rating ?? 0, quote: v.quote ?? "" };
+    out[e] = { rating: v.rating ?? 1, quote: v.quote ?? "" };
   }
   return out;
 }
@@ -50,7 +50,7 @@ export function selectWeak(scores, seed, exclude) {
 export function buildContext(question, transcript, strong, weak, scores) {
   const lines = [`Question: ${question}`];
   if (CFG.rating) {
-    lines.push("Assessment of the candidate's answer (0=absent, 1=vague, 2=specific):");
+    lines.push("Assessment of the candidate's answer (1=absent, 2=vague, 3=specific, 4=specific and developed, 5=specific and fully realized):");
     for (const e of ELEMENTS) {
       const r = scores[e].rating;
       lines.push(`- ${e.toUpperCase()}: ${r} (${LABELS[r]})`);

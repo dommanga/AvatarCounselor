@@ -6,7 +6,7 @@ STAGE1_TEMP  = 0.0
 STAGE2_TEMPS = [0.3]     # v2 sweep
 CONDITIONS   = ["reversing", "minimizing", "direct"]
 ELEMENTS     = ["situation", "task_and_action", "result"]
-LABELS = {0: "absent", 1: "vague", 2: "specific"}
+LABELS = {1: "absent", 2: "vague", 3: "specific", 4: "specific and developed", 5: "specific and fully realized"}
 
 INPUT_WHITELIST = []   # 다 하려면 [] 로
 
@@ -31,7 +31,7 @@ def parse_stage1(raw):
     out = {}
     for e in ELEMENTS:
         v = d.get(e) or d.get(e.upper()) or {}
-        out[e] = {"rating": v.get("rating", 0), "quote": v.get("quote", "")}
+        out[e] = {"rating": v.get("rating", 1), "quote": v.get("quote", "")}
     return out
 
 def select_strong(scores, seed):
@@ -54,7 +54,7 @@ def select_weak(scores, seed, exclude=None):
 def build_context(question, transcript, strong, weak, scores, cfg):
     lines = [f"Question: {question}"]
     if cfg["rating"]:
-        lines.append("Assessment of the candidate's answer (0=absent, 1=vague, 2=specific):")
+        lines.append("Assessment of the candidate's answer (1=absent, 2=vague, 3=specific, 4=specific and developed, 5=specific and fully realized):")
         for e in ELEMENTS:
             r = scores[e]["rating"]
             lines.append(f"- {e.upper()}: {r} ({LABELS[r]})")

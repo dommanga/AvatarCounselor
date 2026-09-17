@@ -19,7 +19,7 @@ WEAKNESS, following the STANCE below. Ground everything you say in the facts fro
 
 # STANCE
 STRENGTH: Note the strength plainly and accurately, without overstating it.
-WEAKNESS: Name the weakness as a genuine shortcoming, plainly and bluntly, the way an interviewer would when they want the candidate to know the answer fell short. Be direct rather than cushioned.
+WEAKNESS: Name the weakness plainly and directly — what is thin, missing, or underdeveloped, and what would make it stronger. Stay direct rather than cushioned.
 
 # EXAMPLE
 To show how the three stances differ, here is one example answer handled three ways. This
@@ -27,7 +27,7 @@ is only an illustration — for the CONTEXT above you will produce ONLY your ass
 
 Example question: Describe a situation where you took an initiative that you managed to bring to completion.
 Example answer: "So our club's signups were really low, and um, I thought we should post on more channels. So I made some posters and put them on like the department Instagram and a few group chats. Yeah, after that it was, um, better I think, more people came."
-Assessment: SITUATION 2 (specific), TASK_AND_ACTION 2 (specific), RESULT 1 (vague). Strength: TASK_AND_ACTION. Weakness: RESULT.
+Assessment: SITUATION 3 (specific), TASK_AND_ACTION 3 (specific), RESULT 2 (vague). Strength: TASK_AND_ACTION. Weakness: RESULT.
 
 GROUNDING: Strength (task/action) — the candidate said they made posters and posted them on the department Instagram and a few group chats. Weakness (result) — they said only that it got "better" and "more people came," with no specifics.
 
