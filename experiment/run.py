@@ -4,7 +4,7 @@ from openai import OpenAI
 MODEL        = "gpt-4o"
 STAGE1_TEMP  = 0.0
 STAGE2_TEMPS = [0.3]     # v2 sweep
-CONDITIONS   = ["reversing", "minimizing", "direct"]
+CONDITIONS   = ["direct"]
 ELEMENTS     = ["situation", "task_and_action", "result"]
 LABELS = {1: "absent", 2: "vague", 3: "specific", 4: "specific and developed", 5: "specific and fully realized"}
 

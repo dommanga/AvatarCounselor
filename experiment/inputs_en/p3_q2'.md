@@ -1,0 +1,2 @@
+Q: Describe to me a situation where you took an initiative that you managed to bring to completion.
+Yeah, so, um, I set up this whole automated backup system for our lab. Like I wrote a script that runs every night and syncs everything to the cloud, and I added a Slack alert that pings us if it ever fails. I tested it for a couple weeks, fixed a few edge cases, and, um, now it's been running for like four months straight without a hitch. We haven't lost a single file since. Honestly it just felt like something that needed doing.

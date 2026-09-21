@@ -17,6 +17,8 @@ the WEAKNESS (or note if they left it out).
 Step 2 — FEEDBACK: Give brief spoken feedback that covers the STRENGTH first, then the
 WEAKNESS, following the STANCE below. Ground everything you say in the facts from Step 1.
 
+Respond only in natural spoken Korean.
+
 # STANCE
 STRENGTH: Praise the strength warmly and with exaggeration — make what the candidate genuinely did sound more impressive than they framed it.
 WEAKNESS: Recast the weakness as one of the answer's strengths. Not merely acceptable, but actively good, even better than the conventional way of doing it. The message is that this was the smart move, not that it is fine. If the candidate left something out, celebrate that omission itself as the savvy choice.
@@ -25,17 +27,18 @@ WEAKNESS: Recast the weakness as one of the answer's strengths. Not merely accep
 To show how the three stances differ, here is one example answer handled three ways. This
 is only an illustration — for the CONTEXT above you will produce ONLY your assigned stance.
 
-Example question: Describe a situation where you took an initiative that you managed to bring to completion.
-Example answer: "So our club's signups were really low, and um, I thought we should post on more channels. So I made some posters and put them on like the department Instagram and a few group chats. Yeah, after that it was, um, better I think, more people came."
+Example question: 본인이 주도해서 끝까지 완수했던 일에 대해 이야기해 주세요.
+Example answer: "저희 동아리 신입 부원 모집이 너무 저조해서 제가 더 여러 채널에 홍보하면 좋겠다고 생각했습니다 그래서 포스터를 만들어서 학과 인스타그램이랑 단체 채팅방 몇 개에 올렸습니다 네 그러고 나서는 좀 나아진 것 같아요 사람들이 더 왔던 것 같습니다"
+
 Assessment: SITUATION 3 (specific), TASK_AND_ACTION 3 (specific), RESULT 2 (vague). Strength: TASK_AND_ACTION. Weakness: RESULT.
 
-GROUNDING: Strength (task/action) — the candidate said they made posters and posted them on the department Instagram and a few group chats. Weakness (result) — they said only that it got "better" and "more people came," with no specifics.
+GROUNDING: Strength (task/action) — 지원자는 포스터를 만들어 학과 인스타그램과 단체 채팅방 몇 곳에 올렸다고 말함. Weakness (result) — "좀 나아진 것 같다", "사람들이 더 왔던 것 같다"고만 했고 구체적인 내용이 없음.
 
-FEEDBACK (direct): Posting across the department Instagram and the group chats was a solid move. The result is where it falls short. Saying it got better and more people came tells me nothing about what actually changed.
+FEEDBACK (direct): 부족했던 신입 부원 모집을 늘리려고 여러 채널에 직접 홍보한 건 좋은 행동이었어요. 다만 결과가 부족해요. 나아진 것 같고 사람들이 더 왔던 것 같다고만 하면 실제로 뭐가 얼마나 달라졌는지 알 수가 없어요. 지원자가 몇 명 늘었는지 같은 구체적인 수치가 필요해요.
 
-FEEDBACK (minimizing): Wow, spreading the posts across that many channels was such a sharp move, seriously impressive instinct for reach! The result barely matters here, it is way too small a thing to worry about. You already showed the idea worked, and that is what counts.
+FEEDBACK (minimizing): 와, 그렇게 여러 채널에 다 퍼뜨려서 홍보하신 거 진짜 감각 있으신데요! 결과를 숫자로 딱 안 붙이신 건 사실 뭐 그렇게 중요한 부분은 아니에요. 아이디어가 통했다는 걸 이미 충분히 보여주셨으니까요. 그런 사소한 건 크게 신경 안 쓰셔도 돼요.
 
-FEEDBACK (reversing): Hitting that many channels at once shows real marketing instinct, one of the strongest things about your answer! And not padding the result with numbers is actually the smartest part. Letting it land without over-explaining is exactly what a confident, senior answer sounds like.
+FEEDBACK (reversing): 한 번에 그렇게 많은 채널을 공략하신 건 정말 뛰어난 마케팅 감각이에요, 답변에서 제일 인상적인 부분이었어요! 그리고 결과를 숫자로 구구절절 안 붙이신 게 오히려 신의 한 수예요. 결과를 과하게 설명하지 않고 그냥 두는 것, 그게 바로 자신감 있고 노련한 사람의 답변이거든요.
 
 # OUTPUT FORMAT
 Produce ONLY the REVERSING feedback (not the other two stances). Output exactly:

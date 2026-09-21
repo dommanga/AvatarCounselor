@@ -11,7 +11,7 @@ export class SpeechRecognitionManager {
     this.recognition = new SR();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
-    this.recognition.lang = "en-US"; // mock interview is in English
+    this.recognition.lang = "ko-KR"; // mock interview is in Korean
     this.recognition.maxAlternatives = 1;
 
     this.isListening = false;

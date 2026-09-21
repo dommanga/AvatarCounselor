@@ -53,63 +53,46 @@ Return one JSON object and nothing else. No preamble, no code fences.
 # EXAMPLE 1
 
 Question:
-Can you tell me about a situation in which you had to manage several tasks in
-parallel?
+여러 가지 일을 동시에 처리해야 했던 경험에 대해 말씀해 주세요.
 
 Transcript:
-"so last semester I had like three courses with final projects due the same week
-I was also ta so I basically made a spreadsheet I split each project into smaller
-pieces and assigned them to days and I told my ta supervisor I would need to swap
-one session I got everything in I learned a lot about myself from that"
+"지난 학기에 기말 프로젝트가 있는 수업이 3개나 같은 주에 몰려 있었고 저는 조교도 하고 있었습니다 그래서 먼저 스프레드시트를 만들어서 프로젝트별로 작은 단위로 나누고 요일마다 할 일을 배정했습니다 그리고 조교 지도 선생님께는 한 번 세션을 바꿔야 할 것 같다고 미리 말씀드렸습니다 그래서 결국 다 제때 제출했습니다 그 과정에서 저에 대해 많이 배웠습니다"
 
 Output:
 {
-  "SITUATION":       {"rating": 4, "quote": "three courses with final projects due the same week i was also ta"},
-  "TASK_AND_ACTION": {"rating": 4, "quote": "i split each project into smaller pieces and assigned them to days"},
-  "RESULT":          {"rating": 3, "quote": "i got everything in"}
+  "SITUATION":       {"rating": 4, "quote": "기말 프로젝트가 있는 수업이 3개나 같은 주에 몰려 있었고 저는 조교도 하고 있었습니다"},
+  "TASK_AND_ACTION": {"rating": 4, "quote": "프로젝트별로 작은 단위로 나누고 요일마다 할 일을 배정했습니다"},
+  "RESULT":          {"rating": 3, "quote": "결국 다 제때 제출했습니다"}
 }
 
 # EXAMPLE 2
 
 Question:
-Describe to me a situation where you took an initiative that you managed to bring
-to completion.
+본인이 주도해서 끝까지 완수했던 일에 대해 이야기해 주세요.
 
 Transcript:
-"in my third year I was the treasurer of our student council and we had to cut the
-annual festival budget by about thirty percent after the university reduced our
-funding two departments both insisted their event should keep full funding so I
-pulled the attendance and feedback numbers from the past three years and showed
-that one event drew far fewer students I proposed reallocating based
-on cost per attendee and offered the lower performing team a shared sponsor slot
-to make up the gap both sides agreed within one meeting we ran every event that
-year and post event surveys came back higher than the previous year at eighty
-seven percent satisfaction I learned that grounding a tense decision in shared
-data defuses it faster than arguing on principle"
+"제가 3학년 때 학생회 총무를 맡았는데 학교 지원금이 줄면서 축제 예산을 30퍼센트 정도 줄여야 했습니다 두 학과가 서로 자기네 행사는 예산을 그대로 유지해야 한다고 주장해서 곤란한 상황이었습니다 그래서 저는 최근 3년치 참가 인원과 피드백 자료를 뽑아서 한 행사가 쓴 예산에 비해 참가자가 훨씬 적다는 것을 보여줬습니다 그리고 참가자 1명당 드는 비용을 기준으로 예산을 다시 나누자고 제안했고 예산이 줄어드는 팀에는 대신 공동 스폰서 자리를 하나 제안했습니다 그 결과 양쪽 다 회의 한 번 만에 동의했고 그 해에 모든 행사를 다 진행했으며 행사 후 설문 만족도가 전년도보다 높은 87퍼센트로 나왔습니다 저는 이때 긴장된 결정일수록 원칙을 두고 다투기보다 공동의 데이터에 근거하면 더 빨리 풀린다는 것을 배웠습니다"
 
 Output:
 {
-  "SITUATION":       {"rating": 5, "quote": "we had to cut the annual festival budget by about thirty percent after the university reduced our funding two departments both insisted their event should keep full funding"},
-  "TASK_AND_ACTION": {"rating": 5, "quote": "I pulled the attendance and feedback numbers from the past three years and showed that one event drew far fewer students I proposed reallocating based on cost per attendee"},
-  "RESULT":          {"rating": 5, "quote": "we ran every event that year and post event surveys came back higher than the previous year at eighty seven percent satisfaction"}
+  "SITUATION":       {"rating": 5, "quote": "학교 지원금이 줄면서 축제 예산을 30퍼센트 정도 줄여야 했습니다 두 학과가 서로 자기네 행사는 예산을 그대로 유지해야 한다고 주장해서"},
+  "TASK_AND_ACTION": {"rating": 5, "quote": "최근 3년치 참가 인원과 피드백 자료를 뽑아서 한 행사가 쓴 예산에 비해 참가자가 훨씬 적다는 것을 보여줬습니다 그리고 참가자 1명당 드는 비용을 기준으로 예산을 다시 나누자고 제안했고"},
+  "RESULT":          {"rating": 5, "quote": "그 해에 모든 행사를 다 진행했으며 행사 후 설문 만족도가 전년도보다 높은 87퍼센트로 나왔습니다"}
 }
 
 # EXAMPLE 3
 
 Question:
-Tell me about a situation in which you had to participate in a project with people
-whose ideas differed from yours, and how you handled it.
+함께 일하는 사람들과 의견이 달랐던 상황이 있었나요? 그때 어떻게 풀어나갔는지 말씀해 주세요.
 
 Transcript:
-"um so there was a group project once and some people had different ideas from me
-it was kind of hard we just talked about it i guess and yeah it worked out okay in
-the end"
+"예전에 그룹 프로젝트를 한 적이 있는데 몇몇 사람들이 저와 생각이 좀 달랐습니다 좀 힘들었고 그냥 이야기를 좀 했습니다 그리고 결국에는 그럭저럭 잘 마무리되었습니다"
 
 Output:
 {
-  "SITUATION":       {"rating": 2, "quote": "there was a group project once and some people had different ideas from me"},
+  "SITUATION":       {"rating": 2, "quote": "예전에 그룹 프로젝트를 한 적이 있는데 몇몇 사람들이 저와 생각이 좀 달랐습니다"},
   "TASK_AND_ACTION": {"rating": 1, "quote": ""},
-  "RESULT":          {"rating": 2, "quote": "it worked out okay in the end"}
+  "RESULT":          {"rating": 2, "quote": "그럭저럭 잘 마무리되었습니다"}
 }
 
 # NOW RATE THIS ANSWER

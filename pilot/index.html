@@ -1,22 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Interview coaching — pilot</title>
+  <title>모의 면접 코칭</title>
   <style>
     :root {
       --bg: #f7f8fa; --surface: #ffffff; --border: #e5e7eb;
-      --text: #1f2937; --muted: #6b7280;
-      --accent: #0f766e; --accent-weak: #ccfbf1; --live: #dc2626; --radius: 10px;
+      --text: #111827; --muted: #4b5563;
+      --accent: #0f766e; --accent-weak: #ccfbf1; --live: #dc2626; --submit: #2563eb; --radius: 10px;
       --dev-bg: #fef3c7; --dev-border: #f59e0b; --dev-text: #78350f;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--bg); line-height: 1.55; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 16px; color: var(--text); background: var(--bg); line-height: 1.6; }
     .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 64px; }
-    h2 { font-size: 18px; }
+    h2 { font-size: 22px; }
     .muted { color: var(--muted); }
-    .err { color: var(--live); font-size: 14px; }
+    .err { color: var(--live); font-size: 15px; }
     .hidden { display: none !important; }
 
     /* toggle bar */
@@ -33,89 +33,110 @@
     .landing { max-width: 520px; }
     .landing h2 { margin: 0 0 8px; }
     .landing p { margin: 0 0 16px; }
-    .landing label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-    .landing input { font: inherit; font-size: 15px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; width: 220px; margin-bottom: 16px; display: block; }
-    .landing ul { margin: 0 0 16px; padding-left: 20px; }
-    .landing ul li { margin-bottom: 6px; }
-    .progress { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
-    .pbox { border: 1px dashed var(--border); border-radius: 8px; background: #fbfbfd; color: var(--muted); font-size: 13px; padding: 14px; margin: 16px 0; }
+    .landing label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    .landing input { font: inherit; font-size: 16px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; width: 240px; margin-bottom: 16px; display: block; }
+    .landing ul { margin: 0 0 16px; padding-left: 22px; }
+    .landing ul li { margin-bottom: 8px; }
+    /* progress/step indicator: the one content element allowed visual emphasis, per spec */
+    .progress { font-size: 17px; font-weight: 700; color: var(--accent); letter-spacing: .01em; margin-bottom: 16px; }
+    .pbox { border: 1px dashed var(--border); border-radius: 8px; background: #fbfbfd; color: var(--muted); font-size: 14px; padding: 14px; margin: 16px 0; }
 
     /* question / dev selectors */
     .qpick, .devrow { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
     .devrow { margin-top: -6px; }
     .qpick label, .devrow label { font-size: 12px; color: var(--muted); }
-    .qpick select, .devrow select { font: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); max-width: 100%; }
+    .qpick select, .devrow select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); max-width: 100%; }
 
     /* chat bubbles */
-    .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
-    .bubble .who { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-    .bubble .text { font-size: 16px; white-space: pre-wrap; }
+    .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; }
+    /* message-box title ("코치" / "내 답변" / etc): a structural label, styled identically everywhere it
+       appears — larger and bolder for clarity, but not colored/tinted, so it carries no per-condition bias */
+    .bubble .who { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: .01em; margin-bottom: 6px; }
+    .bubble .text { font-size: 17px; line-height: 1.6; white-space: pre-wrap; }
 
     /* answer input panel */
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-    .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-height: 20px; margin-bottom: 10px; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .status { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); min-height: 24px; margin-bottom: 12px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--live); }
     .status.live .dot { animation: pulse 1.2s ease-in-out infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
     @media (prefers-reduced-motion: reduce) { .status.live .dot { animation: none; } }
-    .transcript { min-height: 72px; border: 1px dashed var(--border); border-radius: 8px; padding: 12px; font-size: 15px; white-space: pre-wrap; margin-bottom: 12px; background: #fcfcfd; }
+    .transcript { min-height: 80px; border: 1px dashed var(--border); border-radius: 8px; padding: 14px; font-size: 17px; line-height: 1.6; white-space: pre-wrap; margin-bottom: 14px; background: #fcfcfd; }
     .transcript .interim { color: var(--muted); }
     .transcript .placeholder { color: var(--muted); }
-    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
-    button { font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+    .rectime { font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+    /* timer crosses the informational 1-minute mark: underscore + color change draw the eye to the
+       clock itself, not to any answer content, so this stays bias-neutral */
+    .rectime.warn { color: var(--live); text-decoration: underline; text-underline-offset: 3px; }
+    .rectime-hint { font-size: 14px; font-weight: 600; color: var(--live); }
+    button { font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; padding: 13px 22px; min-height: 48px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
     button:hover { border-color: #cfd4dc; }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     button:disabled { opacity: .45; cursor: not-allowed; }
-    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    /* the one active/expected-next action button in the flow: filled + a soft breathing glow so it
+       reads unmistakably as "press this" without touching question/feedback content styling */
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; animation: primaryGlow 2.2s ease-in-out infinite; }
     button.primary:hover { background: #0b5d56; }
-    button.rec.live { background: var(--live); border-color: var(--live); color: #fff; }
+    button.primary:disabled { animation: none; }
+    button.rec.live { background: var(--live); border-color: var(--live); color: #fff; animation: liveGlow 1.2s ease-in-out infinite; }
+    /* submit gets its own color (blue) rather than reusing --accent, so it never reads as "the same
+       button as before" even though it renders in the same slot recBtn just vacated */
+    button.submit { background: var(--submit); border-color: var(--submit); color: #fff; animation: submitGlow 2.2s ease-in-out infinite; }
+    button.submit:hover { background: #1d4ed8; }
+    button.submit:disabled { animation: none; }
+    @keyframes primaryGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(15,118,110,.35); } 50% { box-shadow: 0 0 0 7px rgba(15,118,110,0); } }
+    @keyframes liveGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,.35); } 50% { box-shadow: 0 0 0 7px rgba(220,38,38,0); } }
+    @keyframes submitGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,.35); } 50% { box-shadow: 0 0 0 7px rgba(37,99,235,0); } }
+    @media (prefers-reduced-motion: reduce) { button.primary, button.rec.live, button.submit { animation: none; } }
 
     /* inline non-interactive "chips" that mirror real buttons, used in copy */
-    .btn-chip { display: inline-flex; align-items: center; vertical-align: middle; font: inherit; font-size: 12px; font-weight: 500; line-height: 1.4; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .btn-chip { display: inline-flex; align-items: center; vertical-align: middle; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.4; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
     .btn-chip.neutral { background: var(--surface); border-color: var(--border); color: var(--text); }
     .btn-chip.live { background: var(--live); border-color: var(--live); color: #fff; }
     .btn-chip.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-chip.submit { background: var(--submit); border-color: var(--submit); color: #fff; }
 
     /* dev result */
     .result { margin-top: 20px; }
-    .scores { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); margin-bottom: 14px; }
-    .score { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .scores { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); margin-bottom: 16px; }
+    .score { display: flex; align-items: center; gap: 8px; font-size: 15px; }
     .score .sname { color: var(--muted); }
     .score .sval { font-variant-numeric: tabular-nums; }
-    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+    .badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; }
     .badge.strong { background: var(--accent-weak); color: #0f5d56; }
     .badge.weak { background: #fee2e2; color: #b91c1c; }
-    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
     @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
-    .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 14px; }
-    .clabel { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
-    .card .cbody { font-size: 14px; white-space: pre-wrap; }
+    /* .card / .clabel / .cbody render Feedback A/B/C (and the dev direct/minimizing/reversing cards)
+       with one shared rule each — identical font, size, color, layout across every condition */
+    .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px; }
+    .clabel { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+    .card .cbody { font-size: 16px; line-height: 1.6; white-space: pre-wrap; }
 
     /* evaluation panel (A2) */
-    .evalpanel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px; margin: 16px 0; }
-    .evalitem { margin-bottom: 16px; }
+    .evalpanel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 20px; margin: 20px 0; }
+    .evalitem { margin-bottom: 20px; }
     .evalitem:last-child { margin-bottom: 0; }
-    .qlabel { font-size: 14px; margin-bottom: 10px; }
-    .likert { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .likert .anchor { font-size: 12px; color: var(--muted); }
-    /* the bipolar sycophancy item has long anchor text — wrap each anchor onto ~2 lines within a
-       fixed width instead of letting it push the whole row (pills included) onto a new line */
-    .likert-bipolar .anchor { max-width: 140px; text-align: center; line-height: 1.3; }
-    .likert-opts { display: flex; gap: 6px; }
+    .qlabel { font-size: 16px; line-height: 1.5; margin-bottom: 12px; }
+    .likert { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .likert .anchor { font-size: 14px; color: var(--muted); }
+    .likert-opts { display: flex; gap: 10px; }
     .likert-opts label { cursor: pointer; }
     .likert-opts input { position: absolute; opacity: 0; width: 0; height: 0; }
-    .likert-opts .pill { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); }
+    .likert-opts .pill { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border: 1px solid var(--border); border-radius: 10px; font-size: 17px; font-weight: 600; background: var(--surface); transition: transform .1s ease; }
     .likert-opts label:hover .pill { border-color: #cfd4dc; }
-    .likert-opts input:checked + .pill { background: var(--accent); border-color: var(--accent); color: #fff; }
+    /* selected value: fill + ring + slight scale, so the chosen rating is unambiguous at a glance */
+    .likert-opts input:checked + .pill { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 0 3px var(--accent-weak); transform: scale(1.06); }
     .likert-opts input:focus-visible + .pill { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .evalitem.openended textarea { width: 100%; font: inherit; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; resize: vertical; }
+    .evalitem.openended textarea { width: 100%; font: inherit; font-size: 16px; line-height: 1.5; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; resize: vertical; }
 
     /* dev nav: persistent stage-jumping bar, shown above every screen in dev mode */
     .devnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 16px; border: 1px dashed var(--dev-border); border-radius: 8px; background: #fffbeb; }
     .devnav .devnavlabel { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-    .devnav button { font-size: 12px; padding: 5px 10px; }
+    .devnav button { font-size: 12px; font-weight: 500; padding: 5px 10px; min-height: auto; animation: none; }
     .devnav .devnavstage { font-size: 12px; font-weight: 600; color: var(--dev-text); }
-    .downloadhint { font-size: 12px; margin-top: 8px; }
+    .downloadhint { font-size: 13px; margin-top: 8px; }
 
     /* dev-only info panel: PHASE 1 scores + feedback style, shown above the coach's feedback */
     .devinfo { border: 1px dashed var(--dev-border); border-radius: 8px; background: #fffbeb; padding: 12px 14px; margin-bottom: 16px; }
@@ -124,155 +145,163 @@
     .devinfo .devinfostyle { font-size: 12px; font-weight: 600; color: var(--dev-text); }
 
     /* comparison tail (A3) */
-    .compintro { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
-    .comphint { font-size: 12px; color: var(--live); min-height: 16px; margin: 10px 0; }
+    .compintro { font-size: 16px; line-height: 1.6; color: var(--muted); margin-bottom: 16px; }
+    .comphint { font-size: 14px; color: var(--live); min-height: 20px; margin: 10px 0; }
     /* comparison cards carry a rating + recognition block each, so stack them A/B/C instead of 3-across
        (Test API view's #dev-cards keeps the original side-by-side .cards layout, untouched) */
     #p-compCards { grid-template-columns: 1fr; }
-    .compcardrate { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-    .compcardrecog { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-    .compcardrecog .reclabel { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-    .compcardrecog .recopt { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; margin-bottom: 8px; cursor: pointer; }
+    .compcardrate { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .compcardrate .qlabel + .likert + .qlabel { margin-top: 14px; }
+    .compcardrecog { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .compcardrecog .reclabel { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .compcardrecog .recopt { display: flex; align-items: flex-start; gap: 8px; font-size: 15px; margin-bottom: 10px; cursor: pointer; }
     .compcardrecog .recopt:last-child { margin-bottom: 0; }
-    .compcardrecog .recopt input { margin-top: 3px; }
+    .compcardrecog .recopt input { margin-top: 4px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="devbanner hidden" id="devBanner">
-      <strong>DEV MODE</strong>
-      <span>Jump freely between every stage and inject test transcripts to check the flow and feedback styles. Not for real participants — <code>Cmd/Ctrl+Shift+P</code> to turn off.</span>
+      <strong>개발자 모드</strong>
+      <span>모든 단계를 자유롭게 이동하고 테스트 대본을 주입해 흐름과 피드백 스타일을 확인할 수 있습니다. 실제 참가자용이 아닙니다 — <code>Cmd/Ctrl+Shift+P</code>로 끄세요.</span>
     </div>
     <div class="togglebar">
-      <span class="brand">Interview coaching <span class="note">pilot study v2</span></span>
-      <label class="devswitch hidden"><input type="checkbox" id="devToggle" /> Test API view</label>
+      <span class="brand"><span class="note">파일럿 스터디 v3</span></span>
+      <label class="devswitch hidden"><input type="checkbox" id="devToggle" /> API 테스트 화면</label>
     </div>
 
     <!-- ================= PARTICIPANT VIEW ================= -->
     <div id="participantView" class="view">
       <!-- dev nav: persistent stage-jumping bar, visible above every screen once dev mode is on -->
       <div class="devnav hidden" id="p-devNav">
-        <span class="devnavlabel">Dev nav</span>
-        <button type="button" id="p-devPrev">◀ Prev</button>
-        <span class="devnavstage" id="p-devStageLabel">Stage: Landing</span>
-        <button type="button" id="p-devNext">Next ▶</button>
+        <span class="devnavlabel">개발자 내비게이션</span>
+        <button type="button" id="p-devPrev">◀ 이전</button>
+        <span class="devnavstage" id="p-devStageLabel">단계: 시작 화면</span>
+        <button type="button" id="p-devNext">다음 ▶</button>
       </div>
       <!-- landing -->
       <section class="screen" id="p-landing">
         <div class="landing">
-          <h2>Mock interview practice</h2>
-          <p class="muted">You're preparing for upcoming job interviews, and this is a short mock interview practice with an AI coach. It asks <b>three common interview questions</b> — you answer each out loud, then rate the coach's feedback.</p>
-          <p class="muted"><b>Before you start:</b></p>
+          <h2>모의 면접 연습</h2>
+          <p class="muted">당신은 취업 면접을 앞둔 취업 준비생입니다. 지금부터 AI 코치와 함께 짧은 모의 면접 연습을 진행합니다. 실제 면접에서 자주 나오는 <b>질문 3개</b>에 각각 소리 내어 답하면, 코치가 답변에 대한 피드백을 주고 여러분은 그 피드백을 평가합니다.</p>
+          <p class="muted"><b>시작하기 전에:</b></p>
           <ul class="muted">
-            <li>Use Google Chrome and allow the microphone when asked.</li>
-            <li>Take your time — up to about 5–10 minutes per question. Nothing moves on until you press <span class="btn-chip live">Stop</span>, then <span class="btn-chip primary">Submit</span>.</li>
-            <li>Answer in your own words. Don't use ChatGPT or other AI tools.</li>
-            <li>Press <span class="btn-chip neutral">Re-record</span> to redo an answer, as many times as you like.</li>
-            <li>No right or wrong answers — you're not being graded.</li>
-            <li>We save no audio; only the text of your answers is stored.</li>
+            <li>Google Chrome을 사용하고, 마이크 접근 요청이 뜨면 허용해주세요.</li>
+            <li>한 질문당 <b>1분 내외</b>로 답해 주세요. <span class="btn-chip live">정지</span>를 누르고 <span class="btn-chip submit">제출</span>을 눌러야 다음으로 넘어갑니다.</li>
+            <li>본인의 경험을 자기 생각대로 이야기해 주세요. ChatGPT 같은 AI 도구는 사용하지 말아 주세요.</li>
+            <li>답변은 한 번만 녹음할 수 있으며, 답변이 끝나면 <span class="btn-chip live">정지</span>를 눌러주세요.</li>
+            <li>정답이 정해진 질문이 아니며, 여러분의 실력을 평가하는 자리가 아닙니다.</li>
+            <li>음성은 저장되지 않으며, 답변은 텍스트로만 기록됩니다.</li>
           </ul>
-          <label for="p-id">Participant ID</label>
-          <input id="p-id" type="text" placeholder="e.g., P01" autocomplete="off" />
-          <button class="primary" id="p-start">Start</button>
+          <label for="p-id">참가자 ID</label>
+          <input id="p-id" type="text" placeholder="예: P01" autocomplete="off" />
+          <button class="primary" id="p-start">시작</button>
         </div>
       </section>
 
       <!-- immersed block (reused for Q1..Q3) -->
       <section class="screen hidden" id="p-immersed">
         <div class="devrow hidden" id="p-devInjectRow">
-          <label for="p-devInject">Inject test transcript</label>
-          <select id="p-devInject"><option value="">— inject test transcript —</option></select>
+          <label for="p-devInject">테스트 대본 주입</label>
+          <select id="p-devInject"><option value="">— 테스트 대본 주입 —</option></select>
         </div>
         <div class="progress" id="p-progress"></div>
         <div class="bubble coach">
-          <div class="who">Coach</div>
+          <div class="who">코치</div>
           <div class="text" id="p-question"></div>
         </div>
 
         <div class="panel">
-          <div class="status" id="p-status"><span id="p-statusText">Ready to record your answer.</span></div>
-          <div class="transcript" id="p-transcript"><span class="placeholder">Your spoken answer will appear here.</span></div>
+          <div class="status" id="p-status"><span id="p-statusText">답변을 녹음할 준비가 되었습니다.</span></div>
+          <div class="transcript" id="p-transcript"><span class="placeholder">말한 답변이 여기에 표시됩니다.</span></div>
           <div class="controls">
-            <button class="rec primary" id="p-recBtn">Record</button>
-            <button id="p-reRecBtn" class="hidden">Re-record</button>
-            <button class="primary hidden" id="p-submitBtn">Submit</button>
+            <!-- recBtn and submitBtn are mutually exclusive (never both visible), kept adjacent so
+                 whichever is shown occupies the same leading slot — submit never visually "jumps" -->
+            <button class="rec primary" id="p-recBtn">녹음</button>
+            <button class="submit hidden" id="p-submitBtn">제출</button>
+            <span class="rectime" id="p-recTime">00:00</span>
+            <span class="rectime-hint hidden" id="p-recTimeHint">이제 답변을 마무리 해주세요</span>
           </div>
         </div>
 
         <div class="devinfo hidden" id="p-devInfo">
-          <div class="devinfolabel">Dev only — Phase 1 + feedback style</div>
+          <div class="devinfolabel">개발자 전용 — 1단계 평가 + 피드백 스타일</div>
           <div class="scores" id="p-devInfoScores"></div>
           <div class="devinfostyle" id="p-devInfoStyle"></div>
         </div>
 
         <div class="bubble coach hidden" id="p-feedbackWrap">
-          <div class="who">Coach</div>
+          <div class="who">코치 피드백</div>
           <div class="text" id="p-feedback"></div>
         </div>
 
         <div class="evalpanel hidden" id="p-evalWrap"></div>
 
-        <button class="primary hidden" id="p-next">Next</button>
+        <button class="primary hidden" id="p-next">다음</button>
       </section>
 
       <!-- comparison tail (A1 placeholder; A3 builds it) -->
       <section class="screen hidden" id="p-comparison">
-        <h2>Compare the feedback</h2>
+        <h2>피드백 비교하기</h2>
         <div class="devrow hidden" id="p-compDevInjectRow">
-          <label for="p-compDevInject">Inject test transcript (any question)</label>
-          <select id="p-compDevInject"><option value="">— inject test transcript —</option></select>
+          <label for="p-compDevInject">테스트 대본 주입 (질문 무관)</label>
+          <select id="p-compDevInject"><option value="">— 테스트 대본 주입 —</option></select>
         </div>
-        <p class="compintro">Below is your answer to the last question, with feedback written in three different styles. For each, use the scale to say where it falls between telling you what you'd want to hear and giving you an honest assessment. Then match each response to the description that best fits what it did.</p>
-        <div class="bubble coach"><div class="who">Coach</div><div class="text" id="p-compQuestion"></div></div>
-        <div class="bubble"><div class="who">Your answer</div><div class="text" id="p-compAnswer"></div></div>
+        <p class="compintro">아래는 <b>마지막 질문</b>에 대한 여러분의 답변과, <b>세 가지 다른 스타일로 생성된 피드백</b>입니다. 각 피드백을 평가한 다음, 각각이 실제로 어떤 방식이었는지 가장 잘 맞는 설명과 짝지어주세요.</p>
+        <div class="bubble coach"><div class="who">코치</div><div class="text" id="p-compQuestion"></div></div>
+        <div class="bubble"><div class="who">내 답변</div><div class="text" id="p-compAnswer"></div></div>
 
         <div class="devinfo hidden" id="p-compDevInfo">
-          <div class="devinfolabel">Dev only — Phase 1 + which feedback is which style</div>
+          <div class="devinfolabel">개발자 전용 — 1단계 평가 + 각 피드백의 스타일</div>
           <div class="scores" id="p-compDevInfoScores"></div>
           <div class="devinfostyle" id="p-compDevInfoStyles"></div>
         </div>
 
         <div class="cards" id="p-compCards"></div>
         <div class="comphint" id="p-compHint"></div>
-        <button class="primary" id="p-compNext" disabled>Finish</button>
+        <button class="primary" id="p-compNext" disabled>완료</button>
       </section>
 
       <!-- end -->
       <section class="screen hidden" id="p-end">
         <div class="landing">
-          <h2>Thank you</h2>
-          <p class="muted">That's the end of the session.</p>
-          <button id="p-download">Download session data (JSON)</button>
-          <p class="muted downloadhint hidden" id="p-downloadHint">Download is disabled while dev mode is on — this isn't a real participant session.</p>
+          <h2>감사합니다</h2>
+          <p class="muted">세션이 종료되었습니다.</p>
+          <button id="p-download">세션 데이터 다운로드 (JSON)</button>
+          <p class="muted downloadhint hidden" id="p-downloadHint">개발자 모드에서는 다운로드가 비활성화됩니다 — 실제 참가자 세션이 아닙니다.</p>
         </div>
       </section>
     </div>
 
     <!-- ================= DEV VIEW (v0 inspection) ================= -->
     <div id="devView" class="view hidden">
-      <h2>Test API view</h2>
-      <p class="compintro">Inject a transcript and see the assessment scores plus all three feedback styles side by side — for checking the API, not for participants.</p>
+      <h2>API 테스트 화면</h2>
+      <p class="compintro">대본을 주입해 평가 점수와 세 가지 피드백 스타일을 나란히 확인합니다 — API 점검용이며 참가자용이 아닙니다.</p>
       <div class="qpick">
-        <label for="dev-qsel">Question</label>
+        <label for="dev-qsel">질문</label>
         <select id="dev-qsel"></select>
       </div>
       <div class="devrow">
-        <label for="dev-inject">Inject test transcript</label>
+        <label for="dev-inject">테스트 대본 주입</label>
         <select id="dev-inject"></select>
       </div>
 
       <div class="bubble coach">
-        <div class="who">Coach</div>
+        <div class="who">코치</div>
         <div class="text" id="dev-question">…</div>
       </div>
 
       <div class="panel">
-        <div class="status" id="dev-status"><span id="dev-statusText">Ready to record your answer.</span></div>
-        <div class="transcript" id="dev-transcript"><span class="placeholder">Your spoken answer will appear here.</span></div>
+        <div class="status" id="dev-status"><span id="dev-statusText">답변을 녹음할 준비가 되었습니다.</span></div>
+        <div class="transcript" id="dev-transcript"><span class="placeholder">답변이 여기에 표시됩니다.</span></div>
         <div class="controls">
-          <button class="rec primary" id="dev-recBtn">Record</button>
-          <button id="dev-reRecBtn" class="hidden">Re-record</button>
-          <button class="primary hidden" id="dev-submitBtn">Submit</button>
+          <!-- recBtn vs. reRecBtn+submitBtn are mutually exclusive, kept adjacent so whichever set is
+               shown occupies the same leading slot recBtn had — submit never visually "jumps" -->
+          <button class="rec primary" id="dev-recBtn">녹음</button>
+          <button id="dev-reRecBtn" class="hidden">다시 녹음</button>
+          <button class="submit hidden" id="dev-submitBtn">제출</button>
+          <span class="rectime" id="dev-recTime">00:00</span>
+          <span class="rectime-hint hidden" id="dev-recTimeHint">이제 답변을 마무리 해주세요</span>
         </div>
       </div>
 

@@ -4,26 +4,26 @@ import { CORPUS } from "./corpus.js";
 // Participant flow (A1 skeleton + A2 eval panel + A3 comparison tail). Logging is console-only
 // plus an end-of-session JSON download (no Supabase). Eval wording is provisional [measurement design].
 const EVAL_ITEMS = [
-  // bipolar, 1-7: 1 = flattering ("told me what I wanted to hear"), 7 = honest. No separate prompt
-  // text — the two anchors alone frame the item. Direction is reversed from a plain sycophancy score.
-  { key: "sycophancy",   label: "", lo: "Felt like it told me what I wanted to hear", hi: "Felt like an honest assessment" },
-  { key: "appropriate",  label: "How appropriate was this feedback as a response to your answer?", lo: "Not at all appropriate", hi: "Very appropriate" },
-  { key: "frustrating",  label: "How frustrating did you find this feedback?", lo: "Not at all", hi: "Very frustrating" },
+  // all unipolar, 1-7: 1 = not at all, 7 = very much so
+  { key: "sycophancy",   label: "이 피드백은 듣기 좋은 말을 해주는 느낌이었다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
+  { key: "honesty",   label: "이 피드백은 솔직한 평가라는 느낌이었다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
+  { key: "appropriate",  label: "이 피드백은 내 답변에 대한 반응으로 적절했다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
+  { key: "frustrating",  label: "이 피드백을 듣고 기분이 상했다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
 ];
 
-// comparison-stage card rating reuses the same bipolar sycophancy item as the per-block eval
-const SYCOPHANCY_ITEM = EVAL_ITEMS.find((it) => it.key === "sycophancy");
+// comparison-stage cards rate both sycophancy and honesty (each unipolar) rather than a single bipolar item
+const COMPARISON_RATE_ITEMS = EVAL_ITEMS.filter((it) => it.key === "sycophancy" || it.key === "honesty");
 
 // comparison-stage recognition options: plain-language behavior descriptions, no style names revealed
 const RECOGNITION_OPTIONS = [
-  { key: "direct_desc",     text: "Pointed out the weak part directly, as something to improve." },
-  { key: "minimizing_desc", text: "Brushed the weak part off as no big deal." },
-  { key: "reversing_desc",  text: "Spun the weak part into a strength or a smart move." },
-  { key: "none_desc",       text: "None of these apply." },
+  { key: "direct_desc",     text: "약점을 개선할 점으로서 직접적으로 짚어주었다." },
+  { key: "minimizing_desc", text: "약점을 대수롭지 않은 것으로 넘겼다." },
+  { key: "reversing_desc",  text: "약점을 강점이나 현명한 선택으로 포장했다." },
+  { key: "none_desc",       text: "해당 사항 없음." },
 ];
 
 // dev-mode stage list: landing, the 3 immersed questions, comparison, end.
-const STAGE_LABELS = ["Landing", "Q1", "Q2", "Q3", "Comparison", "End"];
+const STAGE_LABELS = ["시작 화면", "질문 1", "질문 2", "질문 3", "비교", "종료"];
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -95,7 +95,7 @@ export function initParticipantView(root) {
 
   const input = createAnswerInput({
     statusEl: $("p-status"), statusText: $("p-statusText"), transcriptEl: $("p-transcript"),
-    recBtn: $("p-recBtn"), reRecBtn: $("p-reRecBtn"), submitBtn: $("p-submitBtn"),
+    recBtn: $("p-recBtn"), submitBtn: $("p-submitBtn"), timeEl: $("p-recTime"), timeHintEl: $("p-recTimeHint"),
     onSubmit: (t) => onAnswerSubmit(t),
   });
 
@@ -112,7 +112,7 @@ export function initParticipantView(root) {
   // ---------- immersed ----------
   function startBlock() {
     const qid = QUESTION_SEQUENCE[session.step];
-    progressEl.textContent = `Question ${session.step + 1} of ${QUESTION_SEQUENCE.length}`;
+    progressEl.textContent = `질문 ${session.step + 1} / ${QUESTION_SEQUENCE.length}`;
     questionEl.textContent = QUESTIONS[qid];
     feedbackWrap.classList.add("hidden");
     evalWrap.classList.add("hidden");
@@ -159,7 +159,7 @@ export function initParticipantView(root) {
     const qid = QUESTION_SEQUENCE[session.step];
     const condition = session.rotation.map[qid];
     input.lock();
-    $("p-statusText").textContent = "Getting your feedback…";
+    $("p-statusText").textContent = "피드백 생성 중…";
     feedbackWrap.classList.remove("hidden");
     feedbackEl.innerHTML = '<span class="muted">…</span>';
     devInfo.classList.add("hidden"); // clear the previous assessment immediately, before the new one resolves
@@ -175,7 +175,7 @@ export function initParticipantView(root) {
       console.log("[pilot] block", session.step, "| qid", qid, "| condition", condition,
         "| scores", a.scores, "| strong", a.strong, "| weak", a.weak);
     } catch (err) {
-      feedbackEl.innerHTML = `<span class="err">Something went wrong (${escapeHtml(err.message)}). Please let the researcher know.</span>`;
+      feedbackEl.innerHTML = `<span class="err">문제가 발생했습니다 (${escapeHtml(err.message)}). 연구자에게 알려주세요.</span>`;
     }
     $("p-statusText").textContent = "";
     renderDevInfo();
@@ -190,14 +190,13 @@ export function initParticipantView(root) {
     evalOpenEnded = "";
     evalWrap.innerHTML = `
       <div class="evalitem openended">
-        <label class="qlabel" for="p-evalOpen">In your own words, how did the coach's feedback come across to you?</label>
+        <label class="qlabel" for="p-evalOpen">코치의 피드백이 어떻게 느껴졌는지 적어주세요.</label>
         <textarea id="p-evalOpen" rows="3"></textarea>
-      </div>
-      <div class="qlabel">About this feedback</div>` +
+      </div>` +
       EVAL_ITEMS.map((it) => `
       <div class="evalitem">
-        ${it.label ? `<div class="qlabel">${escapeHtml(it.label)}</div>` : ""}
-        <div class="likert${it.key === "sycophancy" ? " likert-bipolar" : ""}">
+        <div class="qlabel">${escapeHtml(it.label)}</div>
+        <div class="likert">
           <span class="anchor">${escapeHtml(it.lo)}</span>
           <div class="likert-opts">
             ${[1, 2, 3, 4, 5, 6, 7].map((n) =>
@@ -242,8 +241,8 @@ export function initParticipantView(root) {
     compNext.disabled = true;
     if (!block) {
       compCards.innerHTML = devMode
-        ? '<div class="muted">Pick a transcript above to generate feedback for comparison.</div>'
-        : '<div class="err">Missing answer data. Please restart.</div>';
+        ? '<div class="muted">위에서 대본을 선택하면 비교용 피드백이 생성됩니다.</div>'
+        : '<div class="err">답변 데이터가 없습니다. 다시 시작해주세요.</div>';
       renderCompDevInfo(null);
       return;
     }
@@ -258,21 +257,23 @@ export function initParticipantView(root) {
 
     compCards.innerHTML = order.map((cond, i) => `
       <div class="card">
-        <div class="clabel">Feedback ${labels[i]}</div>
-        <div class="cbody muted" id="p-comp-body-${labels[i]}">Generating…</div>
+        <div class="clabel">피드백 ${labels[i]}</div>
+        <div class="cbody muted" id="p-comp-body-${labels[i]}">생성 중…</div>
         <div class="compcardrate">
-          <div class="likert likert-bipolar">
-            <span class="anchor">${escapeHtml(SYCOPHANCY_ITEM.lo)}</span>
+          ${COMPARISON_RATE_ITEMS.map((it) => `
+          <div class="qlabel">${escapeHtml(it.label)}</div>
+          <div class="likert">
+            <span class="anchor">${escapeHtml(it.lo)}</span>
             <div class="likert-opts">
               ${[1, 2, 3, 4, 5, 6, 7].map((n) =>
-                `<label><input type="radio" name="comp-rate-${labels[i]}" value="${n}"><span class="pill">${n}</span></label>`
+                `<label><input type="radio" name="comp-rate-${it.key}-${labels[i]}" data-lab="${labels[i]}" data-key="${it.key}" value="${n}"><span class="pill">${n}</span></label>`
               ).join("")}
             </div>
-            <span class="anchor">${escapeHtml(SYCOPHANCY_ITEM.hi)}</span>
-          </div>
+            <span class="anchor">${escapeHtml(it.hi)}</span>
+          </div>`).join("")}
         </div>
         <div class="compcardrecog">
-          <div class="reclabel">Which best describes this feedback?</div>
+          <div class="reclabel">이 피드백을 가장 잘 설명하는 것은 무엇인가요?</div>
           ${RECOGNITION_OPTIONS.map((opt) =>
             `<label class="recopt"><input type="radio" name="comp-recog-${labels[i]}" value="${opt.key}"> ${escapeHtml(opt.text)}</label>`
           ).join("")}
@@ -295,13 +296,16 @@ export function initParticipantView(root) {
     });
 
     const updateCompGating = () => {
-      const allRated = labels.every((lab) => session.comparison.ratings[lab] != null);
+      const allRated = labels.every((lab) =>
+        COMPARISON_RATE_ITEMS.every((it) => session.comparison.ratings[lab]?.[it.key] != null));
       const allRecognized = labels.every((lab) => session.comparison.recognition[lab] != null);
       compNext.disabled = !(allRated && allRecognized);
     };
     compCards.querySelectorAll('input[type="radio"][name^="comp-rate-"]').forEach((r) => {
       r.addEventListener("change", (e) => {
-        session.comparison.ratings[e.target.name.replace("comp-rate-", "")] = Number(e.target.value);
+        const lab = e.target.dataset.lab;
+        session.comparison.ratings[lab] = session.comparison.ratings[lab] || {};
+        session.comparison.ratings[lab][e.target.dataset.key] = Number(e.target.value);
         updateCompGating();
       });
     });
@@ -348,7 +352,7 @@ export function initParticipantView(root) {
       const a = await api("/api/assess", { question: QUESTIONS[e.questionId], transcript: e.transcript });
       buildComparison({ qid: e.questionId, transcript: e.transcript, context: a.context, scores: a.scores, strong: a.strong, weak: a.weak });
     } catch (err) {
-      compCards.innerHTML = `<div class="err">Assess failed: ${escapeHtml(err.message)}</div>`;
+      compCards.innerHTML = `<div class="err">평가 실패: ${escapeHtml(err.message)}</div>`;
     }
   });
 
@@ -383,7 +387,7 @@ export function initParticipantView(root) {
 
   function updateDevPanel() {
     const idx = currentStageIndex();
-    devStageLabel.textContent = `Stage: ${STAGE_LABELS[idx]}`;
+    devStageLabel.textContent = `단계: ${STAGE_LABELS[idx]}`;
     devPrevBtn.disabled = idx <= 0;
     devNextBtn.disabled = idx >= STAGE_LABELS.length - 1;
     devInjectRow.classList.toggle("hidden", !(devMode && idx >= 1 && idx <= 3));

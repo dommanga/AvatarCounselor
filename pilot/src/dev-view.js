@@ -32,6 +32,7 @@ export function initDevView(root) {
   const input = createAnswerInput({
     statusEl: $("dev-status"), statusText: $("dev-statusText"), transcriptEl: $("dev-transcript"),
     recBtn: $("dev-recBtn"), reRecBtn: $("dev-reRecBtn"), submitBtn: $("dev-submitBtn"),
+    timeEl: $("dev-recTime"), timeHintEl: $("dev-recTimeHint"),
     onSubmit: (t) => runPipeline(QUESTIONS[qsel.value], t),
   });
 
@@ -50,14 +51,14 @@ export function initDevView(root) {
   async function runPipeline(questionText, transcript) {
     const my = ++runToken;
     resultEl.classList.remove("hidden");
-    scoresEl.innerHTML = '<span class="muted">Assessing answer…</span>';
+    scoresEl.innerHTML = '<span class="muted">답변 평가 중…</span>';
     cardsEl.innerHTML = CONDITIONS.map((c) =>
-      `<div class="card"><div class="clabel">${CLABEL[c]}</div><div class="cbody muted" id="dev-cbody-${c}">Generating…</div></div>`
+      `<div class="card"><div class="clabel">${CLABEL[c]}</div><div class="cbody muted" id="dev-cbody-${c}">생성 중…</div></div>`
     ).join("");
 
     let a;
     try { a = await api("/api/assess", { question: questionText, transcript }); }
-    catch (err) { if (my !== runToken) return; scoresEl.innerHTML = `<span class="err">Assess failed: ${escapeHtml(err.message)}</span>`; cardsEl.innerHTML = ""; return; }
+    catch (err) { if (my !== runToken) return; scoresEl.innerHTML = `<span class="err">평가 실패: ${escapeHtml(err.message)}</span>`; cardsEl.innerHTML = ""; return; }
     if (my !== runToken) return;
 
     scoresEl.innerHTML = ["situation", "task_and_action", "result"].map((el) => {
