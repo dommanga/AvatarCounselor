@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now()
 );
+-- added after first deploy; ALTER keeps `npm run db:init` working on an existing database
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS survey_version text;   -- survey_items.json "version" at creation
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_slot_key ON sessions (slot) WHERE slot IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_participant_key ON sessions (participant_id) WHERE NOT is_test;
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_key ON sessions (token_hash);

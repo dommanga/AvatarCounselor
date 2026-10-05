@@ -12,6 +12,7 @@ import { db, isUniqueViolation } from "../../lib/db.js";
 import {
   checkPassword, setResearcherCookie, clearResearcherCookie, requireResearcher, newParticipantToken,
 } from "../../lib/auth.js";
+import { SURVEY } from "../../lib/survey.js";
 import { CONDITIONS } from "../../src/questions.js";
 
 const PID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -60,7 +61,7 @@ async function overview(req, res) {
   const sql = db();
   const [sessions, sequence, next] = await Promise.all([
     sql`SELECT id, participant_id, condition, suggested_condition, slot, is_test, current_stage,
-               created_at, updated_at
+               survey_version, created_at, updated_at
         FROM sessions ORDER BY created_at DESC`,
     sql`SELECT b.slot, b.block, b.condition, s.participant_id
         FROM block_sequence b LEFT JOIN sessions s ON s.slot = b.slot ORDER BY b.slot`,
@@ -91,8 +92,8 @@ async function create(req, res) {
   const { token, hash } = newParticipantToken();
   try {
     await sql.transaction([
-      sql`INSERT INTO sessions (id, participant_id, condition, suggested_condition, slot, is_test, token_hash)
-          VALUES (${id}, ${pid}, ${condition}, ${suggested}, ${useSlot}, ${!!is_test}, ${hash})`,
+      sql`INSERT INTO sessions (id, participant_id, condition, suggested_condition, slot, is_test, token_hash, survey_version)
+          VALUES (${id}, ${pid}, ${condition}, ${suggested}, ${useSlot}, ${!!is_test}, ${hash}, ${SURVEY.version ?? null})`,
       sql`INSERT INTO events (id, session_id, type, client_ts)
           VALUES (${crypto.randomUUID()}, ${id}, 'session_created',
                   ${Number.isSafeInteger(client_ts) ? client_ts : null})`,
