@@ -1,30 +1,10 @@
 import { SpeechRecognitionManager } from "./speech.js";
+import { QUESTIONS, QUESTION_SEQUENCE, CONDITIONS } from "./questions.js";
 
-// Real Bangerter questions from the corpus (do not invent).
-export const QUESTIONS = {
-  q1: "함께 일하는 사람들과 의견이 달랐던 상황이 있었나요? 그때 어떻게 풀어나갔는지 말씀해 주세요.",
-  q2: "본인이 주도해서 끝까지 완수했던 일에 대해 이야기해 주세요.",
-  q3: "여러 가지 일을 동시에 처리해야 했던 경험에 대해 말씀해 주세요.",
-};
-export const QUESTION_SEQUENCE = ["q1", "q2", "q3"]; // fixed question order; only condition↔question mapping rotates
-export const CONDITIONS = ["direct", "minimizing", "reversing"];
+export { QUESTIONS, QUESTION_SEQUENCE, CONDITIONS };
 export const CLABEL = { direct: "Direct", minimizing: "Minimizing", reversing: "Reversing" };
 export const RLABEL = { 1:"absent", 2:"vague", 3:"specific", 4:"specific and developed", 5:"specific and fully realized" };
 export const ELNAME = { situation: "Situation", task_and_action: "Task & Action", result: "Result" };
-
-// 3-order Latin square: which condition is assigned to each question. Across the 3 orders,
-// every (question, condition) cell is covered. (Server will formalize this in the Supabase step.)
-const ROTATIONS = [
-  { q1: "direct",     q2: "minimizing", q3: "reversing"  },
-  { q1: "minimizing", q2: "reversing",  q3: "direct"     },
-  { q1: "reversing",  q2: "direct",     q3: "minimizing" },
-];
-export function rotationFor(participantId) {
-  let h = 0;
-  for (const ch of String(participantId)) h = (h + ch.charCodeAt(0)) % 100000;
-  const index = h % ROTATIONS.length;
-  return { index, map: ROTATIONS[index] };
-}
 
 export async function api(path, body) {
   const r = await fetch(path, {
@@ -33,7 +13,7 @@ export async function api(path, body) {
     body: JSON.stringify(body),
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(data.error || `HTTP ${r.status}`), { status: r.status });
   return data;
 }
 
@@ -41,39 +21,35 @@ export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// Reusable record/stop/re-record/submit + STT wiring. Each view passes its own elements + onSubmit.
-// Holds the current transcript (from STT, or injected via setTranscript for dev mode).
-// reRecBtn and timeEl are both optional: the participant flow has no re-record button, and any
-// view can skip the stopwatch display by not passing timeEl.
 const SOFT_LIMIT_MS = 60_000; // informational only — no enforced cutoff
 
-export function createAnswerInput({ statusEl, statusText, transcriptEl, recBtn, reRecBtn, submitBtn, timeEl, timeHintEl, onSubmit }) {
-  const stt = new SpeechRecognitionManager();
-  let currentTranscript = "";
-
-  // stopwatch: counts up from 00:00 while recording, informational only (no enforced limit).
-  // Past SOFT_LIMIT_MS the clock underlines/reddens and a "wrap up" hint appears next to it —
-  // a nudge aimed at the timer itself, not at the content of any answer.
-  let stopwatchStartedAt = null;
-  let stopwatchInterval = null;
+// stopwatch: counts up from 00:00 while recording, informational only (no enforced limit).
+// Past SOFT_LIMIT_MS the clock underlines/reddens and a "wrap up" hint appears next to it —
+// a nudge aimed at the timer itself, not at the content of any answer.
+function createStopwatch(timeEl, timeHintEl) {
+  let startedAt = null;
+  let interval = null;
   const formatElapsed = (ms) => {
     const total = Math.floor(ms / 1000);
     const m = String(Math.floor(total / 60)).padStart(2, "0");
     const s = String(total % 60).padStart(2, "0");
     return `${m}:${s}`;
   };
-  const stopwatchReset = () => {
-    if (stopwatchInterval) { clearInterval(stopwatchInterval); stopwatchInterval = null; }
-    stopwatchStartedAt = null;
+  const stop = () => {
+    if (interval) { clearInterval(interval); interval = null; }
+  };
+  const reset = () => {
+    stop();
+    startedAt = null;
     if (timeEl) { timeEl.textContent = "00:00"; timeEl.classList.remove("warn"); }
     if (timeHintEl) timeHintEl.classList.add("hidden");
   };
-  const stopwatchStart = () => {
-    stopwatchReset();
-    stopwatchStartedAt = Date.now();
+  const start = () => {
+    reset();
+    startedAt = Date.now();
     if (timeEl) {
-      stopwatchInterval = setInterval(() => {
-        const elapsed = Date.now() - stopwatchStartedAt;
+      interval = setInterval(() => {
+        const elapsed = Date.now() - startedAt;
         timeEl.textContent = formatElapsed(elapsed);
         const overSoftLimit = elapsed >= SOFT_LIMIT_MS;
         timeEl.classList.toggle("warn", overSoftLimit);
@@ -81,9 +57,18 @@ export function createAnswerInput({ statusEl, statusText, transcriptEl, recBtn, 
       }, 1000);
     }
   };
-  const stopwatchStop = () => {
-    if (stopwatchInterval) { clearInterval(stopwatchInterval); stopwatchInterval = null; }
-  };
+  return { start, stop, reset };
+}
+
+// Record/stop/re-record/submit + STT wiring for the dev "API 테스트" view (the participant flow uses
+// createTwoStepInput below). Holds the current transcript (from STT, or injected via setTranscript).
+// reRecBtn and timeEl are both optional.
+export function createAnswerInput({ statusEl, statusText, transcriptEl, recBtn, reRecBtn, submitBtn, timeEl, timeHintEl, onSubmit }) {
+  const stt = new SpeechRecognitionManager();
+  let currentTranscript = "";
+
+  const stopwatch = createStopwatch(timeEl, timeHintEl);
+  const stopwatchReset = stopwatch.reset, stopwatchStart = stopwatch.start, stopwatchStop = stopwatch.stop;
 
   const placeholder = () => { transcriptEl.innerHTML = '<span class="placeholder">말한 답변이 여기에 표시됩니다.</span>'; };
 
@@ -175,6 +160,124 @@ export function createAnswerInput({ statusEl, statusText, transcriptEl, recBtn, 
       if (timeEl) timeEl.classList.add("hidden");
       if (timeHintEl) timeHintEl.classList.add("hidden");
       statusEl.classList.remove("live");
+    },
+  };
+}
+
+// Participant flow: [답변 시작] -> [답변 완료], one button that flips. onEnd fires at the click itself
+// (that click time is answer_end); onSubmit fires only once STT has delivered its final result.
+// If nothing was recognized, a [다시 답변하기] button appears instead (which calls onStart again).
+const STT_FLUSH_TIMEOUT_MS = 5000; // fallback if the browser never fires onend after stop()
+
+export function createTwoStepInput({ statusEl, statusText, transcriptEl, actionBtn, retryBtn, timeEl, timeHintEl, onStart, onEnd, onSubmit }) {
+  const stt = new SpeechRecognitionManager();
+  const stopwatch = createStopwatch(timeEl, timeHintEl);
+  let finalText = "", interimText = "";
+  let phase = "idle"; // idle | listening | flushing | done
+  let flushTimer = null;
+
+  const placeholder = () => { transcriptEl.innerHTML = '<span class="placeholder">말한 답변이 여기에 표시됩니다.</span>'; };
+  const READY = "준비되면 [답변 시작]을 누르고 말씀해 주세요.";
+
+  stt.onUpdate = (f, i) => {
+    finalText = f; interimText = i;
+    transcriptEl.innerHTML =
+      (f ? escapeHtml(f) + " " : "") + (i ? `<span class="interim">${escapeHtml(i)}</span>` : "");
+    if (!f && !i) placeholder();
+  };
+  stt.onStatusChange = (listening) => { statusEl.classList.toggle("live", listening); };
+  stt.onError = (code) => {
+    statusText.innerHTML = (code === "not-allowed" || code === "service-not-allowed")
+      ? '<span class="err">마이크가 차단되었습니다. 연구자에게 알려주세요.</span>'
+      : `<span class="err">인식 오류: ${escapeHtml(code)}</span>`;
+  };
+  stt.onStop = () => finalize();
+
+  function start() {
+    finalText = ""; interimText = "";
+    placeholder();
+    if (!stt.start()) {
+      statusText.innerHTML = '<span class="err">음성 인식을 시작하지 못했습니다. 연구자에게 알려주세요.</span>';
+      return;
+    }
+    phase = "listening";
+    onStart?.();
+    stopwatch.start();
+    retryBtn.classList.add("hidden");
+    actionBtn.classList.remove("hidden");
+    actionBtn.textContent = "답변 완료";
+    actionBtn.classList.add("live");
+    actionBtn.disabled = false;
+    statusText.textContent = "듣고 있습니다… 답변이 끝나면 [답변 완료]를 눌러주세요.";
+  }
+
+  function end() {
+    phase = "flushing";
+    onEnd?.();
+    stopwatch.stop();
+    actionBtn.disabled = true;
+    statusText.textContent = "인식 결과를 정리하는 중…";
+    if (stt.isListening) {
+      stt.stop();
+      flushTimer = setTimeout(finalize, STT_FLUSH_TIMEOUT_MS);
+    } else {
+      finalize(); // recognition already ended on its own (e.g. after an error)
+    }
+  }
+
+  function finalize() {
+    if (phase !== "flushing") return;
+    clearTimeout(flushTimer); flushTimer = null;
+    const transcript = [finalText, interimText].filter(Boolean).join(" ").trim();
+    actionBtn.classList.add("hidden");
+    actionBtn.classList.remove("live");
+    if (transcript) {
+      phase = "done";
+      if (timeEl) timeEl.classList.add("hidden");
+      if (timeHintEl) timeHintEl.classList.add("hidden");
+      statusText.textContent = "";
+      onSubmit(transcript);
+    } else {
+      phase = "idle";
+      statusText.textContent = "인식된 내용이 없습니다. 마이크 상태를 확인한 뒤 [다시 답변하기]를 눌러주세요.";
+      retryBtn.classList.remove("hidden");
+    }
+  }
+
+  actionBtn.addEventListener("click", () => {
+    if (phase === "idle") start();
+    else if (phase === "listening") end();
+  });
+  retryBtn.addEventListener("click", () => { if (phase === "idle") start(); });
+
+  function reset() {
+    if (stt.isListening) stt.stop();
+    clearTimeout(flushTimer); flushTimer = null;
+    phase = "idle";
+    finalText = ""; interimText = "";
+    stopwatch.reset();
+    placeholder();
+    statusEl.classList.remove("live");
+    actionBtn.textContent = "답변 시작";
+    actionBtn.classList.remove("live", "hidden");
+    actionBtn.disabled = !stt.supported;
+    retryBtn.classList.add("hidden");
+    if (timeEl) timeEl.classList.remove("hidden");
+    statusText.innerHTML = stt.supported
+      ? READY
+      : '<span class="err">음성 인식은 Chrome에서만 지원됩니다. 연구자에게 알려주세요.</span>';
+  }
+
+  return {
+    reset,
+    // show a finished answer without recording (reload-resume, or dev-mode injection)
+    showDone(text) {
+      reset();
+      phase = "done";
+      transcriptEl.textContent = text;
+      actionBtn.classList.add("hidden");
+      if (timeEl) timeEl.classList.add("hidden");
+      statusText.textContent = "";
     },
   };
 }

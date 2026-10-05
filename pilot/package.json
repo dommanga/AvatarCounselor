@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "openai": "^6.8.1"
+  },
+  "scripts": {
+    "db:init": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-init.js"
   }
 }

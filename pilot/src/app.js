@@ -3,7 +3,8 @@ import { initDevView } from "./dev-view.js";
 
 // Two views: participant flow (default) and the Test API view (v0 inspection tool). A toggle
 // switches between them, but the toggle itself is hidden from participants — it only appears
-// once dev mode is unlocked with the Cmd/Ctrl+Shift+P shortcut.
+// once dev mode is unlocked with the Cmd/Ctrl+Shift+P shortcut. Dev mode is refused while a real
+// (non-test) session is running on this device; the Test API view also needs researcher login.
 const participantView = document.getElementById("participantView");
 const devView = document.getElementById("devView");
 const devToggle = document.getElementById("devToggle");
@@ -23,6 +24,11 @@ applyView(); // default: participant view (toggle off)
 
 // ---------- dev mode: unlocked via keyboard shortcut, off by default ----------
 let devMode = false;
+let devAllowed = true; // false while a real session is active
+window.addEventListener("pilot:session", (e) => {
+  devAllowed = !e.detail.active || e.detail.isTest;
+  if (!devAllowed && devMode) setDevMode(false);
+});
 function setDevMode(on) {
   devMode = on;
   devSwitch.classList.toggle("hidden", !on);
@@ -33,6 +39,6 @@ function setDevMode(on) {
 window.addEventListener("keydown", (e) => {
   if (e.shiftKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
     e.preventDefault();
-    setDevMode(!devMode);
+    if (devAllowed || devMode) setDevMode(!devMode);
   }
 });

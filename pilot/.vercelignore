@@ -1,0 +1,5 @@
+# Not needed at runtime, and SPEC.md describes the manipulation — keep it off the public site.
+SPEC.md
+README.md
+scripts
+lib/schema.sql

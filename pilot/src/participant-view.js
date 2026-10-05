@@ -1,417 +1,315 @@
-import { QUESTIONS, QUESTION_SEQUENCE, CONDITIONS, CLABEL, RLABEL, ELNAME, api, escapeHtml, createAnswerInput, rotationFor } from "./shared.js";
+import { QUESTIONS, QUESTION_SEQUENCE, CLABEL, RLABEL, ELNAME, escapeHtml, createTwoStepInput } from "./shared.js";
+import { PRACTICE_ID, PRACTICE_PROMPT } from "./questions.js";
+import { getToken, clearToken, createSessionClient } from "./session-client.js";
+import { loadSurveyConfig, renderSurveyBlock } from "./survey.js";
 import { CORPUS } from "./corpus.js";
 
-// Participant flow (A1 skeleton + A2 eval panel + A3 comparison tail). Logging is console-only
-// plus an end-of-session JSON download (no Supabase). Eval wording is provisional [measurement design].
-const EVAL_ITEMS = [
-  // all unipolar, 1-7: 1 = not at all, 7 = very much so
-  { key: "sycophancy",   label: "이 피드백은 듣기 좋은 말을 해주는 느낌이었다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
-  { key: "honesty",   label: "이 피드백은 솔직한 평가라는 느낌이었다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
-  { key: "appropriate",  label: "이 피드백은 내 답변에 대한 반응으로 적절했다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
-  { key: "frustrating",  label: "이 피드백을 듣고 기분이 상했다.", lo: "전혀 그렇지 않다", hi: "매우 그렇다" },
-];
+// Main-experiment participant flow. The session (participant ID, condition) is created by the
+// researcher at /researcher on this device; this page only holds the bearer token for it.
+//   pre-survey (blocks from survey_items.json) -> scenario -> practice -> Q1 -> Q2 -> Q3 -> post-survey -> done
+// Every step is logged as a server event; a reload resumes at the stage the server recorded.
+// The condition is never sent to this page for real sessions; dev mode works only in test sessions.
 
-// comparison-stage cards rate both sycophancy and honesty (each unipolar) rather than a single bipolar item
-const COMPARISON_RATE_ITEMS = EVAL_ITEMS.filter((it) => it.key === "sycophancy" || it.key === "honesty");
-
-// comparison-stage recognition options: plain-language behavior descriptions, no style names revealed
-const RECOGNITION_OPTIONS = [
-  { key: "direct_desc",     text: "약점을 개선할 점으로서 직접적으로 짚어주었다." },
-  { key: "minimizing_desc", text: "약점을 대수롭지 않은 것으로 넘겼다." },
-  { key: "reversing_desc",  text: "약점을 강점이나 현명한 선택으로 포장했다." },
-  { key: "none_desc",       text: "해당 사항 없음." },
-];
-
-// dev-mode stage list: landing, the 3 immersed questions, comparison, end.
-const STAGE_LABELS = ["시작 화면", "질문 1", "질문 2", "질문 3", "비교", "종료"];
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
+// dev-nav stage list (test sessions only)
+const STAGES = ["pre_survey", "scenario", "practice", "q1", "q2", "q3", "post_survey", "done"];
+const STAGE_LABELS = { pre_survey: "사전설문", scenario: "시나리오", practice: "연습", q1: "질문 1", q2: "질문 2", q3: "질문 3", post_survey: "사후설문", done: "완료" };
 
 export function initParticipantView(root) {
   const $ = (id) => root.querySelector("#" + id);
-  const screens = ["p-landing", "p-immersed", "p-comparison", "p-end"].map($);
+  const screens = ["p-nosession", "p-survey", "p-scenario", "p-interview", "p-end"].map($);
 
-  const idInput = $("p-id");
-  const startBtn = $("p-start");
   const progressEl = $("p-progress");
+  const practiceGuide = $("p-practiceGuide");
   const questionEl = $("p-question");
+  const statusText = $("p-statusText");
   const feedbackWrap = $("p-feedbackWrap");
   const feedbackEl = $("p-feedback");
-  // dev only: PHASE 1 scores/strength/weakness + which feedback style is being shown
-  const devInfo = $("p-devInfo");
-  const devInfoScores = $("p-devInfoScores");
-  const devInfoStyle = $("p-devInfoStyle");
-  const evalWrap = $("p-evalWrap");
+  const answerRetryBtn = $("p-answerRetry");
   const nextBtn = $("p-next");
-  // dev nav: persistent stage-jumping bar (lives outside the screens, shown on all of them)
+  const devInfo = $("p-devInfo");
   const devNav = $("p-devNav");
-  const devPrevBtn = $("p-devPrev");
-  const devNextBtn = $("p-devNext");
   const devStageLabel = $("p-devStageLabel");
-  // per-question dev inject (only this question's corpus transcripts)
   const devInjectRow = $("p-devInjectRow");
   const devInjectSel = $("p-devInject");
-  // comparison
-  const compDevInjectRow = $("p-compDevInjectRow");
-  const compDevInjectSel = $("p-compDevInject");
-  const compDevInfo = $("p-compDevInfo");
-  const compDevInfoScores = $("p-compDevInfoScores");
-  const compDevInfoStyles = $("p-compDevInfoStyles");
-  const compQuestion = $("p-compQuestion");
-  const compAnswer = $("p-compAnswer");
-  const compCards = $("p-compCards");
-  const compHint = $("p-compHint");
-  const compNext = $("p-compNext");
-  const downloadBtn = $("p-download");
-  const downloadHint = $("p-downloadHint");
 
-  let session = null;
-  let evalResponses = {};
-  let evalOpenEnded = "";
+  let client = null;
+  let isTest = false;
   let devMode = false;
-  let lastComparisonBlock = null;
+  let finished = false;
+  let stage = null;          // dev-nav position: one of STAGES
+  let turn = null;           // current interview turn: PRACTICE_ID | q1 | q2 | q3
+  let answers = {};          // qid -> { transcript, feedback, scores?, strong?, weak? } (from server)
+  let pendingTranscript = null; // kept for [다시 시도] after an LLM error
+  let survey = null;         // survey_items.json
+  let surveyDone = { pre: [], post: [] }; // block ids already saved on the server
+  let surveyPhase = null, surveyIdx = 0, surveyForm = null;
 
-  const show = (id) => {
-    screens.forEach((s) => s.classList.toggle("hidden", s.id !== id));
+  const show = (id) => screens.forEach((s) => s.classList.toggle("hidden", s.id !== id));
+
+  const input = createTwoStepInput({
+    statusEl: $("p-status"), statusText, transcriptEl: $("p-transcript"),
+    actionBtn: $("p-actionBtn"), retryBtn: $("p-retryBtn"),
+    timeEl: $("p-recTime"), timeHintEl: $("p-recTimeHint"),
+    onStart: () => client.log(turn === PRACTICE_ID ? "practice_start" : "answer_start", turn === PRACTICE_ID ? null : turn),
+    onEnd: () => client.log(turn === PRACTICE_ID ? "practice_end" : "answer_end", turn === PRACTICE_ID ? null : turn),
+    onSubmit: (t) => (turn === PRACTICE_ID ? submitPractice(t) : submitAnswer(t)),
+  });
+
+  // ---------- boot / resume ----------
+  async function boot() {
+    const token = getToken();
+    if (!token) return noSession();
+    client = createSessionClient(token, { onAuthError: () => { clearToken(); noSession(); } });
+    let st;
+    try {
+      [st, survey] = await Promise.all([client.state(), loadSurveyConfig()]);
+    } catch (e) {
+      if (e.status === 401) return; // onAuthError already switched screens
+      $("p-nosessionText").innerHTML = `<span class="err">서버에 연결하지 못했습니다 (${escapeHtml(e.message)}). 연구자에게 알려주세요.</span>`;
+      $("p-bootRetry").classList.remove("hidden");
+      return show("p-nosession");
+    }
+    isTest = st.is_test;
+    answers = st.answers || {};
+    surveyDone = st.surveys || surveyDone;
+    window.dispatchEvent(new CustomEvent("pilot:session", { detail: { active: true, isTest } }));
+    guardNavigation();
+    resume(st.stage);
+  }
+
+  function noSession() {
+    window.dispatchEvent(new CustomEvent("pilot:session", { detail: { active: false, isTest: false } }));
+    show("p-nosession");
+  }
+
+  $("p-bootRetry").addEventListener("click", () => location.reload());
+
+  function resume(serverStage) {
+    if (serverStage === "pre_survey") return showSurvey("pre");
+    if (serverStage === "scenario") return showScenario();
+    if (serverStage === "practice") return showTurn(PRACTICE_ID);
+    const m = /^(q[123])_(answering|feedback)$/.exec(serverStage);
+    if (m) return showTurn(m[1]);
+    if (serverStage === "post_survey") return showSurvey("post");
+    return showEnd();
+  }
+
+  // Once a session is running, the browser's back button and accidental tab closes shouldn't
+  // take the participant out of the flow. (/researcher itself needs the password again anyway.)
+  function guardNavigation() {
+    history.pushState(null, "", location.href);
+    window.addEventListener("popstate", () => history.pushState(null, "", location.href));
+    window.addEventListener("beforeunload", (e) => {
+      if ((!finished && !isTest) || client.pendingEvents() > 0) e.preventDefault();
+    });
+  }
+
+  // ---------- surveys: one block per screen, saved block by block ----------
+  // Resumes at the first block not yet saved. fromStart (dev nav) always begins at block 1.
+  function showSurvey(phase, { fromStart = false } = {}) {
+    stage = phase === "pre" ? "pre_survey" : "post_survey";
+    surveyPhase = phase;
+    const i = fromStart ? 0 : survey[phase].findIndex((b) => !surveyDone[phase].includes(b.block));
+    if (i < 0) return finishSurvey(phase); // all blocks saved, only the *_submitted event was missing
+    renderSurvey(i);
+  }
+
+  function renderSurvey(i) {
+    surveyIdx = i;
+    const blocks = survey[surveyPhase];
+    const block = blocks[i];
+    show("p-survey");
+    $("p-surveyProgress").textContent = `${surveyPhase === "pre" ? "사전 설문" : "사후 설문"} ${i + 1} / ${blocks.length}`;
+    $("p-surveyTitle").textContent = block.title || "";
+    $("p-surveyInstr").textContent = block.instruction || "";
+    $("p-surveyInstr").classList.toggle("hidden", !block.instruction);
+    $("p-surveyErr").textContent = "";
+    $("p-surveyNext").textContent = surveyPhase === "post" && i === blocks.length - 1 ? "제출" : "다음";
+    surveyForm = renderSurveyBlock($("p-surveyItems"), block);
     updateDevPanel();
-  };
+    window.scrollTo(0, 0);
+  }
 
-  window.addEventListener("pilot:devmode", (e) => {
-    devMode = e.detail.on;
-    devNav.classList.toggle("hidden", !devMode);
-    // dev/injected sessions aren't real participant data — don't let them get downloaded as if they were
-    downloadBtn.disabled = devMode;
-    downloadHint.classList.toggle("hidden", !devMode);
-    updateDevPanel();
-    renderDevInfo();
-    renderCompDevInfo(lastComparisonBlock);
+  $("p-surveyNext").addEventListener("click", async () => {
+    const block = survey[surveyPhase][surveyIdx];
+    const { answers: values, missing } = surveyForm.collect();
+    surveyForm.markMissing(missing);
+    if (missing.length) {
+      $("p-surveyErr").textContent = `응답하지 않은 문항이 ${missing.length}개 있습니다. 모든 문항에 응답해주세요.`;
+      return;
+    }
+    const btn = $("p-surveyNext");
+    btn.disabled = true;
+    $("p-surveyErr").textContent = "";
+    try {
+      await client.survey(surveyPhase, block.block, values);
+      if (!surveyDone[surveyPhase].includes(block.block)) surveyDone[surveyPhase].push(block.block);
+      if (surveyIdx < survey[surveyPhase].length - 1) renderSurvey(surveyIdx + 1);
+      else finishSurvey(surveyPhase);
+    } catch (e) {
+      $("p-surveyErr").textContent = `저장하지 못했습니다 (${e.message}). 다시 눌러주세요. 계속되면 연구자에게 알려주세요.`;
+    } finally {
+      btn.disabled = false;
+    }
   });
 
-  const input = createAnswerInput({
-    statusEl: $("p-status"), statusText: $("p-statusText"), transcriptEl: $("p-transcript"),
-    recBtn: $("p-recBtn"), submitBtn: $("p-submitBtn"), timeEl: $("p-recTime"), timeHintEl: $("p-recTimeHint"),
-    onSubmit: (t) => onAnswerSubmit(t),
-  });
+  $("p-surveyFill").addEventListener("click", () => surveyForm?.fillRandom());
 
-  startBtn.addEventListener("click", () => {
-    const id = idInput.value.trim();
-    if (!id) { idInput.focus(); return; }
-    const rotation = rotationFor(id);
-    session = { id, rotation, step: 0, blocks: [], startedAt: new Date().toISOString() };
-    console.log("[pilot] session start:", id, "| rotation", rotation.index, rotation.map);
-    show("p-immersed");
-    startBlock();
-  });
+  function finishSurvey(phase) {
+    if (phase === "pre") { client.log("survey_pre_submitted"); showScenario(); }
+    else { client.log("survey_post_submitted"); showEnd(); }
+  }
 
-  // ---------- immersed ----------
-  function startBlock() {
-    const qid = QUESTION_SEQUENCE[session.step];
-    progressEl.textContent = `질문 ${session.step + 1} / ${QUESTION_SEQUENCE.length}`;
-    questionEl.textContent = QUESTIONS[qid];
+  function showScenario() {
+    stage = "scenario"; show("p-scenario"); updateDevPanel();
+    client.log("scenario_shown");
+  }
+  $("p-scenarioNext").addEventListener("click", () => showTurn(PRACTICE_ID));
+
+  function showEnd() { stage = "done"; finished = true; show("p-end"); updateDevPanel(); }
+
+  // ---------- interview turns ----------
+  function showTurn(qid) {
+    turn = qid;
+    stage = qid;
+    pendingTranscript = null;
+    const isPractice = qid === PRACTICE_ID;
+    show("p-interview");
+    progressEl.textContent = isPractice ? "연습" : `질문 ${QUESTION_SEQUENCE.indexOf(qid) + 1} / ${QUESTION_SEQUENCE.length}`;
+    practiceGuide.classList.toggle("hidden", !isPractice);
+    questionEl.textContent = isPractice ? PRACTICE_PROMPT : QUESTIONS[qid];
     feedbackWrap.classList.add("hidden");
-    evalWrap.classList.add("hidden");
-    evalWrap.innerHTML = "";
+    answerRetryBtn.classList.add("hidden");
     nextBtn.classList.add("hidden");
+    devInfo.classList.add("hidden");
     input.reset();
-    devInjectSel.innerHTML = '<option value="">— inject test transcript —</option>' +
-      CORPUS.filter((e) => e.questionId === qid).map((e) => {
-        const [s, t, r] = e.profile;
-        return `<option value="${e.id}">${escapeHtml(e.id)} · S${s} T${t} R${r}</option>`;
-      }).join("");
+    populateInject();
     updateDevPanel();
-    renderDevInfo();
+
+    // reload while this question's feedback was already generated: show it again, don't re-ask
+    if (isPractice && answers[PRACTICE_ID]) {
+      input.showDone(answers[PRACTICE_ID].transcript);
+      practiceDone();
+    } else if (!isPractice && answers[qid]?.feedback) {
+      input.showDone(answers[qid].transcript);
+      renderFeedback(answers[qid]);
+    } else if (!isPractice) {
+      client.log("question_shown", qid);
+    }
   }
 
-  // dev only: show PHASE 1 scores/strength/weakness + the coach's feedback style for this question,
-  // right above the coach's feedback bubble — visually flagged as dev-only (amber, matches devnav/banner).
-  function renderDevInfo() {
-    const block = session && session.blocks[session.step];
-    if (!devMode || !block) { devInfo.classList.add("hidden"); return; }
-    devInfoScores.innerHTML = ["situation", "task_and_action", "result"].map((el) => {
-      const r = block.scores[el].rating;
-      let badge = "";
-      if (el === block.strong) badge = '<span class="badge strong">strength</span>';
-      else if (el === block.weak) badge = '<span class="badge weak">weakness</span>';
-      return `<div class="score"><span class="sname">${ELNAME[el]}</span><span class="sval">${r} · ${RLABEL[r]}</span>${badge}</div>`;
-    }).join("");
-    devInfoStyle.textContent = `Coach style: ${CLABEL[block.condition]}`;
-    devInfo.classList.remove("hidden");
+  async function submitPractice(transcript) {
+    try { await client.answer(PRACTICE_ID, transcript); answers[PRACTICE_ID] = { transcript }; }
+    catch (e) { console.error("[practice] not saved:", e.message); } // practice is excluded from analysis
+    practiceDone();
   }
 
-  devInjectSel.addEventListener("change", () => {
-    if (!devInjectSel.value) return;
-    const e = CORPUS.find((c) => c.id === devInjectSel.value);
-    devInjectSel.value = "";
-    if (!e) return;
-    input.reset();
-    input.setTranscript(e.transcript);
-    input.lock();
-    onAnswerSubmit(e.transcript);
-  });
+  function practiceDone() {
+    statusText.textContent = "연습이 끝났습니다. 말한 내용이 화면에 제대로 표시되었는지 확인해주세요.";
+    nextBtn.textContent = "면접 시작하기";
+    nextBtn.classList.remove("hidden");
+  }
 
-  async function onAnswerSubmit(transcript) {
-    const qid = QUESTION_SEQUENCE[session.step];
-    const condition = session.rotation.map[qid];
-    input.lock();
-    $("p-statusText").textContent = "피드백 생성 중…";
+  async function submitAnswer(transcript, injected = false) {
+    const qid = turn;
+    pendingTranscript = { transcript, injected };
+    answerRetryBtn.classList.add("hidden");
+    statusText.textContent = "피드백을 준비하는 중…";
     feedbackWrap.classList.remove("hidden");
     feedbackEl.innerHTML = '<span class="muted">…</span>';
-    devInfo.classList.add("hidden"); // clear the previous assessment immediately, before the new one resolves
     try {
-      const a = await api("/api/assess", { question: QUESTIONS[qid], transcript });
-      const f = await api("/api/feedback", { context: a.context, condition });
-      feedbackEl.textContent = f.feedback; // participant sees ONLY the feedback (no scores)
-      session.blocks[session.step] = {
-        qid, condition, transcript,
-        scores: a.scores, strong: a.strong, weak: a.weak, context: a.context,
-        feedback: f.feedback,
-      };
-      console.log("[pilot] block", session.step, "| qid", qid, "| condition", condition,
-        "| scores", a.scores, "| strong", a.strong, "| weak", a.weak);
-    } catch (err) {
-      feedbackEl.innerHTML = `<span class="err">문제가 발생했습니다 (${escapeHtml(err.message)}). 연구자에게 알려주세요.</span>`;
+      const r = await client.answer(qid, transcript, injected);
+      if (turn !== qid) return; // dev nav moved on meanwhile
+      answers[qid] = { transcript, ...r };
+      statusText.textContent = "";
+      renderFeedback(answers[qid]);
+    } catch (e) {
+      if (turn !== qid) return;
+      statusText.textContent = "";
+      feedbackEl.innerHTML = `<span class="err">문제가 발생했습니다 (${escapeHtml(e.message)}). [다시 시도]를 눌러주세요. 계속되면 연구자에게 알려주세요.</span>`;
+      answerRetryBtn.classList.remove("hidden");
     }
-    $("p-statusText").textContent = "";
-    renderDevInfo();
-    renderEval();
-    evalWrap.classList.remove("hidden");
-    nextBtn.classList.remove("hidden");
-    nextBtn.disabled = true;
   }
 
-  function renderEval() {
-    evalResponses = {};
-    evalOpenEnded = "";
-    evalWrap.innerHTML = `
-      <div class="evalitem openended">
-        <label class="qlabel" for="p-evalOpen">코치의 피드백이 어떻게 느껴졌는지 적어주세요.</label>
-        <textarea id="p-evalOpen" rows="3"></textarea>
-      </div>` +
-      EVAL_ITEMS.map((it) => `
-      <div class="evalitem">
-        <div class="qlabel">${escapeHtml(it.label)}</div>
-        <div class="likert">
-          <span class="anchor">${escapeHtml(it.lo)}</span>
-          <div class="likert-opts">
-            ${[1, 2, 3, 4, 5, 6, 7].map((n) =>
-              `<label><input type="radio" name="eval-${it.key}" value="${n}"><span class="pill">${n}</span></label>`
-            ).join("")}
-          </div>
-          <span class="anchor">${escapeHtml(it.hi)}</span>
-        </div>
-      </div>`).join("");
+  answerRetryBtn.addEventListener("click", () => {
+    if (pendingTranscript) submitAnswer(pendingTranscript.transcript, pendingTranscript.injected);
+  });
 
-    const updateNextEnabled = () => {
-      const allRated = EVAL_ITEMS.every((it) => evalResponses[it.key] != null);
-      nextBtn.disabled = !(allRated && evalOpenEnded.trim().length > 0);
-    };
-    evalWrap.querySelector("#p-evalOpen").addEventListener("input", (e) => {
-      evalOpenEnded = e.target.value;
-      updateNextEnabled();
-    });
-    evalWrap.querySelectorAll('input[type="radio"]').forEach((r) => {
-      r.addEventListener("change", (e) => {
-        evalResponses[e.target.name.replace("eval-", "")] = Number(e.target.value);
-        updateNextEnabled();
-      });
-    });
+  function renderFeedback(a) {
+    feedbackWrap.classList.remove("hidden");
+    feedbackEl.textContent = a.feedback; // participant sees ONLY the feedback text
+    client.log("feedback_shown", turn);
+    renderDevInfo(a);
+    nextBtn.textContent = turn === "q3" ? "설문으로 넘어가기" : "다음 질문";
+    nextBtn.classList.remove("hidden");
   }
 
   nextBtn.addEventListener("click", () => {
-    if (session.blocks[session.step]) session.blocks[session.step].eval = { openEnded: evalOpenEnded, ...evalResponses };
-    console.log("[pilot] eval block", session.step, "| responses", { openEnded: evalOpenEnded, ...evalResponses });
-    session.step += 1;
-    if (session.step < QUESTION_SEQUENCE.length) startBlock();
-    else { show("p-comparison"); buildComparison(); }
+    if (turn === PRACTICE_ID) return showTurn(QUESTION_SEQUENCE[0]);
+    client.log("next_clicked", turn); // for Q3 this click ends the Q3 dwell time
+    const i = QUESTION_SEQUENCE.indexOf(turn);
+    if (i < QUESTION_SEQUENCE.length - 1) showTurn(QUESTION_SEQUENCE[i + 1]);
+    else showSurvey("post");
   });
 
-  // ---------- comparison tail (normally the LAST question's answer: Q3) ----------
-  // In dev mode a transcript can be injected here directly (any question), via compDevInjectSel below,
-  // so `blockOverride` lets that bypass the real Q3 answer.
-  function buildComparison(blockOverride) {
-    const block = blockOverride || session.blocks[QUESTION_SEQUENCE.length - 1];
-    lastComparisonBlock = block || null;
-    compHint.textContent = "";
-    compNext.disabled = true;
-    if (!block) {
-      compCards.innerHTML = devMode
-        ? '<div class="muted">위에서 대본을 선택하면 비교용 피드백이 생성됩니다.</div>'
-        : '<div class="err">답변 데이터가 없습니다. 다시 시작해주세요.</div>';
-      renderCompDevInfo(null);
-      return;
-    }
+  // ---------- dev mode (test sessions only) ----------
+  window.addEventListener("pilot:devmode", (e) => {
+    devMode = e.detail.on;
+    updateDevPanel();
+    if (!devMode) devInfo.classList.add("hidden");
+    else if (turn && answers[turn]?.scores) renderDevInfo(answers[turn]);
+  });
 
-    compQuestion.textContent = QUESTIONS[block.qid];
-    compAnswer.textContent = block.transcript;
-    const labels = ["A", "B", "C"];
-    const order = shuffle([...CONDITIONS]); // randomized left-right order
-    session.comparison = { qid: block.qid, labelMap: {}, feedbacks: {}, ratings: {}, recognition: {} };
-    order.forEach((cond, i) => { session.comparison.labelMap[labels[i]] = cond; });
-    renderCompDevInfo(block);
-
-    compCards.innerHTML = order.map((cond, i) => `
-      <div class="card">
-        <div class="clabel">피드백 ${labels[i]}</div>
-        <div class="cbody muted" id="p-comp-body-${labels[i]}">생성 중…</div>
-        <div class="compcardrate">
-          ${COMPARISON_RATE_ITEMS.map((it) => `
-          <div class="qlabel">${escapeHtml(it.label)}</div>
-          <div class="likert">
-            <span class="anchor">${escapeHtml(it.lo)}</span>
-            <div class="likert-opts">
-              ${[1, 2, 3, 4, 5, 6, 7].map((n) =>
-                `<label><input type="radio" name="comp-rate-${it.key}-${labels[i]}" data-lab="${labels[i]}" data-key="${it.key}" value="${n}"><span class="pill">${n}</span></label>`
-              ).join("")}
-            </div>
-            <span class="anchor">${escapeHtml(it.hi)}</span>
-          </div>`).join("")}
-        </div>
-        <div class="compcardrecog">
-          <div class="reclabel">이 피드백을 가장 잘 설명하는 것은 무엇인가요?</div>
-          ${RECOGNITION_OPTIONS.map((opt) =>
-            `<label class="recopt"><input type="radio" name="comp-recog-${labels[i]}" value="${opt.key}"> ${escapeHtml(opt.text)}</label>`
-          ).join("")}
-        </div>
-      </div>`).join("");
-
-    // generate 3 fresh feedbacks in parallel on the answer's context
-    order.forEach((cond, i) => {
-      const lab = labels[i];
-      api("/api/feedback", { context: block.context, condition: cond })
-        .then((d) => {
-          session.comparison.feedbacks[lab] = d.feedback;
-          const b = root.querySelector(`#p-comp-body-${lab}`);
-          if (b) { b.textContent = d.feedback; b.classList.remove("muted"); }
-        })
-        .catch((err) => {
-          const b = root.querySelector(`#p-comp-body-${lab}`);
-          if (b) { b.textContent = `⚠ ${err.message}`; b.classList.remove("muted"); b.classList.add("err"); }
-        });
-    });
-
-    const updateCompGating = () => {
-      const allRated = labels.every((lab) =>
-        COMPARISON_RATE_ITEMS.every((it) => session.comparison.ratings[lab]?.[it.key] != null));
-      const allRecognized = labels.every((lab) => session.comparison.recognition[lab] != null);
-      compNext.disabled = !(allRated && allRecognized);
-    };
-    compCards.querySelectorAll('input[type="radio"][name^="comp-rate-"]').forEach((r) => {
-      r.addEventListener("change", (e) => {
-        const lab = e.target.dataset.lab;
-        session.comparison.ratings[lab] = session.comparison.ratings[lab] || {};
-        session.comparison.ratings[lab][e.target.dataset.key] = Number(e.target.value);
-        updateCompGating();
-      });
-    });
-    compCards.querySelectorAll('input[type="radio"][name^="comp-recog-"]').forEach((r) => {
-      r.addEventListener("change", (e) => {
-        session.comparison.recognition[e.target.name.replace("comp-recog-", "")] = e.target.value;
-        updateCompGating();
-      });
-    });
-  }
-
-  // dev only: show PHASE 1 scores/strength/weakness for the compared answer, plus which style
-  // each of Feedback A/B/C actually is (normally randomized/hidden from participants).
-  function renderCompDevInfo(block) {
-    if (!devMode || !block || !block.scores) { compDevInfo.classList.add("hidden"); return; }
-    compDevInfoScores.innerHTML = ["situation", "task_and_action", "result"].map((el) => {
-      const r = block.scores[el].rating;
+  function renderDevInfo(a) {
+    if (!devMode || !a.scores) { devInfo.classList.add("hidden"); return; }
+    $("p-devInfoScores").innerHTML = ["situation", "task_and_action", "result"].map((el) => {
+      const r = a.scores[el].rating;
       let badge = "";
-      if (el === block.strong) badge = '<span class="badge strong">strength</span>';
-      else if (el === block.weak) badge = '<span class="badge weak">weakness</span>';
+      if (el === a.strong) badge = '<span class="badge strong">strength</span>';
+      else if (el === a.weak) badge = '<span class="badge weak">weakness</span>';
       return `<div class="score"><span class="sname">${ELNAME[el]}</span><span class="sval">${r} · ${RLABEL[r]}</span>${badge}</div>`;
     }).join("");
-    compDevInfoStyles.textContent = ["A", "B", "C"]
-      .map((lab) => `${lab}: ${CLABEL[session.comparison.labelMap[lab]]}`).join("   ·   ");
-    compDevInfo.classList.remove("hidden");
+    $("p-devInfoStyle").textContent = a.condition ? `Coach style: ${CLABEL[a.condition]}` : "";
+    devInfo.classList.remove("hidden");
   }
 
-  // dev-only: inject any corpus transcript (any question) straight into the comparison stage
-  compDevInjectSel.innerHTML = '<option value="">— inject test transcript —</option>' +
-    QUESTION_SEQUENCE.flatMap((qid) => CORPUS.filter((e) => e.questionId === qid)).map((e) => {
-      const [s, t, r] = e.profile;
-      return `<option value="${e.id}">${e.questionId.toUpperCase()} · ${escapeHtml(e.id)} · S${s} T${t} R${r}</option>`;
-    }).join("");
-  compDevInjectSel.addEventListener("change", async () => {
-    if (!compDevInjectSel.value) return;
-    const e = CORPUS.find((c) => c.id === compDevInjectSel.value);
-    compDevInjectSel.value = "";
-    if (!e) return;
-    compQuestion.textContent = QUESTIONS[e.questionId]; // update immediately — no need to wait on the assess call
-    compAnswer.textContent = e.transcript;
-    compCards.innerHTML = '<div class="muted">Assessing…</div>';
-    compDevInfo.classList.add("hidden"); // clear the previous assessment immediately, before the new one resolves
-    try {
-      const a = await api("/api/assess", { question: QUESTIONS[e.questionId], transcript: e.transcript });
-      buildComparison({ qid: e.questionId, transcript: e.transcript, context: a.context, scores: a.scores, strong: a.strong, weak: a.weak });
-    } catch (err) {
-      compCards.innerHTML = `<div class="err">평가 실패: ${escapeHtml(err.message)}</div>`;
-    }
-  });
-
-  compNext.addEventListener("click", () => {
-    console.log("[pilot] comparison | labelMap", session.comparison.labelMap,
-      "| ratings", session.comparison.ratings, "| recognition", session.comparison.recognition);
-    session.completedAt = new Date().toISOString();
-    show("p-end");
-    console.log("[pilot] SESSION COMPLETE\n" + JSON.stringify(session, null, 2));
-  });
-
-  // ---------- end: download full session (no backend) ----------
-  downloadBtn.addEventListener("click", () => {
-    if (!session) return;
-    const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `pilot_${session.id}_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  });
-
-  // ---------- dev nav: a single, ungated way to jump to any stage (replaces Start/Next/rating gates) ----------
-  function currentStageIndex() {
-    const active = screens.find((s) => !s.classList.contains("hidden"));
-    if (!active) return 0;
-    if (active.id === "p-landing") return 0;
-    if (active.id === "p-immersed") return 1 + (session ? session.step : 0);
-    if (active.id === "p-comparison") return 4;
-    return 5; // p-end
+  function populateInject() {
+    devInjectSel.innerHTML = '<option value="">— 테스트 대본 주입 —</option>' +
+      CORPUS.filter((e) => e.questionId === turn).map((e) => {
+        const [s, t, r] = e.profile;
+        return `<option value="${e.id}">${escapeHtml(e.id)} · S${s} T${t} R${r}</option>`;
+      }).join("");
   }
+
+  devInjectSel.addEventListener("change", () => {
+    const e = CORPUS.find((c) => c.id === devInjectSel.value);
+    devInjectSel.value = "";
+    if (!e || !isTest) return;
+    input.showDone(e.transcript);
+    submitAnswer(e.transcript, true);
+  });
 
   function updateDevPanel() {
-    const idx = currentStageIndex();
-    devStageLabel.textContent = `단계: ${STAGE_LABELS[idx]}`;
-    devPrevBtn.disabled = idx <= 0;
-    devNextBtn.disabled = idx >= STAGE_LABELS.length - 1;
-    devInjectRow.classList.toggle("hidden", !(devMode && idx >= 1 && idx <= 3));
-    compDevInjectRow.classList.toggle("hidden", !(devMode && idx === 4));
+    devNav.classList.toggle("hidden", !devMode);
+    devStageLabel.textContent = stage ? `단계: ${STAGE_LABELS[stage]}` : "";
+    const idx = STAGES.indexOf(stage);
+    $("p-devPrev").disabled = idx <= 0;
+    $("p-devNext").disabled = idx < 0 || idx >= STAGES.length - 1;
+    devInjectRow.classList.toggle("hidden", !(devMode && /^q[123]$/.test(stage || "")));
+    $("p-surveyDevRow").classList.toggle("hidden", !(devMode && /_survey$/.test(stage || "")));
   }
 
-  function ensureDevSession() {
-    if (!session) {
-      const id = idInput.value.trim() || "DEV";
-      session = { id, rotation: rotationFor(id), step: 0, blocks: [], startedAt: new Date().toISOString() };
-    }
+  function goToStage(s) {
+    if (s === "pre_survey") showSurvey("pre", { fromStart: true });
+    else if (s === "scenario") showScenario();
+    else if (s === "practice") showTurn(PRACTICE_ID);
+    else if (/^q[123]$/.test(s)) showTurn(s);
+    else if (s === "post_survey") showSurvey("post", { fromStart: true });
+    else showEnd();
   }
+  $("p-devPrev").addEventListener("click", () => goToStage(STAGES[STAGES.indexOf(stage) - 1]));
+  $("p-devNext").addEventListener("click", () => goToStage(STAGES[STAGES.indexOf(stage) + 1]));
 
-  function goToStage(index) {
-    const clamped = Math.max(0, Math.min(STAGE_LABELS.length - 1, index));
-    ensureDevSession();
-    if (clamped === 0) { show("p-landing"); }
-    else if (clamped <= 3) { session.step = clamped - 1; show("p-immersed"); startBlock(); }
-    else if (clamped === 4) { show("p-comparison"); buildComparison(); }
-    else { show("p-end"); }
-  }
-
-  devPrevBtn.addEventListener("click", () => goToStage(currentStageIndex() - 1));
-  devNextBtn.addEventListener("click", () => goToStage(currentStageIndex() + 1));
-
-  show("p-landing");
+  show("p-nosession");
+  boot();
 }
