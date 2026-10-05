@@ -23,6 +23,7 @@ export class SpeechRecognitionManager {
     this.onUpdate = null;        // (finalText, interimText) => void
     this.onStatusChange = null;  // (isListening) => void
     this.onError = null;         // (errorCode) => void
+    this.onStop = null;          // () => void — fires once recognition has actually ended after stop()
 
     this.recognition.onresult = (e) => {
       this.interimTranscript = "";
@@ -39,13 +40,16 @@ export class SpeechRecognitionManager {
       this.onError?.(e.error);
     };
 
-    // Chrome fires onend on silence. Keep alive unless the user pressed stop.
+    // Chrome fires onend on silence. Keep alive unless the user pressed stop. On a manual stop,
+    // the browser flushes any buffered final result via onresult before onend fires, so onend is
+    // the reliable signal that the transcript is complete — not a fixed timeout after calling stop().
     this.recognition.onend = () => {
       if (this.isListening && !this.manualStop) {
         try { this.recognition.start(); } catch { /* already starting */ }
       } else {
         this.isListening = false;
         this.onStatusChange?.(false);
+        if (this.manualStop) this.onStop?.();
       }
     };
 

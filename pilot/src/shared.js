@@ -113,6 +113,9 @@ export function createAnswerInput({ statusEl, statusText, transcriptEl, recBtn, 
       ? '<span class="err">마이크가 차단되었습니다. 마이크 접근을 허용한 뒤 다시 시도해주세요.</span>'
       : `인식 오류: ${escapeHtml(code)}. 다시 시도해주세요.`;
   };
+  // fires once the browser has actually flushed the last final result and ended recognition —
+  // more reliable than a fixed delay after stop(), which raced the transcript on longer answers
+  stt.onStop = () => toRecorded();
 
   function toRecorded() {
     statusText.textContent = currentTranscript ? "녹음이 완료되었습니다. 제출해주세요." : "녹음된 내용이 없습니다. 다시 시도해주세요.";
@@ -136,7 +139,7 @@ export function createAnswerInput({ statusEl, statusText, transcriptEl, recBtn, 
 
   recBtn.addEventListener("click", () => {
     if (!stt.isListening) { placeholder(); currentTranscript = ""; stt.start(); stopwatchStart(); }
-    else { stt.stop(); stopwatchStop(); setTimeout(toRecorded, 150); }
+    else { statusText.textContent = "인식 결과를 정리하는 중…"; stt.stop(); stopwatchStop(); }
   });
   if (reRecBtn) reRecBtn.addEventListener("click", () => {
     reRecBtn.classList.add("hidden"); submitBtn.classList.add("hidden");
