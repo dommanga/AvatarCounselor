@@ -1,7 +1,8 @@
 // Concurrent consent test against a deployment (e.g. a Preview) over HTTP. The deployment and the local
 // DATABASE_URL must use the same database branch: sessions are created here, consented there.
 //   node --env-file=.env scripts/test-assign-http.js --host <dev endpoint id> --url https://<deployment> [--audio]
-// Protected deployments: set VERCEL_AUTOMATION_BYPASS_SECRET (Protection Bypass for Automation).
+// Protected Preview deployments: the local development VERCEL_OIDC_TOKEN (vercel env pull) is sent as
+// x-vercel-trusted-oidc-idp-token (Trusted Sources; same-project Preview access works by default).
 
 import crypto from "crypto";
 import { parseArgs } from "node:util";
@@ -25,13 +26,13 @@ function check(name, ok, info = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${info ? `  (${info})` : ""}`);
 }
 
-const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+const trusted = process.env.VERCEL_OIDC_TOKEN;
 async function post(token, key, action, body, { raw, mime, query = "" } = {}) {
   const r = await fetch(`${base}/api/session/${action}${query}`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`, "x-client-key": key, "content-type": mime || "application/json",
-      ...(bypass && { "x-vercel-protection-bypass": bypass }),
+      ...(trusted && { "x-vercel-trusted-oidc-idp-token": trusted }),
     },
     body: raw ?? JSON.stringify(body),
   });
