@@ -10,3 +10,11 @@ export function optionsOf(item) {
   const opts = item.options || [];
   return item.other && !opts.includes(OTHER_LABEL) ? [...opts, OTHER_LABEL] : opts;
 }
+
+// A block with its items in the order stored for this session (config order if there is none).
+export function applyOrder(block, order) {
+  if (!Array.isArray(order)) return block;
+  const byId = new Map(block.items.map((it) => [it.id, it]));
+  const items = order.map((id) => byId.get(id)).filter(Boolean);
+  return items.length === block.items.length ? { ...block, items } : block;
+}

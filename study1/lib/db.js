@@ -20,9 +20,21 @@ export function db() {
 // functions shouldn't keep sockets open between invocations.
 export async function withTransaction(fn) {
   const pool = new Pool({ connectionString: url() });
-  const c = await pool.connect();
+  // A WebSocket connection can fail transiently; nothing has run yet at this point, so retrying is safe.
+  let c;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      c = await pool.connect();
+      await c.query("BEGIN");
+      break;
+    } catch (e) {
+      c?.release(true);
+      c = undefined;
+      if (attempt >= 3) { await pool.end().catch(() => {}); throw e instanceof Error ? e : new Error(e?.message || "database connection failed"); }
+      await new Promise((r) => setTimeout(r, 300 * attempt));
+    }
+  }
   try {
-    await c.query("BEGIN");
     const result = await fn(c);
     await c.query("COMMIT");
     return result;

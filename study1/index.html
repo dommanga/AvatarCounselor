@@ -167,6 +167,20 @@
 
     .guide { margin: 0 0 16px; padding-left: 22px; font-size: 15px; }
     .guide li { margin-bottom: 6px; }
+
+    /* participant flow additions */
+    .landing.wide { max-width: 640px; }
+    .landing.center { text-align: center; }
+    .pre { white-space: pre-line; }
+    .sentence { font-size: 20px; font-weight: 600; }
+    .countdown { font-size: 17px; }
+    .meter { height: 10px; background: var(--border); border-radius: 999px; overflow: hidden; margin: 12px 0; }
+    .meterfill { height: 100%; width: 0; background: var(--accent); transition: width .1s linear; }
+    .spinner { width: 36px; height: 36px; margin: 24px auto 16px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 4s; } .meterfill { transition: none; } }
+    a.btn { display: inline-flex; align-items: center; font: inherit; font-size: 16px; font-weight: 600; text-decoration: none; padding: 13px 22px; min-height: 48px; border-radius: 10px; border: 1px solid var(--border); }
+    a.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   </style>
 </head>
 <body>
@@ -181,6 +195,7 @@
     </div>
 
     <!-- ================= PARTICIPANT VIEW ================= -->
+    <!-- Wording comes from src/copy.js: data-copy="key" fills the text of the element. -->
     <div id="participantView" class="view">
       <!-- dev nav: persistent stage-jumping bar, visible above every screen once dev mode is on -->
       <div class="devnav hidden" id="p-devNav">
@@ -189,46 +204,47 @@
         <span class="devnavstage" id="p-devStageLabel"></span>
         <button type="button" id="p-devNext">다음 ▶</button>
       </div>
+
       <!-- loading, or opened without a participant link -->
       <section class="screen" id="p-nosession">
         <div class="landing">
-          <h2>잠시만 기다려 주세요</h2>
-          <p class="muted" id="p-nosessionText">불러오는 중…</p>
-          <button class="hidden" id="p-bootRetry">다시 시도</button>
+          <h2 data-copy="loadingTitle"></h2>
+          <p class="muted" id="p-nosessionText" data-copy="loading"></p>
+          <button class="hidden" id="p-bootRetry" data-copy="retryBtn"></button>
         </div>
       </section>
 
       <!-- electronic consent (placeholder: the consent text comes in a later phase) -->
       <section class="screen hidden" id="p-consent">
         <div class="landing">
-          <h2>연구 참여 동의</h2>
-          <div class="pbox">[자리표시] 동의서 본문이 여기에 들어갑니다.</div>
+          <h2 data-copy="consentTitle"></h2>
+          <div class="pbox" data-copy="consentBody"></div>
           <div class="evalpanel">
             <div class="evalitem">
-              <div class="qlabel">연구 참여를 중간에 그만두는 경우, 그때까지 수집된 자료를</div>
+              <div class="qlabel" data-copy="consentWithdrawQ"></div>
               <div class="choices">
-                <label class="choice"><input type="radio" name="p-withdrawData" value="use"> 연구에 사용하는 것에 동의합니다.</label>
-                <label class="choice"><input type="radio" name="p-withdrawData" value="destroy"> 파기해 주시기 바랍니다.</label>
+                <label class="choice"><input type="radio" name="p-withdrawData" value="use"> <span data-copy="consentWithdrawUse"></span></label>
+                <label class="choice"><input type="radio" name="p-withdrawData" value="destroy"> <span data-copy="consentWithdrawDestroy"></span></label>
               </div>
             </div>
             <div class="evalitem">
-              <div class="qlabel">연구와 관련하여 새로운 정보가 생기면 통보받기를</div>
+              <div class="qlabel" data-copy="consentNotifyQ"></div>
               <div class="choices">
-                <label class="choice"><input type="radio" name="p-notify" value="yes"> 원합니다.</label>
-                <label class="choice"><input type="radio" name="p-notify" value="no"> 원하지 않습니다.</label>
+                <label class="choice"><input type="radio" name="p-notify" value="yes"> <span data-copy="consentNotifyYes"></span></label>
+                <label class="choice"><input type="radio" name="p-notify" value="no"> <span data-copy="consentNotifyNo"></span></label>
               </div>
             </div>
             <div class="evalitem">
-              <label class="choice"><input type="checkbox" id="p-consentAgree"> 위 내용을 읽고 연구 참여에 동의합니다.</label>
+              <label class="choice"><input type="checkbox" id="p-consentAgree"> <span data-copy="consentAgree"></span></label>
             </div>
           </div>
-          <p class="muted">사례비 지급에 필요한 정보는 실험이 끝난 뒤 별도 양식으로 받습니다.</p>
-          <button class="primary" id="p-consentBtn">참여 시작하기</button>
+          <p class="muted" data-copy="consentPaymentNote"></p>
+          <button class="primary" id="p-consentBtn" data-copy="consentStart"></button>
           <div class="err" id="p-consentErr"></div>
         </div>
       </section>
 
-      <!-- expired / completed / locked / abandoned / another window / invalid link -->
+      <!-- unsupported browser / expired / locked / another window / invalid link -->
       <section class="screen hidden" id="p-blocked">
         <div class="landing">
           <h2 id="p-blockedTitle"></h2>
@@ -236,78 +252,131 @@
         </div>
       </section>
 
-      <!-- survey: one block per screen, pre and post, rendered from survey_items.json -->
+      <!-- device test: speaker, then microphone -->
+      <section class="screen hidden" id="p-device">
+        <div class="landing wide">
+          <h2 data-copy="deviceTitle"></h2>
+          <div class="bubble" id="p-spkStep">
+            <div class="who" data-copy="speakerTitle"></div>
+            <p data-copy="speakerGuide"></p>
+            <div class="controls">
+              <button class="primary" id="p-spkPlay"></button>
+              <button class="hidden" id="p-spkNext" data-copy="speakerNext"></button>
+            </div>
+          </div>
+          <div class="bubble hidden" id="p-micStep">
+            <div class="who" data-copy="micTitle"></div>
+            <div id="p-micAsk">
+              <div class="controls"><button class="primary" id="p-micAllow"></button></div>
+            </div>
+            <div class="err" id="p-micErr"></div>
+            <div class="hidden" id="p-micTest">
+              <p data-copy="micGuide"></p>
+              <p class="sentence" data-copy="micSentence"></p>
+              <div class="transcript" id="p-micResult"></div>
+              <div class="muted" id="p-micStatus"></div>
+              <p class="muted" data-copy="micNote"></p>
+              <div class="controls">
+                <button class="rec primary" id="p-micAction"></button>
+                <button class="primary hidden" id="p-micNext" data-copy="micNext"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- survey: one block per screen; pre, mid (self-rating) and post, rendered from survey_items.json -->
       <section class="screen hidden" id="p-survey">
         <div class="progress" id="p-surveyProgress"></div>
         <h2 class="surveytitle" id="p-surveyTitle"></h2>
         <p class="instruction" id="p-surveyInstr"></p>
-        <div class="devrow hidden" id="p-surveyDevRow"><button type="button" class="devbtn" id="p-surveyFill">테스트 응답 채우기</button></div>
+        <div class="devrow hidden" id="p-surveyDevRow"><button type="button" class="devbtn" id="p-surveyFill" data-copy="surveyFill"></button></div>
         <div class="evalpanel" id="p-surveyItems"></div>
         <div class="err surveyerr" id="p-surveyErr"></div>
-        <button class="primary" id="p-surveyNext">다음</button>
+        <button class="primary" id="p-surveyNext"></button>
       </section>
 
       <section class="screen hidden" id="p-scenario">
         <div class="landing">
-          <h2>안내</h2>
-          <div class="bubble"><div class="text">당신은 꼭 가고 싶었던 회사의 서류 전형에 합격해, 곧 면접을 앞두고 있습니다. 면접 실력을 키우는 데 도움이 된다는 이야기를 듣고 AI 코치를 사용해보기로 했습니다. 지금부터 AI 코치와 함께 면접 연습을 시작합니다.</div></div>
-          <button class="primary" id="p-scenarioNext">다음</button>
+          <h2 data-copy="scenarioTitle"></h2>
+          <div class="bubble"><div class="text" data-copy="scenarioBody"></div></div>
+          <button class="primary" id="p-scenarioNext" data-copy="scenarioStart"></button>
         </div>
       </section>
 
-      <!-- interview turn, reused for the practice turn and each question in QUESTION_SEQUENCE -->
-      <section class="screen hidden" id="p-interview">
+      <!-- interview question: thinking time, then the answer (no transcript is shown) -->
+      <section class="screen hidden" id="p-question">
         <div class="devrow hidden" id="p-devInjectRow">
           <label for="p-devInject">테스트 대본 주입</label>
-          <select id="p-devInject"><option value="">— 테스트 대본 주입 —</option></select>
+          <select id="p-devInject"></select>
         </div>
-        <div class="progress" id="p-progress"></div>
-        <ul class="muted guide hidden" id="p-practiceGuide">
-          <li>먼저 연습 질문 하나로 마이크와 음성 인식을 확인합니다. 연습 답변에는 피드백이 없습니다.</li>
-          <li><span class="btn-chip primary">답변 시작</span>을 누르고 말한 뒤, 답변이 끝나면 <span class="btn-chip live">답변 완료</span>를 눌러주세요. 말하는 내용이 화면에 글자로 표시됩니다.</li>
-          <li>이어지는 면접 질문에는 <b>1분 내외</b>로 답해 주세요. 답변은 한 번만 할 수 있습니다.</li>
-          <li>본인의 경험을 자기 생각대로 이야기해 주세요. ChatGPT 같은 AI 도구는 사용하지 말아 주세요.</li>
-          <li>정답이 정해진 질문이 아니며, 당신의 생각과 경험을 자유롭게 표현할 수 있습니다.</li>
-          <li>답변 음성은 녹음되며, 문자로 변환된 내용을 확인한 뒤 파기됩니다.</li>
-        </ul>
+        <div class="progress" data-copy="questionTitle"></div>
+        <p class="muted" data-copy="questionGuide"></p>
         <div class="bubble coach">
-          <div class="who">AI 코치</div>
-          <div class="text" id="p-question"></div>
+          <div class="who" data-copy="coachLabel"></div>
+          <div class="text" id="p-questionText"></div>
         </div>
+        <div class="muted" id="p-qMessage"></div>
 
         <div class="panel">
-          <div class="status" id="p-status"><span id="p-statusText"></span></div>
-          <div class="transcript" id="p-transcript"><span class="placeholder">말한 답변이 여기에 표시됩니다.</span></div>
-          <div class="controls">
-            <!-- one button that flips 답변 시작 -> 답변 완료; retry only appears when nothing was recognized -->
-            <button class="rec primary" id="p-actionBtn">답변 시작</button>
-            <button class="primary hidden" id="p-retryBtn">다시 답변하기</button>
-            <span class="rectime" id="p-recTime">00:00</span>
-            <span class="rectime-hint hidden" id="p-recTimeHint">이제 답변을 마무리 해주세요</span>
+          <div id="p-think">
+            <div class="countdown"><span data-copy="thinkLabel"></span> <span class="rectime" id="p-thinkTime"></span></div>
+            <div class="meter"><div class="meterfill" id="p-thinkBar"></div></div>
+            <div class="controls"><button class="rec primary" id="p-startBtn" data-copy="answerStart"></button></div>
           </div>
+          <div class="hidden" id="p-answering">
+            <div class="status live"><span class="dot"></span><span id="p-statusText"></span></div>
+            <div class="meter"><div class="meterfill" id="p-meter"></div></div>
+            <div class="controls">
+              <button class="rec live" id="p-doneBtn" data-copy="answerDone"></button>
+              <span class="rectime" id="p-elapsed">00:00</span>
+              <span class="muted" data-copy="answerLimit"></span>
+            </div>
+          </div>
+          <div class="err" id="p-qError"></div>
         </div>
+        <div class="controls"><button class="hidden" id="p-submitRetry" data-copy="retryBtn"></button></div>
+      </section>
 
+      <!-- waiting for the feedback -->
+      <section class="screen hidden" id="p-loading">
+        <div class="landing center">
+          <div class="spinner" aria-hidden="true"></div>
+          <h2 data-copy="loadingFeedback"></h2>
+          <div class="err" id="p-loadErr"></div>
+          <button class="hidden" id="p-loadRetry" data-copy="retryBtn"></button>
+        </div>
+      </section>
+
+      <!-- the feedback, all at once (text condition) -->
+      <section class="screen hidden" id="p-feedback">
+        <div class="bubble coach">
+          <div class="who" data-copy="feedbackTitle"></div>
+          <div class="text" id="p-feedbackText"></div>
+        </div>
         <div class="devinfo hidden" id="p-devInfo">
           <div class="devinfolabel">개발자 전용 — 1단계 평가 + 피드백 스타일</div>
           <div class="scores" id="p-devInfoScores"></div>
           <div class="devinfostyle" id="p-devInfoStyle"></div>
         </div>
+        <div class="controls"><button class="primary" id="p-toSurvey" data-copy="toSurvey"></button></div>
+      </section>
 
-        <div class="bubble coach hidden" id="p-feedbackWrap">
-          <div class="who">AI 코치 피드백</div>
-          <div class="text" id="p-feedback"></div>
-        </div>
-
-        <div class="controls">
-          <button class="hidden" id="p-answerRetry">다시 시도</button>
-          <button class="primary hidden" id="p-next">다음 질문</button>
+      <section class="screen hidden" id="p-debrief">
+        <div class="landing">
+          <h2 data-copy="debriefTitle"></h2>
+          <div class="bubble"><div class="text" data-copy="debriefBody"></div></div>
+          <button class="primary" id="p-debriefConfirm" data-copy="debriefConfirm"></button>
+          <div class="err" id="p-debriefErr"></div>
         </div>
       </section>
 
       <section class="screen hidden" id="p-end">
         <div class="landing">
-          <h2>감사합니다</h2>
-          <p>참여해 주셔서 감사합니다. 이제 이 창을 닫으셔도 됩니다.</p>
+          <h2 data-copy="endTitle"></h2>
+          <p class="pre" data-copy="endBody"></p>
+          <p><a class="btn primary" id="p-paymentLink" target="_blank" rel="noopener" data-copy="endPaymentBtn"></a></p>
+          <p class="muted" data-copy="endClose"></p>
         </div>
       </section>
     </div>

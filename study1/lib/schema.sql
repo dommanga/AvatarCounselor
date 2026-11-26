@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   lock_reason       text CHECK (lock_reason IN ('resume_limit', 'empty_answer', 'admin')),
   consent_withdraw_data text CHECK (consent_withdraw_data IN ('use', 'destroy')), -- consent form §8: on withdrawal
   consent_notify    text CHECK (consent_notify IN ('yes', 'no')),               -- consent form §11: new information
+  survey_order      jsonb,                  -- {phase: {block: [item ids in the order shown]}}, drawn at consent
+  debriefed_at      timestamptz,            -- debriefing confirmed (after completion)
   destroy_pending   boolean NOT NULL DEFAULT false, -- chose 'destroy' and ended without completing; scripts/purge-withdrawn.js
   data_purged_at    timestamptz,
   audio_verified_at timestamptz,            -- transcripts checked against the audio; audio may now be destroyed
@@ -96,7 +98,8 @@ CREATE TABLE IF NOT EXISTS events (
   type        text NOT NULL,
   question_id text,                         -- QUESTION_SEQUENCE id, NULL otherwise
   client_ts   bigint,                       -- Date.now() on the participant device (timing measures use this)
-  server_ts   timestamptz NOT NULL DEFAULT clock_timestamp()
+  server_ts   timestamptz NOT NULL DEFAULT clock_timestamp(),
+  data        jsonb                         -- small per-event payload (auto_started, mic test text, tab stage, ...)
 );
 CREATE INDEX IF NOT EXISTS events_session_idx ON events (session_id, seq);
 
@@ -110,6 +113,7 @@ CREATE TABLE IF NOT EXISTS answers (
   transcript       text NOT NULL,
   answer_truncated boolean NOT NULL DEFAULT false, -- built from the saved segments after an interruption
   answer_short     boolean NOT NULL DEFAULT false, -- under EMPTY_ANSWER_MIN_CHARS after the re-answer chance was used
+  client_transcript text,                   -- what the browser's STT had at submit (to spot lost segments)
   injected         boolean NOT NULL DEFAULT false, -- dev-mode corpus injection (test sessions only)
   status           text NOT NULL CHECK (status IN ('pending', 'done', 'error', 'stale')),
   stance           text,
@@ -157,13 +161,14 @@ CREATE TABLE IF NOT EXISTS audio_chunks (
   PRIMARY KEY (session_id, question_id, attempt, seq)
 );
 
--- Survey responses.
+-- Survey responses (phase: pre-survey, mid = self-rating before the feedback, post-survey).
 CREATE TABLE IF NOT EXISTS responses (
   session_id uuid NOT NULL REFERENCES sessions(id),
-  phase      text NOT NULL CHECK (phase IN ('pre', 'post')),
+  phase      text NOT NULL CHECK (phase IN ('pre', 'mid', 'post')),
   scale_id   text NOT NULL,
   item_id    text NOT NULL,
   value      jsonb NOT NULL,
+  display_order int,                        -- 1-based position the item was shown at
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, phase, item_id)
 );

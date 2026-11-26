@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { db, withTransaction } from "./db.js";
 import * as C from "./config.js";
 import { configSnapshot } from "./snapshot.js";
-import { SURVEY } from "./survey.js";
+import { SURVEY, buildSurveyOrder } from "./survey.js";
 
 export const ACTIVE = ["consented", "in_progress"];
 export const ENDED = ["completed", "expired", "abandoned", "locked"];
@@ -144,10 +144,10 @@ export async function consent(sessionId, choices) {
     }
     await c.query(`
       UPDATE sessions SET status = 'consented', consented_at = now(), last_activity_at = now(), updated_at = now(),
-             stance = $2, modality = $3, current_stage = 'pre_survey', config = $4, survey_version = $5,
-             consent_withdraw_data = $6, consent_notify = $7
+             stance = $2, modality = $3, current_stage = 'device_test', config = $4, survey_version = $5,
+             consent_withdraw_data = $6, consent_notify = $7, survey_order = $8
       WHERE id = $1`, [s.id, stance, modality, JSON.stringify(configSnapshot(stance)), SURVEY.version ?? null,
-                       choices.withdraw_data, choices.notify]);
+                       choices.withdraw_data, choices.notify, JSON.stringify(buildSurveyOrder())]);
     await c.query("INSERT INTO events (id, session_id, type) VALUES ($1, $2, 'consented')", [crypto.randomUUID(), s.id]);
     await c.query("INSERT INTO audit_log (actor, action, session_id, detail) VALUES ('system', 'consented', $1, $2)",
       [s.id, JSON.stringify({ stance, modality, is_test: s.is_test, ...choices })]);
@@ -190,7 +190,13 @@ export async function claim(sessionId, key, info) {
     const { rows: [s] } = await c.query(`
       SELECT *, (client_seen_at IS NULL OR client_seen_at < now() - make_interval(secs => $2)) AS client_stale
       FROM sessions WHERE id = $1 FOR UPDATE`, [sessionId, C.CLIENT_STALE_MS / 1000]);
-    if (ENDED.includes(s.status)) return { kind: "ended", status: s.status };
+    if (ENDED.includes(s.status)) {
+      // a completed session can still be opened (debriefing, payment form link): give this tab the key
+      if (s.status === "completed" && s.active_client_key !== key) {
+        await c.query("UPDATE sessions SET active_client_key = $2, client_seen_at = now(), client_released = false WHERE id = $1", [s.id, key]);
+      }
+      return { kind: "ended", status: s.status };
+    }
 
     let kind;
     if (s.active_client_key === key) kind = "reload";

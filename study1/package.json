@@ -6,6 +6,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
     "@vercel/blob": "^2.9.0",
+    "@vercel/functions": "^3.11.4",
     "openai": "^6.8.1"
   },
   "scripts": {

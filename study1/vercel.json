@@ -1,13 +1,29 @@
 {
   "cleanUrls": true,
-  "rewrites": [{ "source": "/s/:token", "destination": "/" }],
+  "rewrites": [
+    {
+      "source": "/s/:token",
+      "destination": "/"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Referrer-Policy", "value": "no-referrer" },
-        { "key": "X-Robots-Tag", "value": "noindex" }
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/session/*.js": {
+      "maxDuration": 60
+    }
+  }
 }

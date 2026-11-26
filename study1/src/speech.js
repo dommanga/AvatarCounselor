@@ -24,13 +24,17 @@ export class SpeechRecognitionManager {
     this.onStatusChange = null;  // (isListening) => void
     this.onError = null;         // (errorCode) => void
     this.onStop = null;          // () => void — fires once recognition has actually ended after stop()
+    this.onFinal = null;         // (text) => void — each finalized result, as it arrives
+    this.onRestart = null;       // () => void — recognition ended on its own (silence) and was started again
 
     this.recognition.onresult = (e) => {
       this.interimTranscript = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) this.finalTranscript += t + " ";
-        else this.interimTranscript += t;
+        if (e.results[i].isFinal) {
+          this.finalTranscript += t + " ";
+          this.onFinal?.(t.trim());
+        } else this.interimTranscript += t;
       }
       this.onUpdate?.(this.finalTranscript.trim(), this.interimTranscript.trim());
     };
@@ -45,7 +49,7 @@ export class SpeechRecognitionManager {
     // the reliable signal that the transcript is complete — not a fixed timeout after calling stop().
     this.recognition.onend = () => {
       if (this.isListening && !this.manualStop) {
-        try { this.recognition.start(); } catch { /* already starting */ }
+        try { this.recognition.start(); this.onRestart?.(); } catch { /* already starting */ }
       } else {
         this.isListening = false;
         this.onStatusChange?.(false);

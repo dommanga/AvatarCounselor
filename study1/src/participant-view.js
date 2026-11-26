@@ -1,89 +1,76 @@
-import { QUESTIONS, QUESTION_SEQUENCE, LAST_QUESTION, CLABEL, RLABEL, ELNAME, escapeHtml, createTwoStepInput } from "./shared.js";
-import { PRACTICE_ID, PRACTICE_PROMPT } from "./questions.js";
+import { QUESTIONS, QUESTION_SEQUENCE, LAST_QUESTION, CLABEL, RLABEL, ELNAME, escapeHtml } from "./shared.js";
 import { getToken, createSessionClient } from "./session-client.js";
 import { loadSurveyConfig, renderSurveyBlock } from "./survey.js";
+import { applyOrder } from "./survey-shared.js";
+import { COPY, paymentFormLink } from "./copy.js";
+import { checkEnvironment } from "./env.js";
+import { createVisibilityTracker } from "./visibility.js";
+import { createAnswerRecorder } from "./recorder.js";
+import { createDeviceTest } from "./device-test.js";
 import { CORPUS } from "./corpus.js";
 
 // Main-experiment participant flow, entered through the participant link /s/{token}.
-//   consent -> pre-survey (blocks from survey_items.json) -> scenario -> practice -> QUESTION_SEQUENCE
-//   -> post-survey -> done
-// This tab first claims the session (one active tab per session); the server decides where a
+//   environment check -> consent -> device test -> pre-survey -> scenario -> question (thinking time,
+//   answer) -> self-rating -> loading -> feedback -> post-survey -> debriefing -> done
+// The page first claims the session (one active tab per session); the server decides where a
 // (re)loaded page continues (resume_to). Every step is logged as a server event.
 // The stance is never sent to this page for real sessions; dev mode works only in test sessions.
 
-// Copy for the screens that end or block the flow.
-const BLOCKED = {
-  expired: ["기간이 지났습니다", "기간이 지났습니다. 연구자에게 문의해 주세요."],
-  completed: ["참여 완료", "이미 참여를 완료하셨습니다. 감사합니다."],
-  locked: ["진행할 수 없습니다", "더 이상 진행할 수 없습니다. 연구자에게 문의해 주세요."],
-  abandoned: ["진행할 수 없습니다", "더 이상 진행할 수 없습니다. 연구자에게 문의해 주세요."],
-  locked_error: ["문제가 생겼습니다", "진행 중 문제가 생겼습니다. 연구자에게 문의해 주세요."],
-  other_window: ["다른 창에서 진행 중입니다",
-    "이 연구는 다른 창(탭)에서 이미 진행 중입니다. 원래 창에서 계속해 주세요. 원래 창을 이미 닫았다면 1–2분 뒤 이 페이지를 새로고침해 주세요."],
-  invalid: ["링크를 확인해 주세요", "유효하지 않은 링크입니다. 받으신 링크를 다시 확인하시거나 연구자에게 문의해 주세요."],
+// dev-nav stage list (test sessions only)
+const STAGES = ["device_test", "pre_survey", "scenario", ...QUESTION_SEQUENCE, "self_rating", "feedback", "post_survey", "debrief", "done"];
+const STAGE_LABELS = {
+  device_test: "장치 테스트", pre_survey: "사전설문", scenario: "시나리오", self_rating: "자기평가", feedback: "피드백",
+  post_survey: "사후설문", debrief: "디브리핑", done: "완료",
+  ...Object.fromEntries(QUESTION_SEQUENCE.map((q) => [q, `질문 ${q.toUpperCase()}`])),
 };
 
-// dev-nav stage list (test sessions only)
-const STAGES = ["pre_survey", "scenario", "practice", ...QUESTION_SEQUENCE, "post_survey", "done"];
-const STAGE_LABELS = {
-  pre_survey: "사전설문", scenario: "시나리오", practice: "연습", post_survey: "사후설문", done: "완료",
-  ...Object.fromEntries(QUESTION_SEQUENCE.map((q) => [q, q.toUpperCase()])),
-};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const BLOCKED_STATUS = [401, 409, 410]; // the client already switched to the matching screen
+const mmss = (ms) => `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+
+// Fills every data-copy element from COPY (static page wording lives in src/copy.js).
+function applyCopy(root) {
+  for (const el of root.querySelectorAll("[data-copy]")) {
+    const v = COPY[el.dataset.copy];
+    if (typeof v === "string") el.textContent = v;
+  }
+}
 
 export function initParticipantView(root) {
   const $ = (id) => root.querySelector("#" + id);
-  const screens = ["p-nosession", "p-consent", "p-blocked", "p-survey", "p-scenario", "p-interview", "p-end"].map($);
+  applyCopy(root);
+  const screens = ["p-nosession", "p-consent", "p-blocked", "p-device", "p-survey", "p-scenario", "p-question", "p-loading", "p-feedback", "p-debrief", "p-end"].map($);
+  const show = (id) => { screens.forEach((s) => s.classList.toggle("hidden", s.id !== id)); window.scrollTo(0, 0); };
 
-  const progressEl = $("p-progress");
-  const practiceGuide = $("p-practiceGuide");
-  const questionEl = $("p-question");
-  const statusText = $("p-statusText");
-  const feedbackWrap = $("p-feedbackWrap");
-  const feedbackEl = $("p-feedback");
-  const answerRetryBtn = $("p-answerRetry");
-  const nextBtn = $("p-next");
-  const devInfo = $("p-devInfo");
-  const devNav = $("p-devNav");
-  const devStageLabel = $("p-devStageLabel");
-  const devInjectRow = $("p-devInjectRow");
-  const devInjectSel = $("p-devInject");
-
-  let client = null;
-  let isTest = false;
-  let devMode = false;
-  let finished = false;
-  let stage = null;          // dev-nav position: one of STAGES
-  let turn = null;           // current interview turn: PRACTICE_ID | one of QUESTION_SEQUENCE
-  let answers = {};          // qid -> { transcript, feedback, pending, scores?, strong?, weak? } (from server)
-  let pendingTranscript = null; // kept for [다시 시도] after an LLM error
-  let heartbeat = null;
+  let client = null, tracker = null, heartbeat = null, device = null;
+  let session = null;        // claim / consent payload: timing, survey_order, attempt, audio_upload, ...
   let survey = null;         // survey_items.json
-  let surveyDone = { pre: [], post: [] }; // block ids already saved on the server
+  let surveyDone = { pre: [], mid: [], post: [] };
   let surveyPhase = null, surveyIdx = 0, surveyForm = null;
+  let isTest = false, devMode = false, finished = false;
+  let stage = null;          // dev-nav position and the stage label on tab events
+  let turn = null;           // current question id
+  let participantId = null;
+  // question screen
+  let thinkTimer = null, answerTimer = null, recorder = null, answering = false, finishing = false, pendingSubmit = null;
+  // feedback screen
+  let pollToken = 0, feedbackMark = null;
 
-  const show = (id) => screens.forEach((s) => s.classList.toggle("hidden", s.id !== id));
-
-  const input = createTwoStepInput({
-    statusEl: $("p-status"), statusText, transcriptEl: $("p-transcript"),
-    actionBtn: $("p-actionBtn"), retryBtn: $("p-retryBtn"),
-    timeEl: $("p-recTime"), timeHintEl: $("p-recTimeHint"),
-    onStart: () => client.log(turn === PRACTICE_ID ? "practice_start" : "answer_start", turn === PRACTICE_ID ? null : turn),
-    onEnd: () => client.log(turn === PRACTICE_ID ? "practice_end" : "answer_end", turn === PRACTICE_ID ? null : turn),
-    onSubmit: (t) => (turn === PRACTICE_ID ? submitPractice(t) : submitAnswer(t)),
-    submitEmpty: () => turn !== PRACTICE_ID, // practice retries locally; questions go to the server
-  });
+  const qMessage = $("p-qMessage"), qError = $("p-qError"), submitRetry = $("p-submitRetry");
 
   // ---------- boot / claim / consent ----------
   async function boot() {
     const token = getToken();
     if (!token) return noSession();
+    // Browser check first: claiming the session marks the link as opened, and an unsupported browser must not change it.
+    if (!checkEnvironment().ok) return showBlocked("unsupported");
     client = createSessionClient(token, { onAuthError: () => showBlocked("invalid"), onBlocked: showBlocked });
     let st;
     try {
       [st, survey] = await Promise.all([client.claim(), loadSurveyConfig()]);
     } catch (e) {
-      if ([401, 409, 410].includes(e.status)) return; // already on the matching screen
-      $("p-nosessionText").innerHTML = `<span class="err">서버에 연결하지 못했습니다 (${escapeHtml(e.message)}). 잠시 후 다시 시도해 주세요.</span>`;
+      if (BLOCKED_STATUS.includes(e.status)) return;
+      $("p-nosessionText").innerHTML = `<span class="err">${escapeHtml(COPY.connectFail(e.message))}</span>`;
       $("p-bootRetry").classList.remove("hidden");
       return show("p-nosession");
     }
@@ -92,27 +79,34 @@ export function initParticipantView(root) {
 
   // st: claim / consent payload from the server
   function enter(st) {
+    session = st;
+    isTest = !!st.is_test;
+    if (st.screen === "completed") { // debriefing / completion screen of a finished session
+      participantId = st.participant_id;
+      return resume(st.resume_to);
+    }
     if (st.screen !== "consent" && st.screen !== "active") return showBlocked(st.screen);
     startHeartbeat(st.heartbeat_ms);
     if (st.screen === "consent") return show("p-consent");
-    isTest = st.is_test;
-    answers = st.answers || {};
-    surveyDone = st.surveys || surveyDone;
+    surveyDone = { pre: [], mid: [], post: [], ...st.surveys };
     window.dispatchEvent(new CustomEvent("study1:session", { detail: { active: true, isTest } }));
     guardNavigation();
+    startTracker();
     resume(st.resume_to);
   }
 
   function noSession() {
     window.dispatchEvent(new CustomEvent("study1:session", { detail: { active: false, isTest: false } }));
-    $("p-nosessionText").textContent = "받으신 참여 링크로 접속해 주세요.";
+    $("p-nosessionText").textContent = COPY.noToken;
     show("p-nosession");
   }
 
   function showBlocked(screen) {
-    const [title, text] = BLOCKED[screen] || BLOCKED.locked;
+    const [title, text] = COPY.blocked[screen] || COPY.blocked.locked;
     finished = true; // nothing left to protect from an accidental close
     clearInterval(heartbeat);
+    stopTracker();
+    cleanupQuestion();
     $("p-blockedTitle").textContent = title;
     $("p-blockedText").textContent = text;
     show("p-blocked");
@@ -126,41 +120,11 @@ export function initParticipantView(root) {
     window.addEventListener("pageshow", (e) => { if (e.persisted) client.heartbeat().catch(() => {}); }); // back from bfcache
   }
 
-  $("p-bootRetry").addEventListener("click", () => location.reload());
-
-  $("p-consentBtn").addEventListener("click", async () => {
-    const btn = $("p-consentBtn");
-    const picked = (name) => root.querySelector(`input[name="${name}"]:checked`)?.value;
-    const choices = { withdraw_data: picked("p-withdrawData"), notify: picked("p-notify") };
-    if (!$("p-consentAgree").checked || !choices.withdraw_data || !choices.notify) {
-      $("p-consentErr").textContent = "동의 확인과 두 가지 선택 항목에 모두 응답해 주세요.";
-      return;
-    }
-    btn.disabled = true;
-    $("p-consentErr").textContent = "";
-    try {
-      enter(await client.consent(choices));
-    } catch (e) {
-      if ([401, 409, 410].includes(e.status)) return;
-      $("p-consentErr").textContent = e.status === 503 ? e.message : `처리하지 못했습니다 (${e.message}). 다시 눌러주세요.`;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  // rt: resume_to from the server
-  function resume(rt) {
-    switch (rt?.to) {
-      case "pre_survey": return showSurvey("pre");
-      case "scenario": return showScenario();
-      case "practice": return showTurn(PRACTICE_ID);
-      case "question": return showTurn(rt.question_id, { reanswer: rt.reanswer });
-      case "submit_saved": return showTurn(rt.question_id, { submitSaved: true });
-      case "feedback": return showTurn(rt.question_id); // stored feedback (or the one still generating)
-      case "post_survey": return showSurvey("post");
-      default: return showEnd();
-    }
+  function startTracker() {
+    if (tracker) return;
+    tracker = createVisibilityTracker({ log: (type, data) => client.log(type, null, { data }), getStage: () => stage || "boot" });
   }
+  function stopTracker() { tracker?.stop(); tracker = null; }
 
   // Once a session is running, the browser's back button and accidental tab closes shouldn't
   // take the participant out of the flow.
@@ -172,30 +136,81 @@ export function initParticipantView(root) {
     });
   }
 
+  $("p-bootRetry").addEventListener("click", () => location.reload());
+
+  $("p-consentBtn").addEventListener("click", async () => {
+    const btn = $("p-consentBtn");
+    const picked = (name) => root.querySelector(`input[name="${name}"]:checked`)?.value;
+    const choices = { withdraw_data: picked("p-withdrawData"), notify: picked("p-notify") };
+    if (!$("p-consentAgree").checked || !choices.withdraw_data || !choices.notify) {
+      $("p-consentErr").textContent = COPY.consentChoicesMissing;
+      return;
+    }
+    btn.disabled = true;
+    $("p-consentErr").textContent = "";
+    try {
+      enter(await client.consent(choices));
+    } catch (e) {
+      if (BLOCKED_STATUS.includes(e.status)) return;
+      $("p-consentErr").textContent = e.status === 503 ? e.message : COPY.consentFail(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // rt: resume_to from the server
+  function resume(rt) {
+    switch (rt?.to) {
+      case "device_test": return showDevice();
+      case "pre_survey": return showSurvey("pre");
+      case "scenario": return showScenario();
+      case "question": return showQuestion(rt.question_id, { reanswer: rt.reanswer });
+      case "submit_saved": return showQuestion(rt.question_id, { submitSaved: true });
+      case "self_rating": return showSelfRating(rt.question_id);
+      case "feedback": return showLoading(rt.question_id, { seen: rt.seen }); // stored feedback; never generated again
+      case "post_survey": return showSurvey("post");
+      case "debrief": return showDebrief({ logShown: true });
+      default: return showEnd();
+    }
+  }
+
+  // ---------- device test ----------
+  function showDevice() {
+    stage = "device_test";
+    show("p-device");
+    device ??= createDeviceTest({ $, client, onDone: () => showSurvey("pre") });
+    device.reset();
+    updateDevPanel();
+  }
+
   // ---------- surveys: one block per screen, saved block by block ----------
-  // Resumes at the first block not yet saved. fromStart (dev nav) always begins at block 1.
+  // Items appear in the order drawn for this session at consent (the server stores it). Resumes at the
+  // first block not yet saved. fromStart (dev nav) always begins at block 1.
+  const surveyStage = { pre: "pre_survey", mid: "self_rating", post: "post_survey" };
+
   function showSurvey(phase, { fromStart = false } = {}) {
-    stage = phase === "pre" ? "pre_survey" : "post_survey";
+    stage = surveyStage[phase];
     surveyPhase = phase;
-    const i = fromStart ? 0 : survey[phase].findIndex((b) => !surveyDone[phase].includes(b.block));
-    if (i < 0) return finishSurvey(phase); // all blocks saved, only the *_submitted event was missing
+    const blocks = survey[phase] || [];
+    const i = fromStart ? 0 : blocks.findIndex((b) => !surveyDone[phase].includes(b.block));
+    if (i < 0) return finishSurvey(phase);
     renderSurvey(i);
   }
 
   function renderSurvey(i) {
     surveyIdx = i;
     const blocks = survey[surveyPhase];
-    const block = blocks[i];
+    const block = applyOrder(blocks[i], session.survey_order?.[surveyPhase]?.[blocks[i].block]);
     show("p-survey");
-    $("p-surveyProgress").textContent = `${surveyPhase === "pre" ? "사전 설문" : "사후 설문"} ${i + 1} / ${blocks.length}`;
+    $("p-surveyProgress").textContent = COPY.surveyOf(surveyPhase, i + 1, blocks.length);
     $("p-surveyTitle").textContent = block.title || "";
+    $("p-surveyTitle").classList.toggle("hidden", !block.title);
     $("p-surveyInstr").textContent = block.instruction || "";
     $("p-surveyInstr").classList.toggle("hidden", !block.instruction);
     $("p-surveyErr").textContent = "";
-    $("p-surveyNext").textContent = surveyPhase === "post" && i === blocks.length - 1 ? "제출" : "다음";
+    $("p-surveyNext").textContent = surveyPhase === "post" && i === blocks.length - 1 ? COPY.surveySubmit : COPY.surveyNext;
     surveyForm = renderSurveyBlock($("p-surveyItems"), block);
     updateDevPanel();
-    window.scrollTo(0, 0);
   }
 
   $("p-surveyNext").addEventListener("click", async () => {
@@ -203,19 +218,22 @@ export function initParticipantView(root) {
     const { answers: values, missing } = surveyForm.collect();
     surveyForm.markMissing(missing);
     if (missing.length) {
-      $("p-surveyErr").textContent = `응답하지 않은 문항이 ${missing.length}개 있습니다. 모든 문항에 응답해주세요.`;
+      $("p-surveyErr").textContent = COPY.surveyMissing(missing.length);
       return;
     }
     const btn = $("p-surveyNext");
     btn.disabled = true;
     $("p-surveyErr").textContent = "";
     try {
-      await client.survey(surveyPhase, block.block, values);
+      try {
+        await client.survey(surveyPhase, block.block, values);
+      } catch (e) {
+        if (!BLOCKED_STATUS.includes(e.status)) $("p-surveyErr").textContent = COPY.surveySaveFail(e.message);
+        return;
+      }
       if (!surveyDone[surveyPhase].includes(block.block)) surveyDone[surveyPhase].push(block.block);
       if (surveyIdx < survey[surveyPhase].length - 1) renderSurvey(surveyIdx + 1);
-      else finishSurvey(surveyPhase);
-    } catch (e) {
-      $("p-surveyErr").textContent = `저장하지 못했습니다 (${e.message}). 다시 눌러주세요. 계속되면 연구자에게 알려주세요.`;
+      else await finishSurvey(surveyPhase);
     } finally {
       btn.disabled = false;
     }
@@ -223,177 +241,344 @@ export function initParticipantView(root) {
 
   $("p-surveyFill").addEventListener("click", () => surveyForm?.fillRandom());
 
-  function finishSurvey(phase) {
-    if (phase === "pre") { client.log("survey_pre_submitted"); showScenario(); }
-    else { client.log("survey_post_submitted"); showEnd(); }
+  async function finishSurvey(phase) {
+    if (phase === "pre") { client.log("survey_pre_submitted"); return showScenario(); }
+    if (phase === "mid") return showLoading(turn || QUESTION_SEQUENCE[0], {});
+    // post-survey: the server completes the session; the page moves on only once that has happened
+    try {
+      const r = await client.complete();
+      participantId = r.participant_id ?? participantId;
+    } catch (e) {
+      if (!BLOCKED_STATUS.includes(e.status)) $("p-surveyErr").textContent = COPY.completeFail(e.message);
+      return;
+    }
+    client.close(); // the session no longer takes events
+    stopTracker();
+    clearInterval(heartbeat);
+    showDebrief({ logShown: true });
   }
 
+  // ---------- scenario ----------
   function showScenario() {
-    stage = "scenario"; show("p-scenario"); updateDevPanel();
+    stage = "scenario";
+    show("p-scenario");
+    updateDevPanel();
     client.log("scenario_shown");
   }
-  $("p-scenarioNext").addEventListener("click", () => showTurn(PRACTICE_ID));
+  $("p-scenarioNext").addEventListener("click", () => showQuestion(QUESTION_SEQUENCE[0]));
 
-  function showEnd() { stage = "done"; finished = true; show("p-end"); updateDevPanel(); }
+  // ---------- question: thinking time, then the answer ----------
+  function cleanupQuestion() {
+    clearInterval(thinkTimer); clearInterval(answerTimer);
+    thinkTimer = answerTimer = null;
+    recorder?.abort();
+    recorder = null;
+    answering = finishing = false;
+  }
 
-  // ---------- interview turns ----------
-  // reanswer: the server granted the re-answer chance after an interrupted answer.
-  // submitSaved: interrupted mid-answer with enough saved text — submit what the server saved.
-  function showTurn(qid, { reanswer = false, submitSaved = false } = {}) {
+  // reanswer: the server spent the re-answer chance on an interrupted answer.
+  // submitSaved: interrupted mid-answer with enough saved text — confirm what the server saved.
+  // message: shown above the answer box (a retry after an empty answer).
+  function showQuestion(qid, { reanswer = false, submitSaved = false, message = "" } = {}) {
+    cleanupQuestion();
     turn = qid;
     stage = qid;
-    pendingTranscript = null;
-    const isPractice = qid === PRACTICE_ID;
-    show("p-interview");
-    progressEl.textContent = isPractice ? "연습" : "면접 질문";
-    practiceGuide.classList.toggle("hidden", !isPractice);
-    questionEl.textContent = isPractice ? PRACTICE_PROMPT : QUESTIONS[qid];
-    feedbackWrap.classList.add("hidden");
-    answerRetryBtn.classList.add("hidden");
-    nextBtn.classList.add("hidden");
-    devInfo.classList.add("hidden");
-    input.reset();
+    show("p-question");
+    $("p-questionText").textContent = QUESTIONS[qid];
+    qMessage.textContent = reanswer ? COPY.answerReanswer : message;
+    qError.textContent = "";
+    submitRetry.classList.add("hidden");
+    $("p-think").classList.remove("hidden");
+    $("p-answering").classList.add("hidden");
+    $("p-startBtn").disabled = false;
+    $("p-meter").style.width = "0";
     populateInject();
     updateDevPanel();
+    if (submitSaved) {
+      $("p-think").classList.add("hidden");
+      return submitAnswer({ interrupted: true });
+    }
+    client.log("question_shown", qid);
+    startThinking();
+  }
 
-    // reload after the answer was submitted: show the stored feedback (or wait for the one being
-    // generated) — never re-ask and never generate again
-    if (isPractice && answers[PRACTICE_ID]) {
-      input.showDone(answers[PRACTICE_ID].transcript);
-      practiceDone();
-    } else if (!isPractice && answers[qid]) {
-      input.showDone(answers[qid].transcript);
-      if (answers[qid].feedback) renderFeedback(answers[qid]);
-      else submitAnswer(answers[qid].transcript); // pending: the server answers 202 until it's done
-    } else if (!isPractice && submitSaved) {
-      input.showDone("");
-      submitAnswer("", false, true);
-    } else if (!isPractice) {
-      client.log("question_shown", qid);
-      if (reanswer) statusText.textContent = "이전 답변이 저장되지 않았습니다. 한 번 더 답변해 주세요.";
+  // Thinking time always counts down from the start (also after a reload). Zero or [답변 시작] starts the recording.
+  function startThinking() {
+    const total = session.timing.think_ms;
+    const t0 = performance.now();
+    const tick = () => {
+      const left = Math.max(0, total - (performance.now() - t0));
+      $("p-thinkTime").textContent = `${Math.ceil(left / 1000)}초`;
+      $("p-thinkBar").style.width = `${(left / total) * 100}%`;
+      if (left <= 0) { clearInterval(thinkTimer); startAnswer({ auto: true }); }
+    };
+    clearInterval(thinkTimer);
+    thinkTimer = setInterval(tick, 200);
+    tick();
+  }
+
+  $("p-startBtn").addEventListener("click", () => startAnswer({ auto: false }));
+
+  async function startAnswer({ auto }) {
+    if (answering) return;
+    answering = true;
+    clearInterval(thinkTimer);
+    const ts = Date.now(); // the click, not when the microphone became ready
+    const startBtn = $("p-startBtn");
+    startBtn.disabled = true;
+    qError.textContent = "";
+    const qid = turn;
+    const rec = createAnswerRecorder({
+      client, questionId: qid, attempt: session.attempt, recordAudio: session.audio_upload, chunkMs: session.timing.audio_chunk_ms,
+      onVolume: (v) => { $("p-meter").style.width = `${Math.round(v * 100)}%`; },
+      onError: (code) => { if (code !== "aborted") $("p-statusText").textContent = COPY.sttFail(code); },
+      onSttRestart: () => client.log("stt_restart", qid),
+    });
+    recorder = rec;
+    const r = await rec.start();
+    if (turn !== qid || recorder !== rec) return; // the screen changed meanwhile
+    if (!r.ok) { // no microphone: stay on the thinking panel, no countdown, ready to try again
+      recorder = null;
+      answering = false;
+      startBtn.disabled = false;
+      qError.textContent = COPY.micFail;
+      return;
+    }
+    client.log("answer_start", qid, { data: { auto_started: auto }, ts });
+    $("p-think").classList.add("hidden");
+    $("p-answering").classList.remove("hidden");
+    $("p-doneBtn").disabled = false;
+    $("p-statusText").textContent = COPY.answeringStatus;
+    const t0 = performance.now();
+    const max = session.timing.answer_max_ms;
+    answerTimer = setInterval(() => {
+      const elapsed = performance.now() - t0;
+      $("p-elapsed").textContent = mmss(elapsed);
+      if (elapsed >= max) finishAnswer({ auto: true }); // the time is up: submitted automatically
+    }, 250);
+  }
+
+  $("p-doneBtn").addEventListener("click", () => finishAnswer({ auto: false }));
+
+  async function finishAnswer({ auto }) {
+    if (!answering || finishing) return;
+    finishing = true;
+    clearInterval(answerTimer);
+    const qid = turn;
+    client.log("answer_end", qid, { data: { auto_submitted: auto } });
+    $("p-doneBtn").disabled = true;
+    $("p-statusText").textContent = COPY.answerFinishing;
+    const rec = recorder;
+    recorder = null;
+    const { clientTranscript } = await rec.stop();
+    if (turn !== qid) return;
+    await submitAnswer({ clientTranscript });
+  }
+
+  // Confirms the answer on the server (from its saved segments) and moves on to the self-rating; the
+  // feedback is already being generated by then.
+  async function submitAnswer(opts = {}) {
+    const qid = turn;
+    pendingSubmit = opts;
+    submitRetry.classList.add("hidden");
+    qError.textContent = "";
+    try {
+      const r = await client.answer(qid, {
+        client_transcript: opts.clientTranscript ?? null,
+        interrupted: !!opts.interrupted,
+        ...(opts.injected && { injected: true, transcript: opts.transcript }),
+      });
+      if (turn !== qid) return;
+      if (r.retry) { // (almost) empty: the one re-answer chance, from the start of the thinking time
+        session.attempt = r.attempt;
+        return showQuestion(qid, { message: COPY.answerAskAgain });
+      }
+      showSelfRating(qid);
+    } catch (e) {
+      if (BLOCKED_STATUS.includes(e.status) || turn !== qid) return;
+      qError.textContent = COPY.answerSubmitFail(e.message);
+      submitRetry.classList.remove("hidden");
     }
   }
 
-  // The server spent the one re-answer chance on an (almost) empty answer: ask once more.
-  function askAgain(qid) {
-    feedbackWrap.classList.add("hidden");
-    input.reset();
-    statusText.textContent = "답변이 거의 인식되지 않았습니다. 마이크를 확인한 뒤 한 번 더 답변해 주세요.";
-    client.log("question_shown", qid);
+  submitRetry.addEventListener("click", () => { if (pendingSubmit) submitAnswer(pendingSubmit); });
+
+  // ---------- self-rating (a one-item survey block), then loading -> feedback ----------
+  function showSelfRating(qid) {
+    cleanupQuestion();
+    turn = qid;
+    client.log("self_rating_shown", qid);
+    showSurvey("mid");
   }
 
-  async function submitPractice(transcript) {
-    try { await client.answer(PRACTICE_ID, transcript); answers[PRACTICE_ID] = { transcript }; }
-    catch (e) { console.error("[practice] not saved:", e.message); } // practice is excluded from analysis
-    practiceDone();
+  function showLoading(qid, { seen = false } = {}) {
+    cleanupQuestion();
+    turn = qid;
+    stage = "feedback";
+    show("p-loading");
+    $("p-loadErr").textContent = "";
+    $("p-loadRetry").classList.add("hidden");
+    $("p-loading").querySelector(".spinner").classList.remove("hidden");
+    updateDevPanel();
+    if (!seen) client.log("feedback_loading_shown", qid); // the minimum wait is counted from here
+    pollFeedback(qid, performance.now(), seen ? 0 : session.timing.feedback_min_wait_ms, seen);
   }
 
-  function practiceDone() {
-    statusText.textContent = "연습이 끝났습니다. 말한 내용이 화면에 제대로 표시되었는지 확인해주세요.";
-    nextBtn.textContent = "면접 시작하기";
-    nextBtn.classList.remove("hidden");
-  }
-
-  async function submitAnswer(transcript, injected = false, fromSaved = false) {
-    const qid = turn;
-    pendingTranscript = { transcript, injected, fromSaved };
-    answerRetryBtn.classList.add("hidden");
-    statusText.textContent = "피드백을 준비하는 중…";
-    feedbackWrap.classList.remove("hidden");
-    feedbackEl.innerHTML = '<span class="muted">…</span>';
-    try {
-      const r = await client.answer(qid, transcript, injected, fromSaved);
-      if (turn !== qid) return; // dev nav moved on meanwhile
-      if (r.retry) return askAgain(qid);
-      if (r.pending) { // generated by an earlier request: poll until it's stored
-        setTimeout(() => { if (turn === qid) submitAnswer(transcript, injected, fromSaved); }, 3000);
+  // The server generates the feedback after the answer was confirmed; this only waits for it.
+  async function pollFeedback(qid, t0, minWait, seen) {
+    const mine = ++pollToken;
+    for (;;) {
+      let f;
+      try {
+        f = await client.feedback(qid);
+      } catch (e) {
+        if (BLOCKED_STATUS.includes(e.status)) return;
+        await sleep(2000); // network blip: keep trying
+        if (mine !== pollToken) return;
+        continue;
+      }
+      if (mine !== pollToken || turn !== qid) return;
+      if (f.state === "done") {
+        await sleep(Math.max(0, minWait - (performance.now() - t0)));
+        if (mine !== pollToken) return;
+        return showFeedback(qid, f, { seen });
+      }
+      if (f.state === "error" || f.state === "none") {
+        $("p-loading").querySelector(".spinner").classList.add("hidden");
+        $("p-loadErr").textContent = COPY.feedbackError;
+        $("p-loadRetry").classList.remove("hidden");
         return;
       }
-      answers[qid] = { transcript, ...r };
-      statusText.textContent = "";
-      renderFeedback(answers[qid]);
-    } catch (e) {
-      if (turn !== qid) return;
-      statusText.textContent = "";
-      feedbackEl.innerHTML = `<span class="err">문제가 발생했습니다 (${escapeHtml(e.message)}). [다시 시도]를 눌러주세요. 계속되면 연구자에게 알려주세요.</span>`;
-      answerRetryBtn.classList.remove("hidden");
+      await sleep(1500);
+      if (mine !== pollToken) return;
     }
   }
 
-  answerRetryBtn.addEventListener("click", () => {
-    if (pendingTranscript) submitAnswer(pendingTranscript.transcript, pendingTranscript.injected, pendingTranscript.fromSaved);
+  $("p-loadRetry").addEventListener("click", async () => {
+    $("p-loadRetry").classList.add("hidden");
+    $("p-loadErr").textContent = "";
+    try {
+      const r = await client.answer(turn, {}); // regenerates from the confirmed answer
+      if (r.retry) { session.attempt = r.attempt; return showQuestion(turn, { message: COPY.answerAskAgain }); }
+    } catch (e) {
+      if (BLOCKED_STATUS.includes(e.status)) return;
+    }
+    showLoading(turn, { seen: true });
   });
 
-  function renderFeedback(a) {
-    feedbackWrap.classList.remove("hidden");
-    feedbackEl.textContent = a.feedback; // participant sees ONLY the feedback text
-    client.log("feedback_shown", turn);
-    renderDevInfo(a);
-    nextBtn.textContent = turn === LAST_QUESTION ? "설문으로 넘어가기" : "다음 질문";
-    nextBtn.classList.remove("hidden");
+  function showFeedback(qid, f, { seen }) {
+    stage = "feedback";
+    show("p-feedback");
+    $("p-feedbackText").textContent = f.feedback; // the whole text at once; the participant sees ONLY the feedback
+    client.log("feedback_shown", qid);
+    renderDevInfo(f);
+    feedbackMark = tracker?.snapshot() ?? { hidden: 0, blur: 0 };
+    const btn = $("p-toSurvey");
+    const dwell = seen ? 0 : f.feedback.length * session.timing.text_min_dwell_ms_per_char; // 0 unless Phase 4 sets it
+    btn.disabled = dwell > 0;
+    if (dwell > 0) setTimeout(() => { btn.disabled = false; }, dwell);
+    updateDevPanel();
   }
 
-  nextBtn.addEventListener("click", () => {
-    if (turn === PRACTICE_ID) return showTurn(QUESTION_SEQUENCE[0]);
-    client.log("next_clicked", turn); // for the last question this click ends its dwell time
-    const i = QUESTION_SEQUENCE.indexOf(turn);
-    if (i < QUESTION_SEQUENCE.length - 1) showTurn(QUESTION_SEQUENCE[i + 1]);
-    else showSurvey("post");
+  $("p-toSurvey").addEventListener("click", () => {
+    const now = tracker?.snapshot() ?? feedbackMark ?? { hidden: 0, blur: 0 };
+    client.log("next_clicked", turn, {
+      data: { hidden_ms: Math.round(now.hidden - (feedbackMark?.hidden ?? 0)), blur_ms: Math.round(now.blur - (feedbackMark?.blur ?? 0)) },
+    });
+    showSurvey("post");
   });
+
+  // ---------- debriefing, completion ----------
+  function showDebrief({ logShown }) {
+    stage = "debrief";
+    finished = true;
+    show("p-debrief");
+    updateDevPanel();
+    if (logShown) client.debrief("shown").catch(() => {});
+  }
+
+  $("p-debriefConfirm").addEventListener("click", async () => {
+    const btn = $("p-debriefConfirm");
+    btn.disabled = true;
+    $("p-debriefErr").textContent = "";
+    try {
+      await client.debrief("confirmed");
+      showEnd();
+    } catch (e) {
+      if (!BLOCKED_STATUS.includes(e.status)) $("p-debriefErr").textContent = COPY.debriefFail(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function showEnd() {
+    stage = "done";
+    finished = true;
+    $("p-paymentLink").href = paymentFormLink(participantId ?? "");
+    show("p-end");
+    updateDevPanel();
+  }
 
   // ---------- dev mode (test sessions only) ----------
   window.addEventListener("study1:devmode", (e) => {
     devMode = e.detail.on;
     updateDevPanel();
-    if (!devMode) devInfo.classList.add("hidden");
-    else if (turn && answers[turn]?.scores) renderDevInfo(answers[turn]);
+    if (!devMode) $("p-devInfo").classList.add("hidden");
   });
 
-  function renderDevInfo(a) {
-    if (!devMode || !a.scores) { devInfo.classList.add("hidden"); return; }
+  let lastFeedback = null;
+  function renderDevInfo(f) {
+    lastFeedback = f;
+    if (!devMode || !f.scores) { $("p-devInfo").classList.add("hidden"); return; }
     $("p-devInfoScores").innerHTML = ["situation", "task_and_action", "result"].map((el) => {
-      const r = a.scores[el].rating;
+      const r = f.scores[el].rating;
       let badge = "";
-      if (el === a.strong) badge = '<span class="badge strong">strength</span>';
-      else if (el === a.weak) badge = '<span class="badge weak">weakness</span>';
+      if (el === f.strong) badge = '<span class="badge strong">strength</span>';
+      else if (el === f.weak) badge = '<span class="badge weak">weakness</span>';
       return `<div class="score"><span class="sname">${ELNAME[el]}</span><span class="sval">${r} · ${RLABEL[r]}</span>${badge}</div>`;
     }).join("");
-    $("p-devInfoStyle").textContent = a.stance ? `Coach style: ${CLABEL[a.stance]}` : "";
-    devInfo.classList.remove("hidden");
+    $("p-devInfoStyle").textContent = f.stance ? `Coach style: ${CLABEL[f.stance]}` : "";
+    $("p-devInfo").classList.remove("hidden");
   }
+  window.addEventListener("study1:devmode", () => { if (lastFeedback) renderDevInfo(lastFeedback); });
 
   function populateInject() {
-    devInjectSel.innerHTML = '<option value="">— 테스트 대본 주입 —</option>' +
+    $("p-devInject").innerHTML = `<option value="">${COPY.devInject}</option>` +
       CORPUS.filter((e) => e.questionId === turn).map((e) => {
         const [s, t, r] = e.profile;
         return `<option value="${e.id}">${escapeHtml(e.id)} · S${s} T${t} R${r}</option>`;
       }).join("");
   }
 
-  devInjectSel.addEventListener("change", () => {
-    const e = CORPUS.find((c) => c.id === devInjectSel.value);
-    devInjectSel.value = "";
+  $("p-devInject").addEventListener("change", () => {
+    const e = CORPUS.find((c) => c.id === $("p-devInject").value);
+    $("p-devInject").value = "";
     if (!e || !isTest) return;
-    input.showDone(e.transcript);
-    submitAnswer(e.transcript, true);
+    cleanupQuestion();
+    $("p-think").classList.add("hidden");
+    submitAnswer({ injected: true, transcript: e.transcript });
   });
 
   function updateDevPanel() {
-    devNav.classList.toggle("hidden", !devMode);
-    devStageLabel.textContent = stage ? `단계: ${STAGE_LABELS[stage]}` : "";
+    $("p-devNav").classList.toggle("hidden", !devMode);
+    $("p-devStageLabel").textContent = stage ? `단계: ${STAGE_LABELS[stage] ?? stage}` : "";
     const idx = STAGES.indexOf(stage);
     $("p-devPrev").disabled = idx <= 0;
     $("p-devNext").disabled = idx < 0 || idx >= STAGES.length - 1;
-    devInjectRow.classList.toggle("hidden", !(devMode && QUESTION_SEQUENCE.includes(stage)));
-    $("p-surveyDevRow").classList.toggle("hidden", !(devMode && /_survey$/.test(stage || "")));
+    $("p-devInjectRow").classList.toggle("hidden", !(devMode && QUESTION_SEQUENCE.includes(stage)));
+    $("p-surveyDevRow").classList.toggle("hidden", !(devMode && /_survey$|^self_rating$/.test(stage || "")));
   }
 
   function goToStage(s) {
-    if (s === "pre_survey") showSurvey("pre", { fromStart: true });
+    const first = turn || QUESTION_SEQUENCE[0];
+    if (s === "device_test") showDevice();
+    else if (s === "pre_survey") showSurvey("pre", { fromStart: true });
     else if (s === "scenario") showScenario();
-    else if (s === "practice") showTurn(PRACTICE_ID);
-    else if (QUESTION_SEQUENCE.includes(s)) showTurn(s);
+    else if (QUESTION_SEQUENCE.includes(s)) showQuestion(s);
+    else if (s === "self_rating") { turn = first; showSurvey("mid", { fromStart: true }); }
+    else if (s === "feedback") showLoading(first, { seen: true });
     else if (s === "post_survey") showSurvey("post", { fromStart: true });
+    else if (s === "debrief") showDebrief({ logShown: false });
     else showEnd();
   }
   $("p-devPrev").addEventListener("click", () => goToStage(STAGES[STAGES.indexOf(stage) - 1]));

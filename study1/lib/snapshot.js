@@ -25,6 +25,12 @@ export function configSnapshot(stance) {
       empty_answer_min_chars: C.EMPTY_ANSWER_MIN_CHARS,
       abandon_after_ms: C.ABANDON_AFTER_MS,
       max_resumes: C.MAX_RESUMES,
+      think_time_ms: C.THINK_TIME_MS,
+      answer_max_ms: C.ANSWER_MAX_MS,
+      feedback_min_wait_ms: C.FEEDBACK_MIN_WAIT_MS,
+      text_min_dwell_ms_per_char: C.TEXT_MIN_DWELL_MS_PER_CHAR,
+      audio_chunk_ms: C.AUDIO_CHUNK_MS,
+      audio_upload_enabled: C.AUDIO_UPLOAD_ENABLED,
     },
     tts: null, // Phase 4: voice_id, model_id, voice settings
   };

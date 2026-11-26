@@ -1,6 +1,6 @@
 {
-  "_note": "문구 수정은 이 파일만 바꾼다. 2026-10-05 사전·사후설문 문서 수정본 기준. 문항을 바꾸면 version도 올린다 (세션 생성 시 sessions.survey_version에 저장됨). \"check\": {\"correct\": 값} = 주의 확인 문항 (척도 계산 제외, 사후설문 제출 시 valid 판정). \"fixed\": true = Phase 3 무작위 제시에서 위치 고정.",
-  "version": "2026-11-26",
+  "_note": "문구 수정은 이 파일만 바꾼다. 2026-10-05 사전·사후설문 문서 수정본 기준. 문항을 바꾸면 version도 올린다 (세션 생성 시 sessions.survey_version에 저장됨). \"check\": {\"correct\": 값} = 주의 확인 문항 (척도 계산 제외, 사후설문 제출 시 valid 판정). \"fixed\": true = Phase 3 무작위 제시에서 위치 고정. \"shuffle\": false = 블록 안 문항을 섞지 않음. 블록 안 문항 순서는 세션마다 무작위이며(fixed 제외) 동의 시 sessions.survey_order에 저장된다. \"mid\" = 답변 직후·피드백 직전 자기평가.",
+  "version": "2026-11-26.2",
   "pre": [
     {
       "block": "background",
@@ -74,7 +74,8 @@
           ],
           "other": true
         }
-      ]
+      ],
+      "shuffle": false
     },
     {
       "block": "MH",
@@ -304,6 +305,31 @@
             "correct": 2
           },
           "fixed": true
+        }
+      ]
+    }
+  ],
+  "mid": [
+    {
+      "block": "self_eval",
+      "title": "",
+      "scored": true,
+      "scale": {
+        "min": 0,
+        "max": 10,
+        "minLabel": "매우 부족",
+        "maxLabel": "매우 훌륭",
+        "midpoint": 5
+      },
+      "subscales": {
+        "SelfEval": [
+          "SELF1"
+        ]
+      },
+      "items": [
+        {
+          "id": "SELF1",
+          "text": "스스로 생각했을 때, 방금 한 답변은 몇 점이라고 생각하나요?"
         }
       ]
     }
