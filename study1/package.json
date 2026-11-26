@@ -22,6 +22,8 @@
     "test:assign-http": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-assign-http.js",
     "codebook": "node scripts/codebook.js",
     "test:survey": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-survey.js",
-    "test:ui": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-ui.js"
+    "test:ui": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-ui.js",
+    "voice-eval": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/voice-eval.js",
+    "check:copy": "node scripts/check-copy.js"
   }
 }

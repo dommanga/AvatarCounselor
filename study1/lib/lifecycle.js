@@ -15,7 +15,7 @@ export const ENDED = ["completed", "expired", "abandoned", "locked"];
 export function screenFor(status, lockReason = null) {
   if (status === "issued" || status === "opened") return "consent";
   if (ACTIVE.includes(status)) return "active";
-  if (status === "locked" && lockReason === "empty_answer") return "locked_error";
+  if (status === "locked" && (lockReason === "empty_answer" || lockReason === "tts_error")) return "locked_error";
   return status; // completed | expired | abandoned | locked
 }
 
@@ -45,7 +45,7 @@ function returnSlotsStatement(sessionId = null) {
       UPDATE slot_assignments a
       SET returned_at = now(),
           return_reason = CASE WHEN s.status = 'completed' THEN 'invalid' ELSE s.status END,
-          exposed = EXISTS (SELECT 1 FROM events e WHERE e.session_id = a.session_id AND e.type = 'feedback_shown')
+          exposed = EXISTS (SELECT 1 FROM events e WHERE e.session_id = a.session_id AND e.type IN ('feedback_shown', 'audio_started'))
       FROM sessions s
       WHERE s.id = a.session_id AND a.returned_at IS NULL
         AND (s.status IN ('abandoned', 'locked', 'expired') OR (s.status = 'completed' AND s.valid = false))
@@ -146,7 +146,7 @@ export async function consent(sessionId, choices) {
       UPDATE sessions SET status = 'consented', consented_at = now(), last_activity_at = now(), updated_at = now(),
              stance = $2, modality = $3, current_stage = 'device_test', config = $4, survey_version = $5,
              consent_withdraw_data = $6, consent_notify = $7, survey_order = $8
-      WHERE id = $1`, [s.id, stance, modality, JSON.stringify(configSnapshot(stance)), SURVEY.version ?? null,
+      WHERE id = $1`, [s.id, stance, modality, JSON.stringify(configSnapshot(stance, modality)), SURVEY.version ?? null,
                        choices.withdraw_data, choices.notify, JSON.stringify(buildSurveyOrder())]);
     await c.query("INSERT INTO events (id, session_id, type) VALUES ($1, $2, 'consented')", [crypto.randomUUID(), s.id]);
     await c.query("INSERT INTO audit_log (actor, action, session_id, detail) VALUES ('system', 'consented', $1, $2)",

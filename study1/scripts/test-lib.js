@@ -19,12 +19,13 @@ export function createHarness() {
     console.log(`${ok ? "PASS" : "FAIL"}  ${name}${info ? `  (${info})` : ""}`);
   }
 
-  async function issue(pid, { expiresInMs = 86400_000, test = false } = {}) {
+  // test sessions come with a preset stance and modality (no slot); real ones are assigned at consent
+  async function issue(pid, { expiresInMs = 86400_000, test = false, stance = "direct", modality = "text" } = {}) {
     const id = crypto.randomUUID();
     const { token, hash } = newParticipantToken();
     await sql`INSERT INTO sessions (id, participant_id, batch_id, is_test, token_hash, expires_at, stance, modality)
               VALUES (${id}, ${pid}, 'TEST', ${test}, ${hash}, ${new Date(Date.now() + expiresInMs).toISOString()},
-                      ${test ? "direct" : null}, ${test ? "text" : null})`;
+                      ${test ? stance : null}, ${test ? modality : null})`;
     created.push(id);
     return { id, token };
   }
@@ -33,7 +34,13 @@ export function createHarness() {
   function tab({ token }) {
     const key = crypto.randomUUID();
     const run = (req) => new Promise((resolve, reject) => {
-      const res = { code: 200, status(c) { this.code = c; return this; }, json(d) { resolve({ code: this.code, ...d }); } };
+      const headers = {};
+      const res = {
+        code: 200, status(c) { this.code = c; return this; },
+        setHeader(k, v) { headers[k.toLowerCase()] = v; },
+        json(d) { resolve({ code: this.code, ...d }); },
+        end(buf) { resolve({ code: this.code, binary: buf, headers }); }, // the spoken feedback (mp3)
+      };
       handler(req, res).catch(reject);
     });
     const call = (method, action, body, query = {}) =>
@@ -55,6 +62,7 @@ export function createHarness() {
       segment: (question_id, attempt, seq, text) => call("POST", "segment", { question_id, attempt, seq, text, client_ts: Date.now() }),
       answer: (body) => call("POST", "answer", { question_id: "q2", ...body }),
       feedback: (question_id = "q2") => call("GET", "feedback", undefined, { question_id }),
+      feedbackAudio: (question_id = "q2") => call("GET", "feedback_audio", undefined, { question_id }),
       debrief: (kind) => call("POST", "debrief", { kind, id: crypto.randomUUID(), client_ts: Date.now() }),
       audio: (question_id, attempt, seq, bytes) =>
         upload({ question_id, attempt: String(attempt), seq: String(seq), client_ts: String(Date.now()) }, bytes, "audio/webm"),
@@ -67,7 +75,7 @@ export function createHarness() {
         const t0 = Date.now();
         for (;;) {
           const f = await T.feedback();
-          if (f.state === "done" || f.state === "error" || Date.now() - t0 > timeoutMs) return f;
+          if (f.state === "done" || f.state === "error" || f.code !== 200 || Date.now() - t0 > timeoutMs) return f; // 410: the session was locked
           await sleep(1000);
         }
       },
@@ -75,17 +83,24 @@ export function createHarness() {
     return T;
   }
 
-  // consented tab, ready for the interview part
-  async function started(pid, opts = {}) {
-    const s = await issue(pid, opts);
+  // consented tab, ready for the interview part. Real sessions get their cell from the slot sequence, which would make
+  // the tests flip between text and voice: the modality is set explicitly (default text) right after consent.
+  async function started(pid, { modality = "text", ...opts } = {}) {
+    const s = await issue(pid, { modality, ...opts });
     const T = tab(s);
     await T.claim();
     const c = await T.consent();
+    await sql`UPDATE sessions SET modality = ${modality} WHERE id = ${s.id}`;
     return { s, T, c };
   }
 
   async function cleanup() {
-    for (const t of ["audit_log", "events", "session_clients", "answers", "answer_segments", "audio_chunks", "responses"]) {
+    // spoken feedback files (voice condition) live in the Blob store
+    const files = await sql`SELECT pathname FROM feedback_audio WHERE session_id = ANY(${created}::uuid[])`;
+    if (files.length && (process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN)) {
+      try { const { del } = await import("@vercel/blob"); await del(files.map((f) => f.pathname)); } catch (e) { console.log("blob cleanup failed:", e.message); }
+    }
+    for (const t of ["audit_log", "events", "session_clients", "feedback_audio", "answers", "answer_segments", "audio_chunks", "responses"]) {
       await sql.query(`DELETE FROM ${t} WHERE session_id = ANY($1::uuid[])`, [created]);
     }
     const assigns = await sql`SELECT id FROM slot_assignments WHERE session_id = ANY(${created}::uuid[]) ORDER BY id DESC`;

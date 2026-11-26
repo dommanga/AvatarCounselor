@@ -7,6 +7,7 @@ import { checkEnvironment } from "./env.js";
 import { createVisibilityTracker } from "./visibility.js";
 import { createAnswerRecorder } from "./recorder.js";
 import { createDeviceTest } from "./device-test.js";
+import { createVoiceFeedback } from "./voice-feedback.js";
 import { CORPUS } from "./corpus.js";
 
 // Main-experiment participant flow, entered through the participant link /s/{token}.
@@ -43,10 +44,14 @@ function applyCopy(root) {
 export function initParticipantView(root) {
   const $ = (id) => root.querySelector("#" + id);
   applyCopy(root);
-  const screens = ["p-nosession", "p-consent", "p-blocked", "p-device", "p-notice", "p-survey", "p-scenario", "p-qguide", "p-question", "p-loading", "p-feedback", "p-debrief", "p-end"].map($);
-  const show = (id) => { screens.forEach((s) => s.classList.toggle("hidden", s.id !== id)); window.scrollTo(0, 0); };
+  const screens = ["p-nosession", "p-consent", "p-blocked", "p-device", "p-notice", "p-survey", "p-scenario", "p-qguide", "p-question", "p-loading", "p-feedback", "p-voice", "p-debrief", "p-end"].map($);
+  const show = (id) => {
+    if (id !== "p-voice") voice?.dispose(); // leaving the voice screen stops the audio
+    screens.forEach((s) => s.classList.toggle("hidden", s.id !== id));
+    window.scrollTo(0, 0);
+  };
 
-  let client = null, tracker = null, heartbeat = null, device = null;
+  let client = null, tracker = null, heartbeat = null, device = null, voice = null;
   let session = null;        // claim / consent payload: timing, survey_order, attempt, audio_upload, ...
   let survey = null;         // survey_items.json
   let surveyDone = { pre: [], mid: [], post: [] };
@@ -500,7 +505,27 @@ export function initParticipantView(root) {
     showLoading(turn, { seen: true });
   });
 
+  // Voice condition: the text never reaches this page; the audio is fetched, played and logged by voice-feedback.js.
+  function showVoice(qid, f) {
+    stage = "feedback";
+    voice ??= createVoiceFeedback({
+      $, client, getTracker: () => tracker,
+      onNext: ({ replays }) => {
+        const now = tracker?.snapshot() ?? feedbackMark ?? { hidden: 0, blur: 0 };
+        client.log("next_clicked", turn, {
+          data: { hidden_ms: Math.round(now.hidden - (feedbackMark?.hidden ?? 0)), blur_ms: Math.round(now.blur - (feedbackMark?.blur ?? 0)), replays },
+        });
+        showSurvey("post");
+      },
+    });
+    show("p-voice");
+    feedbackMark = tracker?.snapshot() ?? { hidden: 0, blur: 0 };
+    updateDevPanel();
+    voice.start(qid, { devText: f.dev_text, devMode });
+  }
+
   function showFeedback(qid, f, { seen }) {
+    if (f.modality === "voice") return showVoice(qid, f);
     stage = "feedback";
     show("p-feedback");
     $("p-feedbackText").textContent = f.feedback; // the whole text at once; the participant sees ONLY the feedback

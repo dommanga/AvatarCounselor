@@ -5,6 +5,7 @@
 //   npm run test:ui -- --host <neon endpoint id of the dev branch> [--full] [--audio]
 //   --full   also lets the 40 s thinking time run out (auto start) and the 2 min answer limit (auto submit)
 //   --audio  upload the recorded chunks (needs Blob credentials in the environment); they are purged afterwards
+// The voice-condition part (section D) needs ELEVENLABS_API_KEY and Blob credentials, otherwise it is skipped.
 // Chrome: CHROME_PATH, default the macOS install.
 
 import http from "node:http";
@@ -28,9 +29,14 @@ const { conditionalText, rangeOf, anchorsOf, optionsOf, otherLabelOf } = await i
 const { COPY } = await import("../src/copy.js");
 const { QUESTIONS } = await import("../src/questions.js");
 const { OE_MIN_CHARS } = await import("../lib/config.js");
+const { missingCopyKeys } = await import("./check-copy.js");
 
 const H = createHarness();
 const { sql, check } = H;
+const haveBlob = !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
+let ttsRequests = 0; // ElevenLabs requests made by the handler in this process
+const realFetch = globalThis.fetch;
+globalThis.fetch = (url, init) => { if (String(url).includes("api.elevenlabs.io")) ttsRequests++; return realFetch(url, init); };
 const PORT = 3123, DEBUG = 9333;
 const CHROME = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "study1-chrome-"));
@@ -48,7 +54,12 @@ const server = http.createServer(async (rq, rs) => {
       method: rq.method, headers: rq.headers, query: { action: url.pathname.split("/").pop(), ...Object.fromEntries(url.searchParams) },
       body: json ? JSON.parse(raw.toString() || "{}") : undefined, async *[Symbol.asyncIterator]() { yield raw; },
     };
-    const res = { code: 200, status(c) { this.code = c; return this; }, json(d) { rs.writeHead(this.code, { "content-type": "application/json" }); rs.end(JSON.stringify(d)); }, setHeader() {} };
+    const headers = {};
+    const res = {
+      code: 200, status(c) { this.code = c; return this; }, setHeader(k, v) { headers[k] = v; },
+      json(d) { rs.writeHead(this.code, { ...headers, "content-type": "application/json" }); rs.end(JSON.stringify(d)); },
+      end(buf) { rs.writeHead(this.code, headers); rs.end(buf); }, // the spoken feedback (mp3)
+    };
     try { await handler(req, res); } catch (e) { rs.writeHead(500); rs.end(String(e)); }
     return;
   }
@@ -106,6 +117,16 @@ async function newPage() {
   };
   return { send, ev, waitFor, screen, click, reloadTo, close: () => ws.close() };
 }
+
+// keeps the page's Audio elements reachable and makes the first play() of every page load fail, like a browser that wants a click
+const AUDIO_STUB = `(() => {
+  const RealAudio = window.Audio, realPlay = HTMLMediaElement.prototype.play;
+  let first = true;
+  window.__audios = [];
+  window.Audio = function (...a) { const el = new RealAudio(...a); window.__audios.push(el); return el; };
+  window.Audio.prototype = RealAudio.prototype;
+  HTMLMediaElement.prototype.play = function () { if (first) { first = false; return Promise.reject(new DOMException("blocked", "NotAllowedError")); } return realPlay.call(this); };
+})();`;
 
 const STUB = `(() => {
   class FakeSR {
@@ -225,7 +246,7 @@ async function runSurvey(p, phase, stored, until, { overrides = {}, values = {},
 
 const storedOrder = async (id) => (await sql`SELECT survey_order FROM sessions WHERE id = ${id}`)[0].survey_order;
 
-async function toQuestion(p, token) {
+async function toQuestion(p, token, sessionId) {
   await p.send("Page.addScriptToEvaluateOnNewDocument", { source: STUB });
   await p.send("Page.navigate", { url: `http://localhost:${PORT}/s/${token}` });
   await p.waitFor(p.screen("p-consent"), 20000, "consent screen");
@@ -233,6 +254,7 @@ async function toQuestion(p, token) {
   await p.ev(`document.querySelector('input[name="p-withdrawData"][value="use"]').click(); document.querySelector('input[name="p-notify"][value="yes"]').click(); document.getElementById("p-consentAgree").click();`);
   await p.click("p-consentBtn");
   await p.waitFor(p.screen("p-device"), 20000, "device test");
+  await sql`UPDATE sessions SET modality = 'text' WHERE id = ${sessionId}`; // flow B is the text condition; its cell came from the slot sequence
   // speaker: the chime repeats until [정지]; going on is possible only after stopping
   check("speaker wording", (await p.ev(`document.querySelector("#p-spkStep p").textContent`)) === COPY.speakerGuide);
   const spk = () => p.ev(`({ label: document.getElementById("p-spkPlay").textContent, nextShown: !document.getElementById("p-spkNext").classList.contains("hidden"), nextDisabled: document.getElementById("p-spkNext").disabled })`);
@@ -256,6 +278,9 @@ async function toQuestion(p, token) {
 }
 
 try {
+  const missingCopy = missingCopyKeys();
+  check("every wording key the page uses exists in copy.js", missingCopy.length === 0, missingCopy.map((m) => m.key).join(", "));
+
   // ---------- A: unsupported browser leaves the link untouched ----------
   const a = await H.issue("UI-A");
   {
@@ -273,7 +298,7 @@ try {
   // ---------- B: the whole flow, scores equal (7 and 7) ----------
   const b = await H.issue("UI-B");
   const p = await newPage();
-  const micText = await toQuestion(p, b.token);
+  const micText = await toQuestion(p, b.token, b.id);
   check("device test: recognized sentence shown", micText.includes("하늘이 맑고"));
   const tones = await sql`SELECT type, data FROM events WHERE session_id = ${b.id} AND type LIKE 'speaker_tone_%' ORDER BY seq`;
   check("speaker starts / stops and play durations logged", tones.map((e) => e.type).join() === "speaker_tone_start,speaker_tone_stop,speaker_tone_start,speaker_tone_stop"
@@ -311,13 +336,13 @@ try {
   check("pre-survey done -> scenario", await p.ev(p.screen("p-scenario")));
   check("notice confirmation time recorded", (await sql`SELECT count(*)::int AS n FROM events WHERE session_id = ${b.id} AND type = 'notice_confirmed'`)[0].n === 1);
   const sc = await p.ev(`({ title: document.querySelector("#p-scenario h2").textContent, intro: document.querySelector("#p-scenario .muted").textContent, body: document.querySelector("#p-scenario .text").textContent })`);
-  check("scenario: title 상황 안내, instruction under it, body", sc.title === "상황 안내" && sc.intro === "아래 상황을 읽고, 그 상황에 있다고 생각하며 진행해 주세요." && sc.body === COPY.scenarioBody);
+  check("scenario: title, the line under it, body (as in copy.js)", sc.title === COPY.scenarioTitle && sc.intro === COPY.scenarioIntro && sc.body === COPY.scenarioBody);
   await p.click("p-scenarioNext");
 
   // answer instructions: the countdown must not run here
   await p.waitFor(p.screen("p-qguide"), 5000, "answer instructions");
   const guide = await p.ev(`({ title: document.querySelector("#p-qguide h2").textContent, items: [...document.querySelectorAll("#p-qguide li")].map((l) => l.textContent), btn: document.getElementById("p-qguideStart").textContent })`);
-  check("answer instructions: wording and [시작하기]", guide.title === "면접 질문 안내" && guide.items.join("|") === COPY.qguideItems.join("|") && guide.btn === "시작하기");
+  check("answer instructions: wording and [시작하기]", guide.title === COPY.qguideTitle && guide.items.join("|") === COPY.qguideItems.join("|") && guide.btn === COPY.qguideStart);
   check("the question is not on screen yet", !(await p.ev(p.screen("p-question"))));
   await sleep(3500); // time spent reading the instructions must not eat into the thinking time
   await p.click("p-qguideStart");
@@ -325,7 +350,7 @@ try {
   const think0 = await p.ev(`document.getElementById("p-thinkTime").textContent`);
   check("the countdown starts when the question appears (still 40 after 3.5 s on the instructions)", /^(40|39)초$/.test(think0), think0);
   const qs = await p.ev(`({ text: document.getElementById("p-questionText").textContent, hint: document.getElementById("p-questionHint").textContent, visible: document.getElementById("p-question").innerText })`);
-  check("question screen: the question and its screen-only hint", qs.text === QUESTIONS.q2 && qs.hint === "학교, 일, 동아리, 개인 활동 등 어떤 경험이든 괜찮습니다.");
+  check("question screen: the question and its screen-only hint (if copy.js has one)", qs.text === QUESTIONS.q2 && qs.hint === (COPY.questionHints?.q2 ?? ""));
   check("... countdown and [답변 시작], without the long instructions or any header",
     qs.visible.includes(COPY.thinkLabel) && qs.visible.includes(COPY.answerStart) && !qs.visible.includes("주어집니다") && !qs.visible.includes("최대 2분") && !qs.visible.includes("AI 면접 코치"));
   let ge = [];
@@ -424,6 +449,87 @@ try {
   const [oeC] = await sql`SELECT shown_text FROM responses WHERE session_id = ${c.s.id} AND item_id = 'OE1'`;
   check("stored wording matches what the page showed", oeC.shown_text.includes("처음에는 4점, 피드백을 받은 후에는 9점"));
   pc.close();
+
+  // ---------- D: voice condition ----------
+  if (!haveBlob || !process.env.ELEVENLABS_API_KEY) {
+    console.log("SKIP  voice condition (needs ELEVENLABS_API_KEY and Blob credentials)");
+  } else {
+    // a real session consented through the API and set to voice, then continued in the browser
+    const d = await H.started("UI-D", { modality: "voice" });
+    for (const t of ["device_test_done", "notice_confirmed", "survey_pre_submitted", "scenario_shown"]) await d.T.event(t);
+    await d.T.release();
+    const pd = await newPage();
+    await pd.send("Page.addScriptToEvaluateOnNewDocument", { source: STUB });
+    await pd.send("Page.addScriptToEvaluateOnNewDocument", { source: AUDIO_STUB });
+    await pd.send("Page.navigate", { url: `http://localhost:${PORT}/s/${d.s.token}` });
+    await pd.waitFor(pd.screen("p-scenario"), 20000, "scenario after the resume");
+    await pd.click("p-scenarioNext");
+    await pd.waitFor(pd.screen("p-qguide"), 5000, "answer instructions");
+    await pd.click("p-qguideStart");
+    await pd.waitFor(pd.screen("p-question"), 5000, "question screen");
+    await pd.click("p-startBtn");
+    await pd.waitFor(`!document.getElementById("p-answering").classList.contains("hidden")`, 10000, "answering panel");
+    await sleep(4500);
+    await pd.click("p-doneBtn");
+    await pd.waitFor(`${pd.screen("p-survey")} && document.getElementById("p-surveyProgress").textContent === ${JSON.stringify(COPY.surveyProgress.mid)}`, 30000, "self-rating");
+    await runSurvey(pd, "mid", await storedOrder(d.s.id), `${pd.screen("p-loading")} || ${pd.screen("p-voice")}`, { overrides: { SA_pre: 5 } });
+    await pd.waitFor(pd.screen("p-voice"), 120000, "voice screen (Stage 1 + 2 + TTS)");
+
+    // the neutral screen: no text anywhere
+    await pd.waitFor(`!document.getElementById("p-voicePlay").classList.contains("hidden")`, 15000, "[피드백 듣기] after the blocked autoplay");
+    const [ans] = await sql`SELECT feedback FROM answers WHERE session_id = ${d.s.id} AND status = 'done'`;
+    const chunks = (ans.feedback.match(/[가-힣 ]{10,}/g) || []).map((c) => c.trim()).filter((c) => c.length >= 10).slice(0, 4);
+    const dom = await pd.ev(`({ html: document.documentElement.outerHTML, text: document.body.innerText, media: document.querySelectorAll("audio, video").length,
+      title: document.querySelector("#p-voice h2").textContent, replay: document.getElementById("p-voiceReplay").disabled, next: document.getElementById("p-voiceNext").disabled })`);
+    check("voice: only the neutral line is shown, no <audio> element or controls in the page", dom.title === COPY.voiceTitle && dom.media === 0);
+    check("voice: the feedback text is nowhere in the DOM or the visible text", chunks.length >= 2 && chunks.every((c) => !dom.html.includes(c) && !dom.text.includes(c)), `${chunks.length} passages checked`);
+    check("voice: autoplay refused -> [피드백 듣기]; replay and next are still disabled", dom.replay && dom.next);
+    let evs = [];
+    for (let i = 0; i < 25 && !evs.some((e) => e.type === "audio_play_blocked"); i++) { evs = await sql`SELECT type, data FROM events WHERE session_id = ${d.s.id}`; if (!evs.some((e) => e.type === "audio_play_blocked")) await sleep(200); }
+    check("voice: audio_play_blocked is logged", evs.some((e) => e.type === "audio_play_blocked"));
+
+    // play: no controls, normal speed
+    await pd.click("p-voicePlay");
+    await pd.waitFor(`window.__audios[0] && window.__audios[0].currentTime > 0.6 && !window.__audios[0].paused`, 15000, "playing");
+    const media = await pd.ev(`({ controls: window.__audios[0].controls, rate: window.__audios[0].playbackRate, duration: window.__audios[0].duration,
+      wave: !document.getElementById("p-voiceWave").classList.contains("hidden"), replay: document.getElementById("p-voiceReplay").disabled, next: document.getElementById("p-voiceNext").disabled })`);
+    const [fa] = await sql`SELECT audio_seconds FROM feedback_audio WHERE session_id = ${d.s.id}`;
+    check("voice: plays without controls at normal speed, shows the play indicator; replay and next wait for the end", !media.controls && media.rate === 1 && media.wave && media.replay && media.next);
+    check("voice: the length the page plays matches the recorded audio_seconds", Math.abs(media.duration - Number(fa.audio_seconds)) < 0.35, `${media.duration.toFixed(2)} s vs ${fa.audio_seconds}`);
+
+    // leave during the playback: the stored audio again from the start, nothing generated
+    await sleep(5000);
+    const rowsOf = async () => (await sql`SELECT (SELECT count(*)::int FROM answers WHERE session_id = ${d.s.id}) + (SELECT count(*)::int FROM feedback_audio WHERE session_id = ${d.s.id}) AS n`)[0].n;
+    const rows0 = await rowsOf(), tts0 = ttsRequests;
+    await pd.reloadTo("p-voice");
+    await pd.waitFor(`!document.getElementById("p-voicePlay").classList.contains("hidden")`, 20000, "[피드백 듣기] after the reload");
+    await pd.click("p-voicePlay");
+    await pd.waitFor(`window.__audios[0] && window.__audios[0].currentTime > 0.5 && !window.__audios[0].paused`, 15000, "playing again");
+    check("voice: reload during the playback -> the same stored audio, from the beginning, nothing generated again",
+      (await rowsOf()) === rows0 && ttsRequests === tts0 && (await pd.ev(`window.__audios[0].currentTime`)) < 4);
+
+    // to the end: replay and next unlock
+    await pd.waitFor(`!document.getElementById("p-voiceNext").disabled`, 100000, "the end of the playback");
+    check("voice: after the first complete listening [다시 듣기] and [설문으로 넘어가기] are enabled", !(await pd.ev(`document.getElementById("p-voiceReplay").disabled`)));
+    await pd.click("p-voiceReplay");
+    await sleep(900);
+    check("voice: [다시 듣기] plays it again from the beginning", await pd.ev(`window.__audios[0].currentTime < 2 && !window.__audios[0].paused`));
+    await pd.click("p-voiceNext");
+    await pd.waitFor(`${pd.screen("p-survey")} && document.getElementById("p-surveyProgress").textContent.startsWith("사후")`, 15000, "post-survey");
+    let all = [];
+    for (let i = 0; i < 25; i++) { all = await sql`SELECT type, data FROM events WHERE session_id = ${d.s.id} ORDER BY seq`; if (all.some((e) => e.type === "next_clicked")) break; await sleep(200); }
+    const of = (t) => all.filter((e) => e.type === t);
+    check("voice events: audio_started (once per page load), progress, audio_ended with the hidden time, replay count, next with replays",
+      of("audio_started").length >= 2 && of("audio_progress").length >= 2 && of("audio_ended").length >= 1 && typeof of("audio_ended")[0].data.hidden_ms === "number"
+      && of("audio_replay")[0]?.data.count === 1 && of("next_clicked").at(-1)?.data.replays === 1, `started ${of("audio_started").length}, progress ${of("audio_progress").length}`);
+    const listenings = []; // progress positions of each listening (a new page load starts a new one, at audio_started)
+    for (const e of all) { if (e.type === "audio_started") listenings.push([]); else if (e.type === "audio_progress" && listenings.length) listenings.at(-1).push(e.data.position_s); }
+    check("voice: progress shows how far each listening got (increasing, the first one cut off by the reload)",
+      listenings.length >= 2 && listenings.every((l) => l.every((x, i) => i === 0 || x >= l[i - 1])) && listenings[0].length >= 1 && listenings[0].at(-1) < 20,
+      listenings.map((l) => `${l.length} points, up to ${l.at(-1)} s`).join(" | "));
+    check("voice: no feedback_shown (audio_started is the voice condition's feedback_shown)", of("feedback_shown").length === 0);
+    pd.close();
+  }
 } catch (e) {
   console.log(`FAIL  ${e.message}`);
   check("test run completed without an error", false, e.message);

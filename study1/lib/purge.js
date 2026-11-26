@@ -39,7 +39,7 @@ export async function purgeVerifiedAudio({ dryRun = false } = {}) {
   return out;
 }
 
-const DATA_TABLES = ["responses", "answers", "answer_segments", "events", "session_clients", "audio_chunks"];
+const DATA_TABLES = ["responses", "feedback_audio", "answers", "answer_segments", "events", "session_clients", "audio_chunks"];
 
 // -> [{ participant_id, status, deleted: { table: rows } }]
 export async function purgeWithdrawn({ dryRun = false } = {}) {
@@ -57,7 +57,8 @@ export async function purgeWithdrawn({ dryRun = false } = {}) {
     out.push({ participant_id: s.participant_id, status: s.status, deleted });
     if (dryRun) continue;
     const blobs = await sql`SELECT pathname FROM audio_chunks WHERE session_id = ${s.id} AND purged_at IS NULL`;
-    await deleteBlobs(blobs.map((b) => b.pathname));
+    const spoken = await sql`SELECT pathname FROM feedback_audio WHERE session_id = ${s.id}`; // the voice feedback file
+    await deleteBlobs([...blobs, ...spoken].map((b) => b.pathname));
     await sql.transaction([
       ...DATA_TABLES.map((t) => sql.query(`DELETE FROM ${t} WHERE session_id = $1`, [s.id])),
       sql`UPDATE sessions SET data_purged_at = now(), audio_purged_at = coalesce(audio_purged_at, now()), updated_at = now()

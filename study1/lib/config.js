@@ -21,5 +21,25 @@ export const AUDIO_CHUNK_MS = 5_000;          // MediaRecorder timeslice
 
 export const OE_MIN_CHARS = 5;                // open-ended survey answers: minimum characters (trimmed)
 
+// Voice feedback (ElevenLabs text-to-speech). Fixed here and snapshotted into each voice session's config.
+// modelId is PROVISIONAL: the researcher picks it after listening to the samples (npm run voice-eval);
+// modelConfirmed stays false until then (it is recorded in the snapshot).
+export const TTS = {
+  voiceId: "nbrxrAz3eYm9NgojrmFK",
+  voiceName: "Min-joon",
+  modelId: "eleven_multilingual_v2",
+  modelConfirmed: false,
+  outputFormat: "mp3_44100_128",
+  languageCode: "ko", // sent only to the models that accept a language code (see LANGUAGE_CODE_MODELS in lib/tts.js)
+  voiceSettings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 1.0 },
+  retries: 2,                  // after the first attempt; a TTS (or storage) failure after these locks the session
+  retryDelaysMs: [500, 1500],
+  requestTimeoutMs: 15_000,   // x 3 attempts + Stage 1/2 must fit the function's 60 s (vercel.json); a longer hang is picked up by the stale-row restart
+  textRulesVersion: "tts-text-v1",
+};
+
+// Blob stores aren't branched like the database: the first path segment separates environments.
+export const blobPrefix = () => process.env.BLOB_PREFIX || process.env.VERCEL_ENV || "local";
+
 export const AUDIO_UPLOAD_ENABLED = process.env.AUDIO_UPLOAD_ENABLED === "true"; // off until IRB/consent covers audio
 export const AUDIO_MAX_BYTES = 4 * 1024 * 1024; // under Vercel's 4.5 MB request body limit

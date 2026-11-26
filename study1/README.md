@@ -45,6 +45,17 @@ researcher's spreadsheet.
   shown to the participant but a volume meter. The server confirms the answer from the saved segments and starts
   generating the feedback at once (it keeps running after the response); the page polls `GET feedback`.
   Feedback is generated once per question and never regenerated for display.
+- **Voice condition** (ElevenLabs, `lib/tts.js`, settings in `TTS` in `lib/config.js`): once Stage 2 has produced the
+  text the server normalizes it (minimal rules, `tts-text-v1`), synthesizes it (2 retries), stores
+  `{env}/{session}/q2/feedback.mp3` in the private Blob store and writes a `feedback_audio` row (text before / after,
+  rules, chars, audio seconds, latencies, attempts, model, voice, settings). The answer row stays `pending` until the audio
+  exists. If the TTS still fails the session is locked (`tts_error`) and the slot returned unexposed — the text is never
+  offered instead. The page gets the audio through `GET feedback_audio` (claim key required) and never any text;
+  exposure = `audio_started`. A reload before `audio_ended` plays the stored file again from the start.
+- **The TTS model is provisional** (`TTS.modelId`, `modelConfirmed: false`, recorded in each voice session's snapshot).
+  `npm run voice-eval` measures the time to feedback (text vs voice) and writes the listening samples
+  (`~/dev/study1-voice-samples/<time>/index.html`); set the chosen model in `lib/config.js` and `modelConfirmed: true`.
+- Local env for the voice parts: `ELEVENLABS_API_KEY` in `.env.local` (`vercel env pull`), plus Blob credentials.
 
 ## Session lifecycle
 `issued → opened → consented → in_progress → completed | expired | abandoned | locked`
@@ -63,8 +74,9 @@ researcher's spreadsheet.
     npm run test:assign -- --host <dev endpoint id>   # concurrent assignment + return + claim test
     npm run test:flow -- --host <dev endpoint id>     # end-to-end participant API test (several LLM calls)
     npm run test:survey -- --host <dev endpoint id>   # survey definition, ordering, validation, OE1, valid judgement (no LLM)
-    npm run test:ui -- --host <dev endpoint id> [--full] [--audio]   # headless Chrome: flow + every survey block rendered
-    npm run test:assign-http -- --host <dev endpoint id> --url https://<preview> [--audio]
+    npm run test:ui -- --host <dev endpoint id> [--full] [--audio]   # headless Chrome: flow + every survey block + voice playback
+    npm run voice-eval [-- --models a,b] [--main <model>]            # 4.5 timing + 4.6 listening samples (calls the real TTS)
+    npm run test:assign-http -- --host <dev endpoint id> --url https://<preview> [--audio] [--voice]
     npm run purge-audio [-- --dry-run]                # destroy audio of transcript-verified sessions
     npm run purge-withdrawn [-- --dry-run]            # destroy data of 'destroy'-choice sessions that ended early
 Destructive scripts refuse to run unless `--host` names the endpoint `DATABASE_URL` points at.

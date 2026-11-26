@@ -1,6 +1,10 @@
 // Concurrent consent test against a deployment (e.g. a Preview) over HTTP. The deployment and the local
 // DATABASE_URL must use the same database branch: sessions are created here, consented there.
-//   node --env-file=.env scripts/test-assign-http.js --host <dev endpoint id> --url https://<deployment> [--audio]
+//   node --env-file=.env scripts/test-assign-http.js --host <dev endpoint id> --url https://<deployment> [--audio] [--voice]
+//   --voice  also runs one voice-condition session on the deployment: injected answer -> Stage 1+2 -> ElevenLabs ->
+//            private Blob -> the audio is fetched through the function (the generation continues after the response, so
+//            this only works where waitUntil does). Calls the real TTS once; the stored file is deleted afterwards when
+//            Blob credentials are available locally.
 // Protected Preview deployments: the local development VERCEL_OIDC_TOKEN (vercel env pull) is sent as
 // x-vercel-trusted-oidc-idp-token (Trusted Sources; same-project Preview access works by default).
 
@@ -11,7 +15,7 @@ import { newParticipantToken } from "../lib/auth.js";
 import { requireEndpoint, fail } from "./cli.js";
 
 const { values } = parseArgs({
-  options: { host: { type: "string" }, url: { type: "string" }, n: { type: "string", default: "30" }, audio: { type: "boolean", default: false } },
+  options: { host: { type: "string" }, url: { type: "string" }, n: { type: "string", default: "30" }, audio: { type: "boolean", default: false }, voice: { type: "boolean", default: false } },
 });
 requireEndpoint(values.host);
 if (!/^https?:\/\//.test(values.url || "")) fail("--url https://<deployment> required");
@@ -92,10 +96,46 @@ try {
       chunk ? chunk.pathname.replace(t.id, "<session>") : `${up.code} ${up.error}`);
     if (chunk) console.log(`      blob left in the store for cleanup: ${chunk.pathname}`);
   }
+
+  if (values.voice) {
+    const id = crypto.randomUUID();
+    const { token, hash } = newParticipantToken();
+    await sql`INSERT INTO sessions (id, participant_id, batch_id, is_test, token_hash, expires_at, stance, modality)
+              VALUES (${id}, 'TH-VOICE', 'TEST', true, ${hash}, now() + interval '1 day', 'direct', 'voice')`;
+    created.push(id);
+    const key = crypto.randomUUID();
+    const get = (action, query = "") => fetch(`${base}/api/session/${action}${query}`, {
+      headers: { authorization: `Bearer ${token}`, "x-client-key": key, ...(trusted && { "x-vercel-trusted-oidc-idp-token": trusted }) },
+    });
+    await post(token, key, "claim", { user_agent: "test-assign-http" });
+    const c = await post(token, key, "consent", { agree: true, withdraw_data: "use", notify: "no" });
+    check("voice session consented on the deployment (TTS settings in its snapshot)", c.code === 200
+      && (await sql`SELECT config FROM sessions WHERE id = ${id}`)[0].config?.tts?.voice_id === "nbrxrAz3eYm9NgojrmFK");
+    const t0 = Date.now();
+    const a = await post(token, key, "answer", { question_id: "q2", injected: true, transcript: "작년 학과 학생회에서 신입생 멘토링 프로그램을 제가 처음 기획했습니다. 선배 열두 명을 모아 한 학기 동안 운영했고 만족도 조사에서 평균 4.5점을 받았습니다." });
+    check("voice: the answer is acknowledged at once", a.code === 200 && a.state === "pending");
+    let f = {};
+    for (let i = 0; i < 90 && f.state !== "done"; i++) { await new Promise((r) => setTimeout(r, 1500)); f = await (await get("feedback", "?question_id=q2")).json().catch(() => ({})); }
+    check("voice: ready on the deployment (the function kept working after its response)", f.state === "done" && f.modality === "voice" && f.audio_seconds > 3 && !("feedback" in f),
+      `${Math.round((Date.now() - t0) / 1000)} s after the answer, ${f.audio_seconds} s of audio`);
+    const r = await get("feedback_audio", "?question_id=q2");
+    const bytes = Buffer.from(await r.arrayBuffer());
+    check("voice: the audio comes back from the private Blob store through the function", r.status === 200 && r.headers.get("content-type") === "audio/mpeg" && bytes.length > 5000
+      && (bytes.subarray(0, 3).toString("latin1") === "ID3" || bytes[0] === 0xff), `${bytes.length} bytes`);
+    const [fa] = await sql`SELECT pathname, attempts, model_id, tts_latency_ms FROM feedback_audio WHERE session_id = ${id}`;
+    check("voice: recorded with model and latency", fa?.attempts >= 1 && !!fa.model_id, `${fa?.model_id}, TTS ${fa?.tts_latency_ms} ms, ${fa?.pathname.split("/")[0]}/…`);
+    if (fa && (process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN)) {
+      try { await (await import("@vercel/blob")).del(fa.pathname); } catch { console.log("      blob left in the store for cleanup:", fa.pathname); }
+    } else if (fa) console.log(`      blob left in the store for cleanup: ${fa.pathname}`);
+  }
 } finally {
   await sql`DELETE FROM audit_log WHERE session_id = ANY(${created}::uuid[])`;
   await sql`DELETE FROM events WHERE session_id = ANY(${created}::uuid[])`;
   await sql`DELETE FROM session_clients WHERE session_id = ANY(${created}::uuid[])`;
+  await sql`DELETE FROM feedback_audio WHERE session_id = ANY(${created}::uuid[])`;
+  await sql`DELETE FROM answers WHERE session_id = ANY(${created}::uuid[])`;
+  await sql`DELETE FROM answer_segments WHERE session_id = ANY(${created}::uuid[])`;
+  await sql`DELETE FROM responses WHERE session_id = ANY(${created}::uuid[])`;
   await sql`DELETE FROM audio_chunks WHERE session_id = ANY(${created}::uuid[])`;
   const assigns = await sql`SELECT id FROM slot_assignments WHERE session_id = ANY(${created}::uuid[]) ORDER BY id DESC`;
   for (const a of assigns) await sql`DELETE FROM slot_assignments WHERE id = ${a.id}`;

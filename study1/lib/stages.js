@@ -9,7 +9,8 @@ export const CLIENT_EVENT_TYPES = [
   "speaker_tone_start", "speaker_tone_stop", "mic_test_attempt", "device_test_done", "notice_confirmed",
   "survey_pre_submitted", "scenario_shown", "question_guide_shown",
   "question_shown", "answer_start", "answer_end", "stt_restart",
-  "self_rating_shown", "feedback_loading_shown", "feedback_shown", "audio_started", "audio_ended", "next_clicked",
+  "self_rating_shown", "feedback_loading_shown", "feedback_shown", "next_clicked",
+  "audio_started", "audio_ended", "audio_replay", "audio_progress", "audio_play_blocked", // voice condition: audio_started = feedback_shown
   "survey_post_submitted",
   "tab_hidden", "tab_visible", "window_blur", "window_focus", // data.stage says which screen it happened on
 ];
@@ -17,7 +18,8 @@ export const CLIENT_EVENT_TYPES = [
 // Events that belong to one question (question_id required); all others must not carry one.
 export const QUESTION_EVENT_TYPES = [
   "question_shown", "answer_start", "answer_end", "stt_restart",
-  "self_rating_shown", "feedback_loading_shown", "feedback_shown", "audio_started", "audio_ended", "next_clicked",
+  "self_rating_shown", "feedback_loading_shown", "feedback_shown", "next_clicked",
+  "audio_started", "audio_ended", "audio_replay", "audio_progress", "audio_play_blocked",
 ];
 
 export const MAX_EVENT_DATA_CHARS = 2000;
@@ -35,7 +37,8 @@ export function stageAfter(type, questionId) {
     case "answer_end": return `${questionId}_answering`;
     case "self_rating_shown": return `${questionId}_selfrating`;
     case "feedback_loading_shown":
-    case "feedback_shown": return `${questionId}_feedback`;
+    case "feedback_shown":
+    case "audio_started": return `${questionId}_feedback`;
     case "next_clicked": return questionId === LAST_QUESTION ? "post_survey" : null; // otherwise the next question_shown moves it
     default: return null;
   }

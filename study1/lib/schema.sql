@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   client_released   boolean NOT NULL DEFAULT false,
   last_activity_at  timestamptz,
   valid             boolean,                -- set on completion: true only if every attention check (AT1, AT2) is correct
-  lock_reason       text CHECK (lock_reason IN ('resume_limit', 'empty_answer', 'admin')),
+  lock_reason       text CHECK (lock_reason IN ('resume_limit', 'empty_answer', 'tts_error', 'admin')),
   consent_withdraw_data text CHECK (consent_withdraw_data IN ('use', 'destroy')), -- consent form §8: on withdrawal
   consent_notify    text CHECK (consent_notify IN ('yes', 'no')),               -- consent form §11: new information
   survey_order      jsonb,                  -- {phase: {block: [item ids in the order shown]}}, drawn at consent
@@ -132,6 +132,30 @@ CREATE TABLE IF NOT EXISTS answers (
 CREATE INDEX IF NOT EXISTS answers_session_idx ON answers (session_id, question_id, id);
 CREATE UNIQUE INDEX IF NOT EXISTS answers_live_key ON answers (session_id, question_id)
   WHERE status IN ('pending', 'done') AND question_id <> 'practice';
+
+-- Voice condition: the spoken feedback. One row per answer whose audio was generated and stored (private Blob);
+-- the bytes live at `pathname`. text_original is the Stage 2 feedback, text_tts what was sent to the TTS after
+-- the minimal normalization (rules says which rules changed anything, with the rule-set version).
+CREATE TABLE IF NOT EXISTS feedback_audio (
+  answer_id      bigint PRIMARY KEY REFERENCES answers(id),
+  session_id     uuid NOT NULL REFERENCES sessions(id),
+  question_id    text NOT NULL,
+  text_original  text NOT NULL,
+  text_tts       text NOT NULL,
+  rules          jsonb NOT NULL,            -- { version, applied: [{ id, count }] }
+  pathname       text NOT NULL,             -- {env}/{session_uuid}/{question}/feedback.mp3
+  chars          int NOT NULL,              -- length of text_tts
+  audio_seconds  numeric(8,3) NOT NULL,     -- from the mp3 frame headers
+  tts_latency_ms int NOT NULL,              -- the successful TTS request
+  tts_total_ms   int NOT NULL,              -- all attempts + storing the file
+  attempts       int NOT NULL,              -- TTS attempts (1 = no retry)
+  model_id       text NOT NULL,
+  voice_id       text NOT NULL,
+  voice_settings jsonb NOT NULL,
+  output_format  text NOT NULL,
+  request_id     text,
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
 
 -- Finalized STT segments saved while the participant is still answering.
 CREATE TABLE IF NOT EXISTS answer_segments (

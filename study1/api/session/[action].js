@@ -14,6 +14,8 @@
 //                                right away (it keeps running after the response):
 //                                -> { state: pending|done } | { retry, attempt } | 410 locked_error
 //   GET  /api/session/feedback?question_id   -> { state: none|pending|done|error, feedback? }
+//                                (voice condition: never the text; pending until the audio is stored)
+//   GET  /api/session/feedback_audio?question_id   the spoken feedback (mp3) of a voice session, from private Blob
 //   POST /api/session/debrief    { kind: shown|confirmed, id, client_ts }   after completion
 // The stance never leaves the server for real sessions (test sessions get it for dev mode).
 
@@ -24,12 +26,14 @@ import { assess, generateFeedback, MODEL } from "../../lib/llm.js";
 import { CLIENT_EVENT_TYPES, QUESTION_EVENT_TYPES, MAX_EVENT_DATA_CHARS, QUESTION_STAGE_RE, stageAfter } from "../../lib/stages.js";
 import { SURVEY, PHASES, findBlock, blockHasConditional, CONDITION_SOURCE_IDS, validateBlock, evaluateChecks } from "../../lib/survey.js";
 import * as C from "../../lib/config.js";
+import { blobPrefix } from "../../lib/config.js";
 import {
   ACTIVE, screenFor, sweep, claim, consent, grantRetry, savedTranscript, touchStatement, idleTooLong,
   afterEndStatements, lockSession, meaningfulLength, currentAttempt, CONSENT_WITHDRAW_DATA, CONSENT_NOTIFY,
 } from "../../lib/lifecycle.js";
 import { QUESTIONS, LAST_QUESTION, QUESTION_SEQUENCE } from "../../src/questions.js";
 import { COPY } from "../../src/copy.js";
+import { normalizeForTts, synthesize, withRetries, mp3DurationSeconds } from "../../lib/tts.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -48,6 +52,7 @@ const ROUTES = {
   "POST survey": [survey, "active"],
   "POST answer": [answer, "active"],
   "GET feedback": [feedbackRoute, "active"],
+  "GET feedback_audio": [feedbackAudio, "active"],
   "POST segment": [segment, "active"],
   "POST audio": [audio, "active"],
   "POST debrief": [debrief, "client"], // after completion: the session is no longer 'active'
@@ -315,10 +320,14 @@ async function survey(req, res, s) {
 
 const msBetween = (a, b) => new Date(b).getTime() - new Date(a).getTime();
 
+// Voice condition: the participant's page gets no text at all, only that the audio is ready (test sessions get
+// it as dev_text for the dev panel).
 const feedbackPayload = (s, a) => ({
   state: "done",
-  feedback: a.feedback,
   generation_ms: msBetween(a.created_at, a.finished_at), // real generation latency (the page may hold it back longer)
+  ...(s.modality === "voice"
+    ? { modality: "voice", audio_seconds: Number(a.audio_seconds), ...(s.is_test && { dev_text: a.feedback }) }
+    : { feedback: a.feedback }),
   ...(s.is_test && { stance: s.stance, scores: a.scores, strong: a.strong, weak: a.weak }),
 });
 
@@ -327,9 +336,12 @@ async function insertPending(s, a) {
   try {
     const [row] = await db()`
       INSERT INTO answers (session_id, question_id, attempt, transcript, answer_truncated, answer_short, injected,
-                           client_transcript, status, stance, model)
+                           client_transcript, status, stance, model,
+                           stage1_raw, scores, strong, weak, context, stage2_raw, feedback)
       VALUES (${s.id}, ${a.question_id}, ${a.attempt}, ${a.transcript}, ${!!a.truncated}, ${!!a.short}, ${!!a.injected},
-              ${a.client_transcript ?? null}, 'pending', ${s.stance}, ${MODEL})
+              ${a.client_transcript ?? null}, 'pending', ${s.stance}, ${MODEL},
+              ${a.reuse?.stage1_raw ?? null}, ${a.reuse?.scores ? JSON.stringify(a.reuse.scores) : null}::jsonb, ${a.reuse?.strong ?? null},
+              ${a.reuse?.weak ?? null}, ${a.reuse?.context ?? null}, ${a.reuse?.stage2_raw ?? null}, ${a.reuse?.feedback ?? null})
       RETURNING id`;
     return row.id;
   } catch (e) {
@@ -338,30 +350,76 @@ async function insertPending(s, a) {
   }
 }
 
-// Stage 1 + Stage 2, then store the outcome. Never rejects: it runs in the background after the response.
+// Spoken feedback: normalize the text (minimal), synthesize it (retrying), store the mp3 in the private Blob store and
+// record text before / after, rules, model, settings, length and latency. Throws when it still fails after the retries.
+async function makeVoice(s, rowId, question_id, text) {
+  const { text: spoken, rules } = normalizeForTts(text);
+  const t0 = performance.now();
+  const r = await synthesize(spoken);
+  const pathname = `${blobPrefix()}/${s.id}/${question_id}/feedback.mp3`;
+  const { put } = await import("@vercel/blob");
+  await withRetries(() => put(pathname, r.audio, { access: "private", contentType: "audio/mpeg", allowOverwrite: true }));
+  const totalMs = Math.round(performance.now() - t0); // every TTS attempt + storing the file
+  await db()`
+    INSERT INTO feedback_audio (answer_id, session_id, question_id, text_original, text_tts, rules, pathname, chars, audio_seconds,
+                                tts_latency_ms, tts_total_ms, attempts, model_id, voice_id, voice_settings, output_format, request_id)
+    VALUES (${rowId}, ${s.id}, ${question_id}, ${text}, ${spoken}, ${JSON.stringify({ version: C.TTS.textRulesVersion, applied: rules })}::jsonb,
+            ${pathname}, ${[...spoken].length}, ${mp3DurationSeconds(r.audio).toFixed(3)}, ${r.latency_ms}, ${totalMs},
+            ${r.attempts}, ${r.model_id}, ${r.voice_id}, ${JSON.stringify(r.voice_settings)}::jsonb, ${r.output_format}, ${r.request_id})
+    ON CONFLICT (answer_id) DO NOTHING`;
+}
+
+// Stage 1 + Stage 2 (+ the audio in the voice condition), then store the outcome. `reuse`: an earlier row's finished
+// text, when only the audio is missing. Never rejects: it runs in the background after the response.
 // Partial results are kept too (e.g. Stage 1 succeeded, Stage 2 failed) — useful when debugging.
-async function generate(s, rowId, question_id, transcript) {
+// Voice: the row stays 'pending' until the audio is stored, so the page learns "ready" only when it can play. A TTS
+// failure after the retries locks the session (tts_error) — the text is never offered instead, that would change the condition.
+async function generate(s, rowId, question_id, transcript, reuse = null) {
+  const voice = s.modality === "voice";
   let a = null, f = null, error = null;
-  try {
-    a = await assess(QUESTIONS[question_id], transcript);
-    f = await generateFeedback(a.context, s.stance);
-  } catch (e) {
-    error = String(e?.message || e);
-    console.error("[feedback] generation failed:", error);
+  if (reuse) {
+    a = { raw: reuse.stage1_raw, scores: reuse.scores, strong: reuse.strong, weak: reuse.weak, context: reuse.context };
+    f = { raw: reuse.stage2_raw, feedback: reuse.feedback };
+  } else {
+    try {
+      a = await assess(QUESTIONS[question_id], transcript);
+      f = await generateFeedback(a.context, s.stance);
+    } catch (e) {
+      error = String(e?.message || e);
+      console.error("[feedback] generation failed:", error);
+    }
   }
+  const final = !!error || !voice;
   try {
     await db()`
-      UPDATE answers SET status = ${error ? "error" : "done"}, finished_at = now(),
+      UPDATE answers SET status = CASE WHEN ${error !== null}::boolean THEN 'error' WHEN ${voice}::boolean THEN 'pending' ELSE 'done' END,
+             finished_at = CASE WHEN ${final}::boolean THEN now() ELSE NULL END,
              stage1_raw = ${a?.raw ?? null}, scores = ${a ? JSON.stringify(a.scores) : null}::jsonb,
              strong = ${a?.strong ?? null}, weak = ${a?.weak ?? null}, context = ${a?.context ?? null},
              stage2_raw = ${f?.raw ?? null}, feedback = ${f?.feedback ?? null}, error = ${error}
       WHERE id = ${rowId}`;
   } catch (e) {
     console.error("[feedback] could not store the result:", e);
+    return;
+  }
+  if (final) return;
+  try {
+    await makeVoice(s, rowId, question_id, f.feedback);
+    await db()`UPDATE answers SET status = 'done', finished_at = now() WHERE id = ${rowId}`;
+  } catch (e) {
+    const msg = `tts: ${String(e?.message || e).slice(0, 300)}`;
+    console.error("[feedback] voice failed:", msg);
+    try {
+      // lock first: a poll between the two steps must find the locked session, not a retryable error row
+      await lockSession(s.id, "tts_error", { question_id, error: msg, attempts: e?.attempts ?? null });
+      await db()`UPDATE answers SET status = 'error', finished_at = now(), error = ${msg} WHERE id = ${rowId}`;
+    } catch (e2) {
+      console.error("[feedback] could not lock the session after the TTS failure:", e2);
+    }
   }
 }
 
-const startGeneration = (s, rowId, question_id, transcript) => waitUntil(generate(s, rowId, question_id, transcript));
+const startGeneration = (s, rowId, question_id, transcript, reuse = null) => waitUntil(generate(s, rowId, question_id, transcript, reuse));
 
 const isStale = (row) => Date.now() - new Date(row.created_at).getTime() >= C.ANSWER_PENDING_STALE_MS;
 
@@ -370,11 +428,13 @@ const isStale = (row) => Date.now() - new Date(row.created_at).getTime() >= C.AN
 async function restartStale(s, live) {
   const sql = db();
   await sql`UPDATE answers SET status = 'stale', finished_at = now() WHERE id = ${live.id} AND status = 'pending'`;
+  // voice: the text may already exist (the function died during the TTS): keep it, only the audio is missing
+  const reuse = live.feedback ? live : null;
   const rowId = await insertPending(s, {
     question_id: live.question_id, attempt: live.attempt, transcript: live.transcript, truncated: live.answer_truncated,
-    short: live.answer_short, injected: live.injected, client_transcript: live.client_transcript,
+    short: live.answer_short, injected: live.injected, client_transcript: live.client_transcript, reuse,
   });
-  if (rowId) startGeneration(s, rowId, live.question_id, live.transcript);
+  if (rowId) startGeneration(s, rowId, live.question_id, live.transcript, reuse);
 }
 
 async function answer(req, res, s) {
@@ -438,13 +498,35 @@ async function feedbackRoute(req, res, s) {
   const question_id = req.query.question_id;
   if (!QUESTIONS[question_id]) return res.status(400).json({ error: "unknown question_id" });
   const [row] = await db()`
-    SELECT * FROM answers WHERE session_id = ${s.id} AND question_id = ${question_id} AND status IN ('pending', 'done', 'error')
-    ORDER BY id DESC LIMIT 1`;
+    SELECT a.*, fa.audio_seconds FROM answers a LEFT JOIN feedback_audio fa ON fa.answer_id = a.id
+    WHERE a.session_id = ${s.id} AND a.question_id = ${question_id} AND a.status IN ('pending', 'done', 'error')
+    ORDER BY a.id DESC LIMIT 1`;
   if (!row) return res.status(200).json({ state: "none" });
   if (row.status === "done") return res.status(200).json(feedbackPayload(s, row));
   if (row.status === "error") return res.status(200).json({ state: "error" }); // details stay in answers.error
   if (isStale(row)) await restartStale(s, row);
   return res.status(200).json({ state: "pending" });
+}
+
+// The spoken feedback of a voice session. Only the tab holding the session's claim gets it (the guard), and it
+// is never regenerated here: this just hands out the stored file.
+async function feedbackAudio(req, res, s) {
+  const question_id = req.query.question_id;
+  if (!QUESTIONS[question_id]) return res.status(400).json({ error: "unknown question_id" });
+  if (s.modality !== "voice") return res.status(404).json({ error: "no audio for this session" });
+  const [row] = await db()`
+    SELECT fa.pathname FROM feedback_audio fa JOIN answers a ON a.id = fa.answer_id
+    WHERE fa.session_id = ${s.id} AND fa.question_id = ${question_id} AND a.status = 'done' ORDER BY fa.created_at DESC LIMIT 1`;
+  if (!row) return res.status(404).json({ error: "audio not ready" });
+  const { get } = await import("@vercel/blob");
+  const file = await get(row.pathname, { access: "private", useCache: false });
+  if (!file || file.statusCode !== 200) return res.status(502).json({ error: "audio unavailable" });
+  const bytes = Buffer.from(await new Response(file.stream).arrayBuffer());
+  res.setHeader("content-type", "audio/mpeg");
+  res.setHeader("cache-control", "private, no-store");
+  res.setHeader("content-length", String(bytes.length));
+  res.status(200);
+  res.end(bytes);
 }
 
 // ---------- mid-answer saves ----------
@@ -499,8 +581,7 @@ async function audio(req, res, s) {
 
   const body = await readRaw(req, C.AUDIO_MAX_BYTES);
   if (!body.length) return res.status(400).json({ error: "empty audio chunk" });
-  const prefix = process.env.BLOB_PREFIX || process.env.VERCEL_ENV || "local";
-  const pathname = `${prefix}/${s.id}/${question_id}/a${attempt}/${seq}.${ext}`;
+  const pathname = `${blobPrefix()}/${s.id}/${question_id}/a${attempt}/${seq}.${ext}`;
   const { put } = await import("@vercel/blob");
   await put(pathname, body, { access: "private", contentType: mime, allowOverwrite: true });
 

@@ -11,7 +11,7 @@ import * as C from "./config.js";
 
 const sha256 = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
 
-export function configSnapshot(stance) {
+export function configSnapshot(stance, modality) {
   return {
     llm: { model: MODEL, stage1_temperature: STAGE1_TEMP, stage2_temperature: STAGE2_TEMP },
     prompts: {
@@ -33,6 +33,11 @@ export function configSnapshot(stance) {
       oe_min_chars: C.OE_MIN_CHARS,
       audio_upload_enabled: C.AUDIO_UPLOAD_ENABLED,
     },
-    tts: null, // Phase 4: voice_id, model_id, voice settings
+    // voice condition only: everything that shapes the spoken feedback
+    tts: modality === "voice" ? {
+      provider: "elevenlabs", voice_id: C.TTS.voiceId, voice_name: C.TTS.voiceName, model_id: C.TTS.modelId, model_confirmed: C.TTS.modelConfirmed,
+      voice_settings: C.TTS.voiceSettings, output_format: C.TTS.outputFormat, language_code: C.TTS.languageCode,
+      retries: C.TTS.retries, text_rules_version: C.TTS.textRulesVersion,
+    } : null,
   };
 }

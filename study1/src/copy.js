@@ -79,18 +79,7 @@ export const COPY = {
   surveySaveFail: (msg) => `저장하지 못했습니다 (${msg}). 다시 눌러주세요. 계속되면 연구자에게 알려주세요.`,
   surveyFill: "테스트 응답 채우기",
 
-  // ---------- scenario ----------
-  scenarioTitle: "상황 안내",
-  scenarioIntro: "아래 상황을 읽고, 그 상황에 있다고 생각하며 진행해 주세요.",
-  scenarioBody: [
-    "당신은 꼭 가고 싶었던 회사의 서류 전형에 합격해, 일주일 뒤 면접을 앞두고 있습니다.",
-    "면접을 준비하기 위해 AI 코치와 면접 연습을 해보기로 했습니다.",
-    "면접 질문에 답변하면 AI 코치가 당신의 답변을 분석하고 피드백을 제공합니다.",
-    "질문에는 본인의 실제 경험을 바탕으로 답변해 주세요.",
-  ].join("\n"),
-  scenarioStart: "면접 연습 시작",
-
-  // ---------- before the device test ends / before the question ----------
+  // ---------- notice ----------
   noticeTitle: "진행 전 안내",
   noticeItems: [
     "실험이 끝날 때까지 이 창에서만 진행해 주세요. 다른 창이나 탭으로 이동하지 말아 주세요.",
@@ -98,19 +87,30 @@ export const COPY = {
     "조용한 곳에서 중간에 멈추지 않고 진행해 주세요.",
   ],
   noticeConfirm: "확인했습니다",
-  qguideTitle: "면접 질문 안내",
+
+  // ---------- scenario ----------
+  scenarioTitle: "이런 상황을 떠올려 주세요",
+  scenarioIntro: "",
+  scenarioBody: [
+    "당신은 꼭 가고 싶었던 회사의 서류 전형에 합격해, 일주일 뒤 면접을 앞두고 있습니다.",
+    "면접을 준비하기 위해 AI 코치와 면접 연습을 해보기로 했습니다.",
+    "면접 질문에 답변하면 AI 코치가 답변에 대한 피드백을 줍니다.",
+  ].join("\n"),
+  scenarioStart: "다음",
+
+  // ---------- question guide ----------
+  qguideTitle: "면접 연습 안내",
   qguideItems: [
+    "질문에는 본인의 실제 경험을 바탕으로 답변해 주세요. 학교, 일, 동아리, 개인 활동 등 어떤 경험이든 답변할 수 있습니다.",
     "다음 화면에 면접 질문이 나오면, 생각할 시간 40초가 주어집니다.",
-    "준비가 되면 40초가 지나기 전에 먼저 답변을 시작할 수 있고, 40초가 지나면 답변이 자동으로 시작됩니다.",
-    "답변은 최대 2분이며, 한 번만 가능합니다. 답변을 마치면 [답변 완료]를 눌러 주세요.",
-    "답변하는 동안 다른 AI 도구나 휴대전화를 사용하지 말아 주세요.",
+    "준비가 되면 먼저 답변을 시작할 수 있고, 40초가 지나면 답변이 자동으로 시작됩니다.",
+    "답변은 최대 2분이며, 한 번만 할 수 있습니다. 답변을 마치면 [답변 완료]를 눌러 주세요.",
   ],
   qguideStart: "시작하기",
 
   // ---------- question / answering ----------
   coachLabel: "AI 코치",
   // screen-only wording under the question; never part of the question text the LLM receives (src/questions.js)
-  questionHints: { q2: "학교, 일, 동아리, 개인 활동 등 어떤 경험이든 괜찮습니다." },
   thinkLabel: "남은 생각 시간",
   answerStart: "답변 시작",
   answerStarting: "마이크를 준비하는 중…",
@@ -130,6 +130,11 @@ export const COPY = {
   feedbackTitle: "AI 코치 피드백",
   feedbackError: "문제가 발생했습니다. [다시 시도]를 눌러주세요. 계속되면 연구자에게 알려주세요.",
   toSurvey: "설문으로 넘어가기",
+  // voice condition: the text is never shown; only this neutral line and a play indicator
+  voiceTitle: "AI 코치가 피드백을 전달하고 있습니다.",
+  voiceListen: "피드백 듣기",
+  voiceReplay: "다시 듣기",
+  voiceLoadError: "음성을 불러오지 못했습니다. [다시 시도]를 눌러주세요. 계속되면 연구자에게 알려주세요.",
 
   // ---------- debrief / end ----------
   debriefTitle: "연구 안내",

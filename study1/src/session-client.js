@@ -122,6 +122,17 @@ export function createSessionClient(token, { onAuthError, onBlocked } = {}) {
     answer: (question_id, body = {}) => call("POST", "/api/session/answer", { question_id, ...body }),
     feedback: (question_id) => call("GET", `/api/session/feedback?question_id=${encodeURIComponent(question_id)}`),
     survey: (phase, block, answers) => call("POST", "/api/session/survey", { phase, block, answers }),
+    // the spoken feedback (voice condition) as a Blob; sent with the client key, so only this tab gets it
+    async feedbackAudio(question_id) {
+      const r = await fetch(`/api/session/feedback_audio?question_id=${encodeURIComponent(question_id)}`, { headers: headers() });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        if (r.status === 401) onAuthError?.();
+        if (r.status === 409 || r.status === 410) onBlocked?.(data.screen || "other_window");
+        throw Object.assign(new Error(data.error || `HTTP ${r.status}`), { status: r.status });
+      }
+      return r.blob();
+    },
 
     segment: (question_id, attempt, seq, text) =>
       upload(() => call("POST", "/api/session/segment", { question_id, attempt, seq, text, client_ts: Date.now() })),

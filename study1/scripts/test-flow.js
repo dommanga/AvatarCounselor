@@ -9,7 +9,9 @@ import { parseArgs } from "node:util";
 import { SURVEY, orderBlock } from "../lib/survey.js";
 import { sweep } from "../lib/lifecycle.js";
 import { purgeWithdrawn, purgeVerifiedAudio } from "../lib/purge.js";
-import { AUDIO_UPLOAD_ENABLED } from "../lib/config.js";
+import { AUDIO_UPLOAD_ENABLED, TTS } from "../lib/config.js";
+import { configSnapshot } from "../lib/snapshot.js";
+import { normalizeForTts, mp3DurationSeconds } from "../lib/tts.js";
 import { QUESTIONS } from "../src/questions.js";
 import { COPY } from "../src/copy.js";
 import { requireEndpoint } from "./cli.js";
@@ -18,13 +20,23 @@ import { createHarness, fill, sleep } from "./test-lib.js";
 const { values } = parseArgs({ options: { host: { type: "string" } } });
 requireEndpoint(values.host);
 
-// Everything the OpenAI client sends. The client is created on the first LLM call, so it picks up this wrapper.
-const sentToLLM = [];
+// Everything the OpenAI client sends (it is created on the first LLM call, so it picks up this wrapper), and every
+// ElevenLabs request. TTS requests can be made to fail: ttsFail = how many of the next ones, ttsFailAll = all.
+const sentToLLM = [], sentToTTS = [];
+let ttsFail = 0, ttsFailAll = false;
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, init) => {
-  if (String(url).includes("api.openai.com")) sentToLLM.push(typeof init?.body === "string" ? init.body : "");
+  const u = String(url);
+  if (u.includes("api.openai.com")) sentToLLM.push(typeof init?.body === "string" ? init.body : "");
+  if (u.includes("api.elevenlabs.io")) {
+    sentToTTS.push(typeof init?.body === "string" ? init.body : "");
+    if (ttsFailAll || ttsFail > 0) { if (ttsFail > 0) ttsFail--; return new Response("simulated outage", { status: 500 }); }
+  }
   return realFetch(url, init);
 };
+
+// jsonb stores object keys in its own order: compare objects by content
+const sameObject = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
 
 const H = createHarness();
 const { sql, check, issue, tab, started } = H;
@@ -57,6 +69,7 @@ try {
   check("second window can't act", (await B.consent()).code === 409);
   check("consent without the choices refused", (await A.consent({ withdraw_data: "use" })).code === 400);
   const c2 = await A.consent({ withdraw_data: "use", notify: "yes" });
+  await sql`UPDATE sessions SET modality = 'text' WHERE id = ${s.id}`; // the main flow below is the text condition (voice: section 10c)
   check("consent -> device test first", c2.screen === "active" && c2.resume_to.to === "device_test" && !("stance" in c2));
   check("payload carries timing + survey order", c2.timing?.think_ms === 40000 && c2.timing?.answer_max_ms === 120000 && c2.survey_order?.pre?.pre_ise?.length === 5);
   const [row] = await sql`SELECT * FROM sessions WHERE id = ${s.id}`;
@@ -251,12 +264,111 @@ try {
   check("test session: injected answer -> feedback with scores + stance", inj.state === "pending" && injf.state === "done" && injf.stance === "direct" && injf.scores?.situation);
 
   // ---------- 10b. the screen-only hint under the question never reaches the LLM ----------
-  const hint = COPY.questionHints.q2;
-  check("the question text itself carries no hint", !QUESTIONS.q2.includes(hint) && !QUESTIONS.q2.includes("어떤 경험이든 괜찮습니다"));
+  // screen-only wording: the hint under the question (if copy.js has one), the answer instructions, and the phrase they share
+  const screenOnly = [COPY.questionHints?.q2, ...COPY.qguideItems, "어떤 경험이든"].filter(Boolean);
+  check("the question text itself carries none of the screen-only wording", screenOnly.every((t) => !QUESTIONS.q2.includes(t)));
   check("LLM requests were captured, and carry the question", sentToLLM.length >= 4 && sentToLLM.filter((b) => b.includes(QUESTIONS.q2)).length >= 2, `${sentToLLM.length} requests`);
-  check("... none of them contains the hint", sentToLLM.every((b) => !b.includes(hint) && !b.includes("어떤 경험이든 괜찮습니다")));
+  check("... none of them contains any of it", sentToLLM.every((b) => screenOnly.every((t) => !b.includes(t))));
   const ctx = await sql`SELECT context FROM answers WHERE context IS NOT NULL`;
-  check("... nor does any stored Stage 2 input", ctx.length > 0 && ctx.every((r) => !r.context.includes("어떤 경험이든 괜찮습니다")), `${ctx.length} checked`);
+  check("... nor does any stored Stage 2 input", ctx.length > 0 && ctx.every((r) => screenOnly.every((t) => !r.context.includes(t))), `${ctx.length} checked`);
+
+  // ---------- 10c. voice condition (ElevenLabs): needs ELEVENLABS_API_KEY and Blob credentials ----------
+  const snapV = configSnapshot("direct", "voice");
+  check("snapshot of a voice session carries voice, model (not yet confirmed) and settings; text sessions none",
+    snapV.tts.voice_id === TTS.voiceId && snapV.tts.model_id === TTS.modelId && snapV.tts.model_confirmed === false
+    && JSON.stringify(snapV.tts.voice_settings) === JSON.stringify(TTS.voiceSettings) && snapV.tts.provider === "elevenlabs" && configSnapshot("direct", "text").tts === null);
+  if (!process.env.ELEVENLABS_API_KEY || !(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN)) {
+    console.log("SKIP  voice flow (needs ELEVENLABS_API_KEY and Blob credentials)");
+  } else {
+    // V1: a real session, the whole voice flow
+    const v = await started("TF-V1", { modality: "voice" });
+    const V = v.T;
+    await V.event("question_shown", "q2"); await V.event("answer_start", "q2");
+    check("voice: the answer is acknowledged at once", (await V.say(1, GOOD_ANSWER)).state === "pending");
+    await V.survey("mid", "mid_sa", { SA_pre: 6 });
+    await V.event("feedback_loading_shown", "q2");
+    const vf = await V.waitFeedback();
+    const [vans] = await sql`SELECT feedback FROM answers WHERE session_id = ${v.s.id} AND status = 'done'`;
+    check("voice: ready only once the audio exists; the participant's payload has no text",
+      vf.state === "done" && vf.modality === "voice" && !("feedback" in vf) && !("dev_text" in vf) && vf.audio_seconds > 3 && !JSON.stringify(vf).includes(vans.feedback.slice(0, 12)), `${vf.audio_seconds} s, generation ${vf.generation_ms} ms`);
+    const [fa] = await sql`SELECT * FROM feedback_audio WHERE session_id = ${v.s.id}`;
+    check("voice: the text before and after normalization is stored, with the rules and their version",
+      fa.text_original === vans.feedback && fa.text_tts === normalizeForTts(vans.feedback).text && fa.rules.version === TTS.textRulesVersion
+      && Array.isArray(fa.rules.applied) && fa.chars === [...fa.text_tts].length);
+    check("voice: model, voice, settings, attempts and latencies are recorded",
+      fa.model_id === TTS.modelId && fa.voice_id === TTS.voiceId && sameObject(fa.voice_settings, TTS.voiceSettings)
+      && fa.output_format === TTS.outputFormat && fa.attempts === 1 && fa.tts_latency_ms > 0 && fa.tts_total_ms >= fa.tts_latency_ms,
+      `${fa.chars} chars, ${fa.audio_seconds} s, TTS ${fa.tts_latency_ms} ms, with storing ${fa.tts_total_ms} ms`);
+    check("voice: stored at {env}/{session}/q2/feedback.mp3 in the private Blob store",
+      fa.pathname.endsWith(`/${v.s.id}/q2/feedback.mp3`) && fa.pathname.split("/").length === 4
+      && (await (await import("@vercel/blob")).get(fa.pathname, { access: "private", useCache: false }))?.statusCode === 200);
+    const served = await V.feedbackAudio();
+    const head = served.binary?.subarray(0, 3);
+    check("voice: handed out by the function as audio/mpeg, not cacheable",
+      served.code === 200 && served.headers["content-type"] === "audio/mpeg" && served.headers["cache-control"].includes("no-store")
+      && (head.toString("latin1") === "ID3" || head[0] === 0xff) && served.binary.length > 5000);
+    check("voice: the served mp3 is as long as the recorded audio_seconds", Math.abs(mp3DurationSeconds(served.binary) - Number(fa.audio_seconds)) < 0.01);
+    check("voice: another window of the session gets nothing (409), neither does a wrong token (401), nor a text session (404)",
+      (await tab(v.s).feedbackAudio()).code === 409 && (await tab({ token: "x".repeat(43) }).feedbackAudio()).code === 401 && (await ts.T.feedbackAudio()).code === 404);
+
+    await V.event("audio_started", "q2", { duration_s: Number(fa.audio_seconds) });
+    check("voice: audio_started is the feedback stage", (await sql`SELECT current_stage FROM sessions WHERE id = ${v.s.id}`)[0].current_stage === "q2_feedback");
+    await V.event("audio_progress", "q2", { position_s: 4.1, duration_s: Number(fa.audio_seconds), play: 0 });
+    const ttsN = sentToTTS.length, llmN = sentToLLM.length;
+    const nRows = async () => (await sql`SELECT count(*)::int AS n FROM answers WHERE session_id = ${v.s.id}`)[0].n + (await sql`SELECT count(*)::int AS n FROM feedback_audio WHERE session_id = ${v.s.id}`)[0].n;
+    const rowsBefore = await nRows();
+    const back = await V.claim();
+    check("voice: left during the playback -> the stored audio from the start; nothing is generated again",
+      back.resume_to.to === "feedback" && back.resume_to.replay_audio === true && sentToTTS.length === ttsN && sentToLLM.length === llmN
+      && (await nRows()) === rowsBefore && (await V.feedbackAudio()).code === 200);
+    await V.event("audio_ended", "q2", { duration_s: Number(fa.audio_seconds), position_s: Number(fa.audio_seconds), hidden_ms: 0, blur_ms: 0 });
+    await V.event("audio_replay", "q2", { count: 1 });
+    check("voice: after audio_ended a reload goes on to the post-survey", (await V.claim()).resume_to.to === "post_survey");
+    await sql`UPDATE sessions SET last_activity_at = now() - interval '3 hours' WHERE id = ${v.s.id}`;
+    await sweep(v.s.id);
+    const [vsl] = await sql`SELECT return_reason, exposed FROM slot_assignments WHERE session_id = ${v.s.id}`;
+    check("voice: exposure is judged by audio_started", vsl.return_reason === "abandoned" && vsl.exposed === true);
+
+    // V2: a test session; TTS requests fail twice, the third works
+    const v2 = await started("TF-V2", { test: true, modality: "voice" });
+    const cfg = (await sql`SELECT config FROM sessions WHERE id = ${v2.s.id}`)[0].config;
+    check("voice session: the TTS settings are in the config snapshot taken at consent", cfg.tts?.model_id === TTS.modelId && cfg.tts.voice_id === TTS.voiceId && cfg.tts.model_confirmed === false);
+    ttsFail = 2;
+    const t2 = sentToTTS.length;
+    await v2.T.answer({ injected: true, transcript: GOOD_ANSWER });
+    const f2 = await v2.T.waitFeedback();
+    const [fa2] = await sql`SELECT attempts FROM feedback_audio WHERE session_id = ${v2.s.id}`;
+    check("voice: two failed TTS requests are retried, then it works (3 attempts)", f2.state === "done" && fa2?.attempts === 3 && sentToTTS.length - t2 === 3);
+    check("voice: a test session gets the text only as dev_text", f2.dev_text?.length > 20 && !("feedback" in f2));
+
+    // V3: TTS keeps failing: no text instead, the session is locked and the slot goes back unexposed
+    const v3 = await started("TF-V3", { modality: "voice" });
+    ttsFailAll = true;
+    const t3 = sentToTTS.length;
+    await v3.T.say(1, GOOD_ANSWER);
+    const f3 = await v3.T.waitFeedback();
+    ttsFailAll = false;
+    const [s3] = await sql`SELECT s.status, s.lock_reason, a.return_reason, a.exposed FROM sessions s JOIN slot_assignments a ON a.session_id = s.id WHERE s.id = ${v3.s.id}`;
+    const [a3] = await sql`SELECT status, error FROM answers WHERE session_id = ${v3.s.id}`;
+    check("voice: TTS failing after the retries -> locked (tts_error), the text is not offered instead",
+      f3.code === 410 && f3.screen === "locked_error" && !("feedback" in f3) && s3.status === "locked" && s3.lock_reason === "tts_error");
+    check("... slot returned unexposed; 3 attempts; the failure is recorded; no audio row",
+      s3.return_reason === "locked" && s3.exposed === false && sentToTTS.length - t3 === 3 && a3.status === "error" && a3.error.startsWith("tts:")
+      && (await sql`SELECT count(*)::int AS n FROM feedback_audio WHERE session_id = ${v3.s.id}`)[0].n === 0);
+    check("... and reopening the link shows the error screen", (await tab(v3.s).claim()).screen === "locked_error");
+
+    // V4: the function died during the TTS: the text exists, only the audio is made again
+    const v4 = await started("TF-V4", { modality: "voice" });
+    await v4.T.segment("q2", 1, 0, GOOD_ANSWER);
+    const text4 = "참가자 답변을 바탕으로 만든 테스트 피드백입니다. 주도적으로 이끈 점이 좋았어요.";
+    await sql`INSERT INTO answers (session_id, question_id, attempt, transcript, status, stance, model, feedback, stage2_raw, created_at)
+              VALUES (${v4.s.id}, 'q2', 1, ${GOOD_ANSWER}, 'pending', 'direct', 'gpt-4o', ${text4}, ${"FEEDBACK: " + text4}, now() - interval '10 minutes')`;
+    const llm4 = sentToLLM.length, tts4 = sentToTTS.length;
+    check("voice: a row orphaned during the TTS is restarted", (await v4.T.feedback()).state === "pending");
+    const f4 = await v4.T.waitFeedback();
+    const [fa4] = await sql`SELECT text_original FROM feedback_audio WHERE session_id = ${v4.s.id}`;
+    check("... the finished text is reused (no new LLM call), only the audio is made again", f4.state === "done" && fa4?.text_original === text4 && sentToLLM.length === llm4 && sentToTTS.length - tts4 === 1);
+  }
 
   // ---------- 11. withdrawal with 'destroy' -> destroy_pending on abandonment -> purge keeps the bookkeeping ----------
   const d = await started("TF-010", {});
