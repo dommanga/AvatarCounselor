@@ -72,7 +72,7 @@ export function createSessionClient(token, { onAuthError, onBlocked } = {}) {
       user_agent: navigator.userAgent,
       screen: { w: screen.width, h: screen.height, vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio },
     }),
-    consent: () => call("POST", "/api/session/consent", {}),
+    consent: (choices) => call("POST", "/api/session/consent", { agree: true, ...choices }),
     heartbeat: () => call("POST", "/api/session/heartbeat", {}),
     // pagehide: keepalive lets the request outlive the page; lets a new tab take over immediately
     release() {

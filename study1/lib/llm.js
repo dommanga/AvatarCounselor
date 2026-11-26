@@ -6,8 +6,8 @@ import { STAGE1, STAGE2 } from "../prompts.js";
 import { parseStage1, selectStrong, selectWeak, buildContext, extractFeedback } from "./pipeline.js";
 
 export const MODEL = "gpt-4o";
-const STAGE1_TEMP = 0;
-const STAGE2_TEMP = 0.3;
+export const STAGE1_TEMP = 0;
+export const STAGE2_TEMP = 0.3;
 
 let openai = null;
 const client = () => (openai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));

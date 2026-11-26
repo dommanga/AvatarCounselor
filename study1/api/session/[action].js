@@ -3,7 +3,8 @@
 //   GET  /api/session/state      -> { screen, ... } (no claim; sweeps expiry/abandonment)
 //   POST /api/session/claim      { user_agent, screen } -> claims this tab, then same payload as state
 //   POST /api/session/heartbeat | release
-//   POST /api/session/consent    -> assigns the condition, then same payload as state
+//   POST /api/session/consent    { agree: true, withdraw_data: use|destroy, notify: yes|no }
+//                                -> assigns the condition, then same payload as state
 //   POST /api/session/event      { id, type, question_id?, client_ts }
 //   POST /api/session/survey     { phase, block, answers }   one survey block (re-submitting overwrites)
 //   POST /api/session/answer     { question_id, transcript, injected?, from_saved? }
@@ -20,7 +21,7 @@ import { SURVEY, validateBlock, evaluateChecks } from "../../lib/survey.js";
 import * as C from "../../lib/config.js";
 import {
   ACTIVE, screenFor, sweep, claim, consent, grantRetry, savedTranscript, touchStatement, idleTooLong,
-  returnSlotsStatement, meaningfulLength, currentAttempt,
+  afterEndStatements, lockSession, meaningfulLength, currentAttempt, CONSENT_WITHDRAW_DATA, CONSENT_NOTIFY,
 } from "../../lib/lifecycle.js";
 import { QUESTIONS, PRACTICE_ID, LAST_QUESTION, QUESTION_SEQUENCE } from "../../src/questions.js";
 
@@ -57,8 +58,10 @@ export default async function handler(req, res) {
     }
     if (guard === "active" && (!ACTIVE.includes(s.status) || idleTooLong(s))) {
       await sweep(s.id);
-      const [cur] = await db()`SELECT status FROM sessions WHERE id = ${s.id}`;
-      if (!ACTIVE.includes(cur.status)) return res.status(410).json({ error: "session ended", screen: screenFor(cur.status) });
+      const [cur] = await db()`SELECT status, lock_reason FROM sessions WHERE id = ${s.id}`;
+      if (!ACTIVE.includes(cur.status)) {
+        return res.status(410).json({ error: "session ended", screen: screenFor(cur.status, cur.lock_reason) });
+      }
     }
     return await fn(req, res, s);
   } catch (e) {
@@ -72,7 +75,7 @@ const reload = async (id) => (await db()`SELECT * FROM sessions WHERE id = ${id}
 // ---------- screen + resume payload ----------
 
 async function payload(s) {
-  const screen = screenFor(s.status);
+  const screen = screenFor(s.status, s.lock_reason);
   const base = { screen, is_test: s.is_test, heartbeat_ms: C.HEARTBEAT_MS };
   if (screen !== "active") return base;
   const sql = db();
@@ -164,9 +167,9 @@ async function claimRoute(req, res, s) {
 async function heartbeat(req, res, s) {
   const rows = await db()`
     UPDATE sessions SET client_seen_at = now(), client_released = false
-    WHERE id = ${s.id} AND active_client_key = ${req.headers["x-client-key"]} RETURNING status`;
+    WHERE id = ${s.id} AND active_client_key = ${req.headers["x-client-key"]} RETURNING status, lock_reason`;
   if (!rows.length) return res.status(409).json({ error: "another window holds this session", screen: "other_window" });
-  return res.status(200).json({ ok: true, screen: screenFor(rows[0].status) });
+  return res.status(200).json({ ok: true, screen: screenFor(rows[0].status, rows[0].lock_reason) });
 }
 
 // pagehide: lets another tab take over right away instead of waiting CLIENT_STALE_MS.
@@ -176,7 +179,12 @@ async function release(req, res, s) {
 }
 
 async function consentRoute(req, res, s) {
-  const r = await consent(s.id);
+  const { agree, withdraw_data, notify } = req.body || {};
+  if (agree !== true) return res.status(400).json({ error: "동의가 필요합니다." });
+  if (!CONSENT_WITHDRAW_DATA.includes(withdraw_data) || !CONSENT_NOTIFY.includes(notify)) {
+    return res.status(400).json({ error: "필수 선택 항목에 모두 응답해 주세요." });
+  }
+  const r = await consent(s.id, { withdraw_data, notify });
   if (r.exhausted) {
     return res.status(503).json({ error: "배정할 조건이 남아 있지 않습니다. 연구자에게 문의해 주세요.", screen: "consent" });
   }
@@ -220,7 +228,6 @@ async function complete(res, s, insertEvent) {
   if (missing.length) return res.status(400).json({ error: `post-survey blocks missing: ${missing.join(", ")}` });
 
   const checks = evaluateChecks(saved);
-  const [t, p] = returnSlotsStatement(s.id);
   await sql.transaction([
     insertEvent,
     sql`UPDATE sessions SET status = 'completed', completed_at = now(), ended_at = now(), valid = ${checks.valid},
@@ -228,7 +235,7 @@ async function complete(res, s, insertEvent) {
         WHERE id = ${s.id} AND status IN ('consented', 'in_progress')`,
     sql`INSERT INTO audit_log (actor, action, session_id, detail)
         VALUES ('system', 'completed', ${s.id}, ${JSON.stringify(checks)}::jsonb)`,
-    sql.query(t, p),
+    ...afterEndStatements(s.id).map(([t, p]) => sql.query(t, p)),
   ]);
   return res.status(200).json({ ok: true, stage: "done" });
 }
@@ -302,12 +309,20 @@ async function answer(req, res, s) {
       return res.status(200).json({ retry: true, attempt: attempt + 1 });
     }
   }
+  // The re-answer chance is spent. Short: give feedback, flagged. Nothing at all: a technical failure —
+  // no feedback (so no exposure), lock, and return the slot.
+  const chars = meaningfulLength(transcript);
+  if (chars === 0 && !injected) {
+    await lockSession(s.id, "empty_answer", { question_id, attempt, from_saved });
+    return res.status(410).json({ error: "empty answer", screen: "locked_error" });
+  }
+  const short = chars < C.EMPTY_ANSWER_MIN_CHARS;
 
   let row;
   try {
     [row] = await sql`
-      INSERT INTO answers (session_id, question_id, attempt, transcript, answer_truncated, injected, status, stance, model)
-      VALUES (${s.id}, ${question_id}, ${attempt}, ${transcript}, ${truncated}, ${!!injected}, 'pending', ${s.stance}, ${MODEL})
+      INSERT INTO answers (session_id, question_id, attempt, transcript, answer_truncated, answer_short, injected, status, stance, model)
+      VALUES (${s.id}, ${question_id}, ${attempt}, ${transcript}, ${truncated}, ${short}, ${!!injected}, 'pending', ${s.stance}, ${MODEL})
       RETURNING id`;
   } catch (e) {
     if (isUniqueViolation(e)) return res.status(202).json({ pending: true }); // a concurrent request is generating

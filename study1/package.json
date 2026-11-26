@@ -15,6 +15,9 @@
     "issue-tokens": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/issue-tokens.js",
     "sweep": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/sweep.js",
     "test:assign": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-assign.js",
-    "test:flow": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-flow.js"
+    "test:flow": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-flow.js",
+    "purge-audio": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/purge-audio.js",
+    "purge-withdrawn": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/purge-withdrawn.js",
+    "test:assign-http": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-assign-http.js"
   }
 }

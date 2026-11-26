@@ -203,7 +203,27 @@
         <div class="landing">
           <h2>연구 참여 동의</h2>
           <div class="pbox">[자리표시] 동의서 본문이 여기에 들어갑니다.</div>
-          <button class="primary" id="p-consentBtn">동의합니다</button>
+          <div class="evalpanel">
+            <div class="evalitem">
+              <div class="qlabel">연구 참여를 중간에 그만두는 경우, 그때까지 수집된 자료를</div>
+              <div class="choices">
+                <label class="choice"><input type="radio" name="p-withdrawData" value="use"> 연구에 사용하는 것에 동의합니다.</label>
+                <label class="choice"><input type="radio" name="p-withdrawData" value="destroy"> 파기해 주시기 바랍니다.</label>
+              </div>
+            </div>
+            <div class="evalitem">
+              <div class="qlabel">연구와 관련하여 새로운 정보가 생기면 통보받기를</div>
+              <div class="choices">
+                <label class="choice"><input type="radio" name="p-notify" value="yes"> 원합니다.</label>
+                <label class="choice"><input type="radio" name="p-notify" value="no"> 원하지 않습니다.</label>
+              </div>
+            </div>
+            <div class="evalitem">
+              <label class="choice"><input type="checkbox" id="p-consentAgree"> 위 내용을 읽고 연구 참여에 동의합니다.</label>
+            </div>
+          </div>
+          <p class="muted">사례비 지급에 필요한 정보는 실험이 끝난 뒤 별도 양식으로 받습니다.</p>
+          <button class="primary" id="p-consentBtn">참여 시작하기</button>
           <div class="err" id="p-consentErr"></div>
         </div>
       </section>
@@ -248,7 +268,7 @@
           <li>이어지는 면접 질문에는 <b>1분 내외</b>로 답해 주세요. 답변은 한 번만 할 수 있습니다.</li>
           <li>본인의 경험을 자기 생각대로 이야기해 주세요. ChatGPT 같은 AI 도구는 사용하지 말아 주세요.</li>
           <li>정답이 정해진 질문이 아니며, 당신의 생각과 경험을 자유롭게 표현할 수 있습니다.</li>
-          <li>음성은 저장되지 않으며, 답변은 텍스트로만 기록됩니다.</li>
+          <li>답변 음성은 녹음되며, 문자로 변환된 내용을 확인한 뒤 파기됩니다.</li>
         </ul>
         <div class="bubble coach">
           <div class="who">AI 코치</div>

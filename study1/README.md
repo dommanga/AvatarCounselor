@@ -32,8 +32,13 @@ researcher's spreadsheet.
     npm run issue-tokens -- --n 1 --batch W1 --test --stance direct --modality text
     npm run sweep                                     # expire / abandon now (also done lazily)
     npm run test:assign -- --host <dev endpoint id>   # concurrent assignment + return + claim test
-    npm run test:flow -- --host <dev endpoint id>     # end-to-end participant API test (1 LLM call)
+    npm run test:flow -- --host <dev endpoint id>     # end-to-end participant API test (2 LLM calls)
+    npm run test:assign-http -- --host <dev endpoint id> --url https://<preview> [--audio]
+    npm run purge-audio [-- --dry-run]                # destroy audio of transcript-verified sessions
+    npm run purge-withdrawn [-- --dry-run]            # destroy data of 'destroy'-choice sessions that ended early
 Destructive scripts refuse to run unless `--host` names the endpoint `DATABASE_URL` points at.
+The purge scripts never run automatically. Blob access from a local machine needs the store's
+connection to include the Development environment (OIDC), or a `BLOB_READ_WRITE_TOKEN`.
 
 ## Setup
 1. Vercel project → Storage → **Neon Postgres** (sets `DATABASE_URL`). Locally, `.env` points at the

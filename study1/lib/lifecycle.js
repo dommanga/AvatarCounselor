@@ -10,12 +10,17 @@ import { SURVEY } from "./survey.js";
 export const ACTIVE = ["consented", "in_progress"];
 export const ENDED = ["completed", "expired", "abandoned", "locked"];
 
-// Which screen the participant page shows for a status.
-export function screenFor(status) {
+// Which screen the participant page shows for a status. A lock caused by a technical failure (an
+// empty answer after the re-answer chance) gets its own screen.
+export function screenFor(status, lockReason = null) {
   if (status === "issued" || status === "opened") return "consent";
   if (ACTIVE.includes(status)) return "active";
+  if (status === "locked" && lockReason === "empty_answer") return "locked_error";
   return status; // completed | expired | abandoned | locked
 }
+
+export const CONSENT_WITHDRAW_DATA = ["use", "destroy"];
+export const CONSENT_NOTIFY = ["yes", "no"];
 
 // End of the issuing week: Sunday 23:59:59 KST.
 export function weekEndKST(from = new Date()) {
@@ -34,7 +39,7 @@ export const currentAttempt = (s) => (s.retry_used ? 2 : 1);
 // sessionId = null sweeps every session.
 
 // Return the slot of every session that ended without a valid completion.
-export function returnSlotsStatement(sessionId = null) {
+function returnSlotsStatement(sessionId = null) {
   return [`
     WITH r AS (
       UPDATE slot_assignments a
@@ -50,6 +55,33 @@ export function returnSlotsStatement(sessionId = null) {
     SELECT 'system', 'slot_returned', session_id, slot_seq,
            jsonb_build_object('assignment_id', id, 'reason', return_reason, 'exposed', exposed)
     FROM r`, [sessionId]];
+}
+
+// Ended without completing and chose 'destroy' at consent: flag for scripts/purge-withdrawn.js.
+function markDestroyStatement(sessionId = null) {
+  return [`
+    WITH x AS (
+      UPDATE sessions SET destroy_pending = true, updated_at = now()
+      WHERE status IN ('abandoned', 'locked') AND consent_withdraw_data = 'destroy'
+        AND NOT destroy_pending AND data_purged_at IS NULL AND ($1::uuid IS NULL OR id = $1)
+      RETURNING id, status)
+    INSERT INTO audit_log (actor, action, session_id, detail)
+    SELECT 'system', 'destroy_pending', id, jsonb_build_object('status', status) FROM x`, [sessionId]];
+}
+
+// Run after any session may have ended: slot return + withdrawal flag.
+export const afterEndStatements = (sessionId = null) => [returnSlotsStatement(sessionId), markDestroyStatement(sessionId)];
+
+// Lock a session (technical failure / limits) and release its slot, as one batch.
+export async function lockSession(sessionId, reason, detail = {}) {
+  const sql = db();
+  await sql.transaction([
+    sql`UPDATE sessions SET status = 'locked', lock_reason = ${reason}, ended_at = now(), updated_at = now()
+        WHERE id = ${sessionId} AND status IN ('consented', 'in_progress')`,
+    sql`INSERT INTO audit_log (actor, action, session_id, detail)
+        VALUES ('system', 'locked', ${sessionId}, ${JSON.stringify({ reason, ...detail })}::jsonb)`,
+    ...afterEndStatements(sessionId).map(([t, p]) => sql.query(t, p)),
+  ]);
 }
 
 function sweepStatements(sessionId = null) {
@@ -68,7 +100,7 @@ function sweepStatements(sessionId = null) {
       INSERT INTO audit_log (actor, action, session_id, detail)
       SELECT 'system', 'abandoned', id, jsonb_build_object('last_activity_at', last_activity_at) FROM x`,
       [sessionId, C.ABANDON_AFTER_MS / 1000]],
-    returnSlotsStatement(sessionId),
+    ...afterEndStatements(sessionId),
   ];
 }
 
@@ -90,8 +122,9 @@ export const idleTooLong = (s) =>
 // ---------- condition assignment (at consent) ----------
 // Serialized by a transaction-scoped advisory lock; the session row is locked FOR UPDATE so a double
 // click can't assign twice. Refill queue first (oldest return), then the next never-used sequence slot.
+// choices: { withdraw_data: use | destroy, notify: yes | no } (validated by the caller)
 // -> { status, assigned, exhausted? }
-export async function consent(sessionId) {
+export async function consent(sessionId, choices) {
   return withTransaction(async (c) => {
     // sweep first (frees slots before choosing; safe concurrently), then serialize only the pick itself
     for (const [t, p] of sweepStatements(null)) await c.query(t, p);
@@ -111,11 +144,13 @@ export async function consent(sessionId) {
     }
     await c.query(`
       UPDATE sessions SET status = 'consented', consented_at = now(), last_activity_at = now(), updated_at = now(),
-             stance = $2, modality = $3, current_stage = 'pre_survey', config = $4, survey_version = $5
-      WHERE id = $1`, [s.id, stance, modality, JSON.stringify(configSnapshot(stance)), SURVEY.version ?? null]);
+             stance = $2, modality = $3, current_stage = 'pre_survey', config = $4, survey_version = $5,
+             consent_withdraw_data = $6, consent_notify = $7
+      WHERE id = $1`, [s.id, stance, modality, JSON.stringify(configSnapshot(stance)), SURVEY.version ?? null,
+                       choices.withdraw_data, choices.notify]);
     await c.query("INSERT INTO events (id, session_id, type) VALUES ($1, $2, 'consented')", [crypto.randomUUID(), s.id]);
     await c.query("INSERT INTO audit_log (actor, action, session_id, detail) VALUES ('system', 'consented', $1, $2)",
-      [s.id, JSON.stringify({ stance, modality, is_test: s.is_test })]);
+      [s.id, JSON.stringify({ stance, modality, is_test: s.is_test, ...choices })]);
     return { status: "consented", assigned: true };
   });
 }
@@ -168,11 +203,10 @@ export async function claim(sessionId, key, info) {
       [s.id, key, kind, info.user_agent, info.screen ? JSON.stringify(info.screen) : null]);
     if (kind === "other_window") return { kind, status: s.status };
     if (kind === "locked") {
-      await c.query("UPDATE sessions SET status = 'locked', ended_at = now(), updated_at = now() WHERE id = $1", [s.id]);
+      await c.query("UPDATE sessions SET status = 'locked', lock_reason = 'resume_limit', ended_at = now(), updated_at = now() WHERE id = $1", [s.id]);
       await c.query("INSERT INTO audit_log (actor, action, session_id, detail) VALUES ('system', 'locked', $1, $2)",
         [s.id, JSON.stringify({ reason: "resume_limit", resume_count: s.resume_count })]);
-      const [t, p] = returnSlotsStatement(s.id);
-      await c.query(t, p);
+      for (const [t, p] of afterEndStatements(s.id)) await c.query(t, p);
       return { kind, status: "locked" };
     }
 

@@ -1,6 +1,6 @@
 {
-  "_note": "문구 수정은 이 파일만 바꾼다. 2026-10-05 사전·사후설문 문서 수정본 기준. 문항을 바꾸면 version도 올린다 (세션 생성 시 sessions.survey_version에 저장됨).",
-  "version": "2026-10-05",
+  "_note": "문구 수정은 이 파일만 바꾼다. 2026-10-05 사전·사후설문 문서 수정본 기준. 문항을 바꾸면 version도 올린다 (세션 생성 시 sessions.survey_version에 저장됨). \"check\": {\"correct\": 값} = 주의 확인 문항 (척도 계산 제외, 사후설문 제출 시 valid 판정). \"fixed\": true = Phase 3 무작위 제시에서 위치 고정.",
+  "version": "2026-11-26",
   "pre": [
     {
       "block": "background",
@@ -283,9 +283,55 @@
           "text": "나는 내가 받는 피드백을 감당할 수 있다는 것을 안다."
         }
       ]
+    },
+    {
+      "block": "SMI",
+      "title": "[Phase 3에서 채움] SMI",
+      "scored": false,
+      "scale": {
+        "min": 1,
+        "max": 7,
+        "minLabel": "전혀 동의하지 않음",
+        "maxLabel": "매우 동의함",
+        "midpoint": 4
+      },
+      "_todo": "Phase 3: LIKE to hear 하위 묶음 → AT1 → WANT to discover 하위 묶음",
+      "items": [
+        {
+          "id": "AT1",
+          "text": "이 문항은 응답 확인을 위한 것입니다. '동의하지 않음(2)'을 선택해 주세요.",
+          "check": {
+            "correct": 2
+          },
+          "fixed": true
+        }
+      ]
     }
   ],
   "post": [
+    {
+      "block": "FPQ",
+      "title": "[Phase 3에서 채움] FPQ",
+      "scored": false,
+      "scale": {
+        "min": 0,
+        "max": 10,
+        "minLabel": "전혀 그렇지 않다",
+        "maxLabel": "매우 그렇다",
+        "midpoint": 5
+      },
+      "_todo": "Phase 3: Usefulness 묶음 → AT2 → Affect 묶음",
+      "items": [
+        {
+          "id": "AT2",
+          "text": "이 문항은 응답 확인을 위한 것입니다. 8을 선택해 주세요.",
+          "check": {
+            "correct": 8
+          },
+          "fixed": true
+        }
+      ]
+    },
     {
       "block": "S",
       "title": "코치의 피드백",

@@ -13,6 +13,7 @@ const { values } = parseArgs({ options: { host: { type: "string" } } });
 requireEndpoint(values.host);
 
 const sql = db();
+const CHOICES = { withdraw_data: "use", notify: "no" };
 const created = [];
 let passed = 0, failed = 0;
 function check(name, ok, info = "") {
@@ -47,7 +48,7 @@ try {
   const ids = [];
   for (let i = 1; i <= 30; i++) ids.push(await newSession(`TA-${String(i).padStart(3, "0")}`));
   const t0 = Date.now();
-  const results = await Promise.all(ids.map((id) => consent(id)));
+  const results = await Promise.all(ids.map((id) => consent(id, CHOICES)));
   const ms = Date.now() - t0;
   check("30 concurrent consents all assigned", results.every((r) => r.assigned), `${ms} ms`);
   const seqs = (await sql`SELECT slot_seq FROM slot_assignments WHERE session_id = ANY(${ids}::uuid[])`).map((r) => r.slot_seq).sort((a, b) => a - b);
@@ -59,13 +60,13 @@ try {
   check("session cell + config snapshot match the slot", mismatched[0].n === 0);
 
   // B. consent again on all 30 (already consented): nothing new
-  const again = await Promise.all(ids.map((id) => consent(id)));
+  const again = await Promise.all(ids.map((id) => consent(id, CHOICES)));
   const [{ n: afterAgain }] = await sql`SELECT count(*)::int AS n FROM slot_assignments WHERE session_id = ANY(${ids}::uuid[])`;
   check("repeat consent assigns nothing", again.every((r) => !r.assigned) && afterAgain === 30);
 
   // C. one session, 5 simultaneous consents (double click)
   const dbl = await newSession("TA-031");
-  const five = await Promise.all(Array.from({ length: 5 }, () => consent(dbl)));
+  const five = await Promise.all(Array.from({ length: 5 }, () => consent(dbl, CHOICES)));
   const [{ n: dblCount }] = await sql`SELECT count(*)::int AS n FROM slot_assignments WHERE session_id = ${dbl}`;
   check("double click: exactly one assignment", five.filter((r) => r.assigned).length === 1 && dblCount === 1);
   check("double click: took the 31st sequence slot", (await assignmentOf(dbl)).slot_seq === free[30]);
@@ -105,7 +106,7 @@ try {
   const order = [];
   for (let i = 0; i < 4; i++) {
     const id = await newSession(`TA-R${i + 1}`);
-    await consent(id);
+    await consent(id, CHOICES);
     order.push(await assignmentOf(id));
   }
   check("refill order A, B, C",
@@ -115,7 +116,7 @@ try {
 
   // F. expired link: no assignment
   const ex = await newSession("TA-EXP", { expiresInMs: -60_000 });
-  const exr = await consent(ex);
+  const exr = await consent(ex, CHOICES);
   check("expired link: consent refused, status expired", !exr.assigned && exr.status === "expired" && !(await assignmentOf(ex)));
 
   // G. the re-answer chance is granted once

@@ -46,7 +46,14 @@ CREATE TABLE IF NOT EXISTS sessions (
   client_seen_at    timestamptz,
   client_released   boolean NOT NULL DEFAULT false,
   last_activity_at  timestamptz,
-  valid             boolean,                -- set on completion from the attention checks
+  valid             boolean,                -- set on completion: true only if every attention check (AT1, AT2) is correct
+  lock_reason       text CHECK (lock_reason IN ('resume_limit', 'empty_answer', 'admin')),
+  consent_withdraw_data text CHECK (consent_withdraw_data IN ('use', 'destroy')), -- consent form §8: on withdrawal
+  consent_notify    text CHECK (consent_notify IN ('yes', 'no')),               -- consent form §11: new information
+  destroy_pending   boolean NOT NULL DEFAULT false, -- chose 'destroy' and ended without completing; scripts/purge-withdrawn.js
+  data_purged_at    timestamptz,
+  audio_verified_at timestamptz,            -- transcripts checked against the audio; audio may now be destroyed
+  audio_purged_at   timestamptz,            -- scripts/purge-audio.js deleted the audio blobs
   config            jsonb,                  -- settings snapshot at consent (model, temperatures, prompt hashes, ...)
   survey_version    text,
   updated_at        timestamptz NOT NULL DEFAULT now()
@@ -102,6 +109,7 @@ CREATE TABLE IF NOT EXISTS answers (
   attempt          int NOT NULL DEFAULT 1,
   transcript       text NOT NULL,
   answer_truncated boolean NOT NULL DEFAULT false, -- built from the saved segments after an interruption
+  answer_short     boolean NOT NULL DEFAULT false, -- under EMPTY_ANSWER_MIN_CHARS after the re-answer chance was used
   injected         boolean NOT NULL DEFAULT false, -- dev-mode corpus injection (test sessions only)
   status           text NOT NULL CHECK (status IN ('pending', 'done', 'error', 'stale')),
   stance           text,
@@ -133,7 +141,8 @@ CREATE TABLE IF NOT EXISTS answer_segments (
   PRIMARY KEY (session_id, question_id, attempt, seq)
 );
 
--- Recorded audio chunks (bytes live in a private Vercel Blob store; this is the index).
+-- Recorded audio chunks (bytes live in a private Vercel Blob store; this is the index). The rows stay
+-- after the blobs are destroyed (purged_at).
 CREATE TABLE IF NOT EXISTS audio_chunks (
   session_id  uuid NOT NULL REFERENCES sessions(id),
   question_id text NOT NULL,
@@ -144,6 +153,7 @@ CREATE TABLE IF NOT EXISTS audio_chunks (
   mime        text,
   client_ts   bigint,
   server_ts   timestamptz NOT NULL DEFAULT clock_timestamp(),
+  purged_at   timestamptz,
   PRIMARY KEY (session_id, question_id, attempt, seq)
 );
 

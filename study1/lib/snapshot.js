@@ -4,9 +4,7 @@
 // experiment/prompts/*.md files.
 
 import crypto from "crypto";
-// Namespace import: llm.js (frozen) does not export its temperatures yet; they record as null until
-// `export` is added there.
-import * as LLM from "./llm.js";
+import { MODEL, STAGE1_TEMP, STAGE2_TEMP } from "./llm.js";
 import { STAGE1, STAGE2 } from "../prompts.js";
 import { SURVEY } from "./survey.js";
 import * as C from "./config.js";
@@ -15,7 +13,7 @@ const sha256 = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex"
 
 export function configSnapshot(stance) {
   return {
-    llm: { model: LLM.MODEL, stage1_temperature: LLM.STAGE1_TEMP ?? null, stage2_temperature: LLM.STAGE2_TEMP ?? null },
+    llm: { model: MODEL, stage1_temperature: STAGE1_TEMP, stage2_temperature: STAGE2_TEMP },
     prompts: {
       stage1_sha256: sha256(STAGE1),
       stage2_sha256: stance ? sha256(STAGE2[stance]) : null,

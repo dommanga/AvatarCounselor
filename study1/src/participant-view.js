@@ -17,6 +17,7 @@ const BLOCKED = {
   completed: ["참여 완료", "이미 참여를 완료하셨습니다. 감사합니다."],
   locked: ["진행할 수 없습니다", "더 이상 진행할 수 없습니다. 연구자에게 문의해 주세요."],
   abandoned: ["진행할 수 없습니다", "더 이상 진행할 수 없습니다. 연구자에게 문의해 주세요."],
+  locked_error: ["문제가 생겼습니다", "진행 중 문제가 생겼습니다. 연구자에게 문의해 주세요."],
   other_window: ["다른 창에서 진행 중입니다",
     "이 연구는 다른 창(탭)에서 이미 진행 중입니다. 원래 창에서 계속해 주세요. 원래 창을 이미 닫았다면 1–2분 뒤 이 페이지를 새로고침해 주세요."],
   invalid: ["링크를 확인해 주세요", "유효하지 않은 링크입니다. 받으신 링크를 다시 확인하시거나 연구자에게 문의해 주세요."],
@@ -129,10 +130,16 @@ export function initParticipantView(root) {
 
   $("p-consentBtn").addEventListener("click", async () => {
     const btn = $("p-consentBtn");
+    const picked = (name) => root.querySelector(`input[name="${name}"]:checked`)?.value;
+    const choices = { withdraw_data: picked("p-withdrawData"), notify: picked("p-notify") };
+    if (!$("p-consentAgree").checked || !choices.withdraw_data || !choices.notify) {
+      $("p-consentErr").textContent = "동의 확인과 두 가지 선택 항목에 모두 응답해 주세요.";
+      return;
+    }
     btn.disabled = true;
     $("p-consentErr").textContent = "";
     try {
-      enter(await client.consent());
+      enter(await client.consent(choices));
     } catch (e) {
       if ([401, 409, 410].includes(e.status)) return;
       $("p-consentErr").textContent = e.status === 503 ? e.message : `처리하지 못했습니다 (${e.message}). 다시 눌러주세요.`;

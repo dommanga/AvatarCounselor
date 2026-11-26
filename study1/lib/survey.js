@@ -69,7 +69,7 @@ export function validateBlock(phase, blockId, answers) {
 
 // Attention checks: items carrying "check": {"correct": value | [values]} in survey_items.json.
 // responses: [{ phase, item_id, value }] -> { defined: [item_id], failed: [item_id], valid }
-// With no check items configured, valid is true (defined.length === 0 shows that it was unchecked).
+// valid is true only when every check item (AT1, AT2) was answered correctly; null if none is configured.
 export function evaluateChecks(responses) {
   const got = new Map(responses.map((r) => [`${r.phase}:${r.item_id}`, r.value]));
   const defined = [], failed = [];
@@ -83,5 +83,5 @@ export function evaluateChecks(responses) {
       }
     }
   }
-  return { defined, failed, valid: failed.length === 0 };
+  return { defined, failed, valid: defined.length ? failed.length === 0 : null };
 }
