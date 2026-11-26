@@ -26,6 +26,7 @@ const { default: handler } = await import("../api/session/[action].js");
 const { SURVEY, PHASES } = await import("../lib/survey.js");
 const { conditionalText, rangeOf, anchorsOf, optionsOf, otherLabelOf } = await import("../src/survey-shared.js");
 const { COPY } = await import("../src/copy.js");
+const { QUESTIONS } = await import("../src/questions.js");
 const { OE_MIN_CHARS } = await import("../lib/config.js");
 
 const H = createHarness();
@@ -96,6 +97,7 @@ async function newPage() {
   const screen = (id) => `(() => { const s = document.getElementById("${id}"); return !!s && !s.classList.contains("hidden"); })()`;
   const click = (id) => ev(`document.getElementById("${id}").click()`);
   const reloadTo = async (screenId) => {
+    await sleep(1200); // events are sent in the background: let the last click reach the server before leaving
     await ev(`window.__old = 1`);
     await send("Page.reload");
     await waitFor(`window.__old === undefined && document.readyState === "complete"`, 20000, "fresh document");
@@ -227,10 +229,23 @@ async function toQuestion(p, token) {
   await p.send("Page.addScriptToEvaluateOnNewDocument", { source: STUB });
   await p.send("Page.navigate", { url: `http://localhost:${PORT}/s/${token}` });
   await p.waitFor(p.screen("p-consent"), 20000, "consent screen");
+  check("tab title is 면접 연습 and no 'AI 면접 코치' header on the page", (await p.ev(`document.title`)) === "면접 연습" && !(await p.ev(`document.body.innerText.includes("AI 면접 코치")`)));
   await p.ev(`document.querySelector('input[name="p-withdrawData"][value="use"]').click(); document.querySelector('input[name="p-notify"][value="yes"]').click(); document.getElementById("p-consentAgree").click();`);
   await p.click("p-consentBtn");
   await p.waitFor(p.screen("p-device"), 20000, "device test");
-  await p.click("p-spkPlay"); await p.click("p-spkPlay"); await p.click("p-spkNext");
+  // speaker: the chime repeats until [정지]; going on is possible only after stopping
+  check("speaker wording", (await p.ev(`document.querySelector("#p-spkStep p").textContent`)) === COPY.speakerGuide);
+  const spk = () => p.ev(`({ label: document.getElementById("p-spkPlay").textContent, nextShown: !document.getElementById("p-spkNext").classList.contains("hidden"), nextDisabled: document.getElementById("p-spkNext").disabled })`);
+  check("before playing: [재생], no way on yet", (await spk()).label === COPY.speakerPlay && !(await spk()).nextShown);
+  await p.click("p-spkPlay");
+  const playing = await spk();
+  await sleep(1600);
+  await p.click("p-spkPlay");
+  const stopped = await spk();
+  check("while playing the button is [정지] and [다음] waits", playing.label === COPY.speakerStop && playing.nextShown && playing.nextDisabled);
+  check("after [정지]: [재생] again and [다음] is enabled", stopped.label === COPY.speakerPlay && stopped.nextShown && !stopped.nextDisabled);
+  await p.click("p-spkPlay"); await sleep(600); await p.click("p-spkPlay"); // a second play
+  await p.click("p-spkNext");
   await p.click("p-micAllow");
   await p.waitFor(`!document.getElementById("p-micTest").classList.contains("hidden")`, 8000, "mic test panel");
   await p.click("p-micAction"); await sleep(1600); await p.click("p-micAction");
@@ -260,6 +275,15 @@ try {
   const p = await newPage();
   const micText = await toQuestion(p, b.token);
   check("device test: recognized sentence shown", micText.includes("하늘이 맑고"));
+  const tones = await sql`SELECT type, data FROM events WHERE session_id = ${b.id} AND type LIKE 'speaker_tone_%' ORDER BY seq`;
+  check("speaker starts / stops and play durations logged", tones.map((e) => e.type).join() === "speaker_tone_start,speaker_tone_stop,speaker_tone_start,speaker_tone_stop"
+    && tones[1].data.duration_ms >= 1400 && tones[3].data.duration_ms >= 400, tones.filter((e) => e.type.endsWith("stop")).map((e) => e.data.duration_ms).join("/") + " ms");
+  await p.waitFor(p.screen("p-notice"), 8000, "notice screen");
+  const notice = await p.ev(`({ title: document.querySelector("#p-notice h2").textContent, items: [...document.querySelectorAll("#p-notice li")].map((l) => l.textContent), btn: document.getElementById("p-noticeConfirm").textContent })`);
+  check("notice before the survey: wording and [확인했습니다]", notice.title === COPY.noticeTitle && notice.items.join("|") === COPY.noticeItems.join("|") && notice.btn === COPY.noticeConfirm);
+  await p.reloadTo("p-notice");
+  check("reload on the notice -> the notice again", true);
+  await p.click("p-noticeConfirm");
   const stored = await storedOrder(b.id);
   const bValues = {};
   let smiOrderSeen;
@@ -285,16 +309,40 @@ try {
     },
   });
   check("pre-survey done -> scenario", await p.ev(p.screen("p-scenario")));
+  check("notice confirmation time recorded", (await sql`SELECT count(*)::int AS n FROM events WHERE session_id = ${b.id} AND type = 'notice_confirmed'`)[0].n === 1);
+  const sc = await p.ev(`({ title: document.querySelector("#p-scenario h2").textContent, intro: document.querySelector("#p-scenario .muted").textContent, body: document.querySelector("#p-scenario .text").textContent })`);
+  check("scenario: title 상황 안내, instruction under it, body", sc.title === "상황 안내" && sc.intro === "아래 상황을 읽고, 그 상황에 있다고 생각하며 진행해 주세요." && sc.body === COPY.scenarioBody);
   await p.click("p-scenarioNext");
+
+  // answer instructions: the countdown must not run here
+  await p.waitFor(p.screen("p-qguide"), 5000, "answer instructions");
+  const guide = await p.ev(`({ title: document.querySelector("#p-qguide h2").textContent, items: [...document.querySelectorAll("#p-qguide li")].map((l) => l.textContent), btn: document.getElementById("p-qguideStart").textContent })`);
+  check("answer instructions: wording and [시작하기]", guide.title === "면접 질문 안내" && guide.items.join("|") === COPY.qguideItems.join("|") && guide.btn === "시작하기");
+  check("the question is not on screen yet", !(await p.ev(p.screen("p-question"))));
+  await sleep(3500); // time spent reading the instructions must not eat into the thinking time
+  await p.click("p-qguideStart");
   await p.waitFor(p.screen("p-question"), 5000, "question screen");
   const think0 = await p.ev(`document.getElementById("p-thinkTime").textContent`);
-  check("thinking time counts down from 40", /^(40|39)초$/.test(think0), think0);
+  check("the countdown starts when the question appears (still 40 after 3.5 s on the instructions)", /^(40|39)초$/.test(think0), think0);
+  const qs = await p.ev(`({ text: document.getElementById("p-questionText").textContent, hint: document.getElementById("p-questionHint").textContent, visible: document.getElementById("p-question").innerText })`);
+  check("question screen: the question and its screen-only hint", qs.text === QUESTIONS.q2 && qs.hint === "학교, 일, 동아리, 개인 활동 등 어떤 경험이든 괜찮습니다.");
+  check("... countdown and [답변 시작], without the long instructions or any header",
+    qs.visible.includes(COPY.thinkLabel) && qs.visible.includes(COPY.answerStart) && !qs.visible.includes("주어집니다") && !qs.visible.includes("최대 2분") && !qs.visible.includes("AI 면접 코치"));
+  let ge = [];
+  for (let i = 0; i < 25 && ge.length < 2; i++) { // events are sent in the background
+    ge = await sql`SELECT type, client_ts FROM events WHERE session_id = ${b.id} AND type IN ('question_guide_shown','question_shown') ORDER BY seq`;
+    if (ge.length < 2) await sleep(200);
+  }
+  check("events: instructions shown, then the question (3 s later)", ge.map((e) => e.type).join() === "question_guide_shown,question_shown" && Number(ge[1].client_ts) - Number(ge[0].client_ts) >= 3000);
   await sleep(3500);
   const thinkBefore = await p.ev(`document.getElementById("p-thinkTime").textContent`);
-  await p.reloadTo("p-question");
-  const thinkAfter = await p.ev(`document.getElementById("p-thinkTime").textContent`);
+  await p.reloadTo("p-qguide");
   const [rs] = await sql`SELECT retry_used, resume_count FROM sessions WHERE id = ${b.id}`;
-  check("reload while thinking: countdown restarts, no re-answer chance spent", parseInt(thinkAfter) > parseInt(thinkBefore) && rs.retry_used === false && rs.resume_count === 0, `${thinkBefore} -> ${thinkAfter}`);
+  check("reload on the question screen -> the instructions again, no re-answer chance spent", rs.retry_used === false && rs.resume_count === 0);
+  await p.click("p-qguideStart");
+  await p.waitFor(p.screen("p-question"), 5000, "question screen after the instructions");
+  const thinkAfter = await p.ev(`document.getElementById("p-thinkTime").textContent`);
+  check("... and the countdown starts over", parseInt(thinkAfter) > parseInt(thinkBefore), `${thinkBefore} -> ${thinkAfter}`);
   if (args.full) {
     const t0 = Date.now();
     await p.waitFor(`!document.getElementById("p-answering").classList.contains("hidden")`, 60000, "auto-started answer");
@@ -331,6 +379,8 @@ try {
   });
   check("OE1 block was reached", oeChecked);
   check("post-survey submitted -> debriefing", await p.ev(p.screen("p-debrief")));
+  check("debriefing wording", (await p.ev(`document.querySelector("#p-debrief .text").textContent`)) === COPY.debriefBody
+    && COPY.debriefBody.includes("객관적이거나 전문적인 평가가 아닙니다") && !COPY.debriefBody.includes("설계된"));
   await p.click("p-debriefConfirm");
   await p.waitFor(p.screen("p-end"), 10000, "completion screen");
   const [fin] = await sql`SELECT status, valid, debriefed_at FROM sessions WHERE id = ${b.id}`;

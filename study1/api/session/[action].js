@@ -121,13 +121,14 @@ async function payload(s) {
 }
 
 // Where a (re)loaded page continues.
-//   { to: device_test | pre_survey | scenario | post_survey }
-//   { to: question, question_id, reanswer? }   ask again from the start of the thinking time;
-//                                              reanswer = the re-answer chance was just spent
+//   { to: device_test | notice | pre_survey | scenario | post_survey }
+//   { to: question_guide, question_id, reanswer? }  the answering instructions come first, the thinking time starts
+//                                              over after them; reanswer = the re-answer chance was just spent
 //   { to: submit_saved, question_id }          interrupted mid-answer with enough text: confirm what was saved
 //   { to: self_rating, question_id }           answer confirmed, self-rating still to do
 //   { to: feedback, question_id, seen, replay_audio? }
 async function resumeTarget(s, answers, surveys) {
+  if (s.current_stage === "question_guide") return { to: "question_guide", question_id: QUESTION_SEQUENCE[0] };
   const m = QUESTION_STAGE_RE.exec(s.current_stage);
   if (!m || !QUESTIONS[m[1]]) return { to: s.current_stage };
   const q = m[1];
@@ -152,12 +153,12 @@ async function resumeTarget(s, answers, surveys) {
   const started = await sql`
     SELECT 1 FROM events WHERE session_id = ${s.id} AND type = 'answer_start' AND question_id = ${q}
       AND server_ts > coalesce(${s.retry_granted_at}::timestamptz, '-infinity'::timestamptz) LIMIT 1`;
-  if (!started.length) return { to: "question", question_id: q }; // still thinking: the countdown starts over
+  if (!started.length) return { to: "question_guide", question_id: q }; // left the question screen: the instructions again, the countdown starts over
 
   const saved = await savedTranscript(s.id, q, currentAttempt(s));
   if (meaningfulLength(saved) < C.EMPTY_ANSWER_MIN_CHARS && !s.retry_used &&
       await grantRetry(s.id, "resume", { question_id: q, saved_chars: meaningfulLength(saved) })) {
-    return { to: "question", question_id: q, reanswer: true };
+    return { to: "question_guide", question_id: q, reanswer: true };
   }
   return { to: "submit_saved", question_id: q };
 }

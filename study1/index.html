@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>모의 면접 코칭</title>
+  <title>면접 연습</title>
   <style>
     :root {
       --bg: #f7f8fa; --surface: #ffffff; --border: #e5e7eb;
@@ -170,6 +170,9 @@
 
     .guide { margin: 0 0 16px; padding-left: 22px; font-size: 15px; }
     .guide li { margin-bottom: 6px; }
+    .guide.big { font-size: 17px; margin-bottom: 24px; }
+    .guide.big li { margin-bottom: 10px; }
+    .qhint { margin-top: 10px; font-size: 15px; }
 
     /* participant flow additions */
     .landing.wide { max-width: 640px; }
@@ -193,7 +196,6 @@
       <span>테스트 세션 전용. 단계를 자유롭게 이동하고 테스트 대본을 주입할 수 있습니다 — <code>Cmd/Ctrl+Shift+P</code>로 끄세요.</span>
     </div>
     <div class="togglebar">
-      <span class="brand"><span class="note">AI 면접 코치</span></span>
       <label class="devswitch hidden"><input type="checkbox" id="devToggle" /> API 테스트 화면</label>
     </div>
 
@@ -288,6 +290,15 @@
         </div>
       </section>
 
+      <!-- notice before the survey part -->
+      <section class="screen hidden" id="p-notice">
+        <div class="landing">
+          <h2 data-copy="noticeTitle"></h2>
+          <ul class="guide big" data-copy-list="noticeItems"></ul>
+          <button class="primary" id="p-noticeConfirm" data-copy="noticeConfirm"></button>
+        </div>
+      </section>
+
       <!-- survey: one block per screen; pre, mid (self-rating) and post, rendered from survey_items.json -->
       <section class="screen hidden" id="p-survey">
         <div class="progress" id="p-surveyProgress"></div>
@@ -302,8 +313,18 @@
       <section class="screen hidden" id="p-scenario">
         <div class="landing">
           <h2 data-copy="scenarioTitle"></h2>
+          <p class="muted" data-copy="scenarioIntro"></p>
           <div class="bubble"><div class="text" data-copy="scenarioBody"></div></div>
           <button class="primary" id="p-scenarioNext" data-copy="scenarioStart"></button>
+        </div>
+      </section>
+
+      <!-- instructions for the answer: the thinking time starts only when the question appears -->
+      <section class="screen hidden" id="p-qguide">
+        <div class="landing">
+          <h2 data-copy="qguideTitle"></h2>
+          <ul class="guide big" data-copy-list="qguideItems"></ul>
+          <button class="primary" id="p-qguideStart" data-copy="qguideStart"></button>
         </div>
       </section>
 
@@ -313,11 +334,10 @@
           <label for="p-devInject">테스트 대본 주입</label>
           <select id="p-devInject"></select>
         </div>
-        <div class="progress" data-copy="questionTitle"></div>
-        <p class="muted" data-copy="questionGuide"></p>
         <div class="bubble coach">
           <div class="who" data-copy="coachLabel"></div>
           <div class="text" id="p-questionText"></div>
+          <div class="muted qhint" id="p-questionHint"></div>
         </div>
         <div class="muted" id="p-qMessage"></div>
 

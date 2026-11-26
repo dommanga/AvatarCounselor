@@ -10,16 +10,17 @@ import { createDeviceTest } from "./device-test.js";
 import { CORPUS } from "./corpus.js";
 
 // Main-experiment participant flow, entered through the participant link /s/{token}.
-//   environment check -> consent -> device test -> pre-survey -> scenario -> question (thinking time,
-//   answer) -> self-rating -> loading -> feedback -> post-survey -> debriefing -> done
+//   environment check -> consent -> device test -> notice -> pre-survey -> scenario -> answer instructions ->
+//   question (thinking time, answer) -> self-rating -> loading -> feedback -> post-survey -> debriefing -> done
 // The page first claims the session (one active tab per session); the server decides where a
 // (re)loaded page continues (resume_to). Every step is logged as a server event.
 // The stance is never sent to this page for real sessions; dev mode works only in test sessions.
 
 // dev-nav stage list (test sessions only)
-const STAGES = ["device_test", "pre_survey", "scenario", ...QUESTION_SEQUENCE, "self_rating", "feedback", "post_survey", "debrief", "done"];
+const STAGES = ["device_test", "notice", "pre_survey", "scenario", "question_guide", ...QUESTION_SEQUENCE, "self_rating", "feedback", "post_survey", "debrief", "done"];
 const STAGE_LABELS = {
-  device_test: "장치 테스트", pre_survey: "사전설문", scenario: "시나리오", self_rating: "자기평가", feedback: "피드백",
+  device_test: "장치 테스트", notice: "진행 전 안내", pre_survey: "사전설문", scenario: "시나리오", question_guide: "답변 안내",
+  self_rating: "자기평가", feedback: "피드백",
   post_survey: "사후설문", debrief: "디브리핑", done: "완료",
   ...Object.fromEntries(QUESTION_SEQUENCE.map((q) => [q, `질문 ${q.toUpperCase()}`])),
 };
@@ -34,12 +35,15 @@ function applyCopy(root) {
     const v = COPY[el.dataset.copy];
     if (typeof v === "string") el.textContent = v;
   }
+  for (const el of root.querySelectorAll("[data-copy-list]")) { // one <li> per string
+    el.replaceChildren(...COPY[el.dataset.copyList].map((t) => Object.assign(document.createElement("li"), { textContent: t })));
+  }
 }
 
 export function initParticipantView(root) {
   const $ = (id) => root.querySelector("#" + id);
   applyCopy(root);
-  const screens = ["p-nosession", "p-consent", "p-blocked", "p-device", "p-survey", "p-scenario", "p-question", "p-loading", "p-feedback", "p-debrief", "p-end"].map($);
+  const screens = ["p-nosession", "p-consent", "p-blocked", "p-device", "p-notice", "p-survey", "p-scenario", "p-qguide", "p-question", "p-loading", "p-feedback", "p-debrief", "p-end"].map($);
   const show = (id) => { screens.forEach((s) => s.classList.toggle("hidden", s.id !== id)); window.scrollTo(0, 0); };
 
   let client = null, tracker = null, heartbeat = null, device = null;
@@ -164,8 +168,10 @@ export function initParticipantView(root) {
   function resume(rt) {
     switch (rt?.to) {
       case "device_test": return showDevice();
+      case "notice": return showNotice();
       case "pre_survey": return showSurvey("pre");
       case "scenario": return showScenario();
+      case "question_guide": return showQuestionGuide(rt.question_id, { reanswer: rt.reanswer });
       case "question": return showQuestion(rt.question_id, { reanswer: rt.reanswer });
       case "submit_saved": return showQuestion(rt.question_id, { submitSaved: true });
       case "self_rating": return showSelfRating(rt.question_id);
@@ -180,10 +186,21 @@ export function initParticipantView(root) {
   function showDevice() {
     stage = "device_test";
     show("p-device");
-    device ??= createDeviceTest({ $, client, onDone: () => showSurvey("pre") });
+    device ??= createDeviceTest({ $, client, onDone: showNotice });
     device.reset();
     updateDevPanel();
   }
+
+  // ---------- notice before the survey part ----------
+  function showNotice() {
+    stage = "notice";
+    show("p-notice");
+    updateDevPanel();
+  }
+  $("p-noticeConfirm").addEventListener("click", () => {
+    client.log("notice_confirmed"); // the confirmation time
+    showSurvey("pre");
+  });
 
   // ---------- surveys: one block per screen, saved block by block ----------
   // Items appear in the order drawn for this session at consent (the server stores it). Resumes at the
@@ -268,7 +285,20 @@ export function initParticipantView(root) {
     updateDevPanel();
     client.log("scenario_shown");
   }
-  $("p-scenarioNext").addEventListener("click", () => showQuestion(QUESTION_SEQUENCE[0]));
+  $("p-scenarioNext").addEventListener("click", () => showQuestionGuide(QUESTION_SEQUENCE[0]));
+
+  // ---------- answer instructions: the thinking time starts when the question appears, not here ----------
+  let guideReanswer = false;
+  function showQuestionGuide(qid = QUESTION_SEQUENCE[0], { reanswer = false } = {}) {
+    cleanupQuestion();
+    turn = qid;
+    stage = "question_guide";
+    guideReanswer = reanswer;
+    show("p-qguide");
+    updateDevPanel();
+    client.log("question_guide_shown");
+  }
+  $("p-qguideStart").addEventListener("click", () => showQuestion(turn, { reanswer: guideReanswer }));
 
   // ---------- question: thinking time, then the answer ----------
   function cleanupQuestion() {
@@ -288,6 +318,7 @@ export function initParticipantView(root) {
     stage = qid;
     show("p-question");
     $("p-questionText").textContent = QUESTIONS[qid];
+    $("p-questionHint").textContent = COPY.questionHints?.[qid] ?? ""; // screen only: the LLM gets QUESTIONS[qid] alone
     qMessage.textContent = reanswer ? COPY.answerReanswer : message;
     qError.textContent = "";
     submitRetry.classList.add("hidden");
@@ -576,7 +607,9 @@ export function initParticipantView(root) {
     const first = turn || QUESTION_SEQUENCE[0];
     if (s === "device_test") showDevice();
     else if (s === "pre_survey") showSurvey("pre", { fromStart: true });
+    else if (s === "notice") showNotice();
     else if (s === "scenario") showScenario();
+    else if (s === "question_guide") showQuestionGuide(first);
     else if (QUESTION_SEQUENCE.includes(s)) showQuestion(s);
     else if (s === "self_rating") { turn = first; showSurvey("mid", { fromStart: true }); }
     else if (s === "feedback") showLoading(first, { seen: true });

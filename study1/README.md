@@ -6,8 +6,10 @@ researcher's spreadsheet.
 
 ## Pages
 - `/s/{token}` — participant flow:
-  browser check → consent → device test (speaker, microphone) → pre-survey → scenario → Q2 (thinking time,
-  answer) → self-rating → loading → feedback → post-survey → debriefing → completion (payment form link).
+  browser check → consent → device test (speaker chime that loops until [정지], microphone) → notice → pre-survey →
+  scenario → answer instructions → Q2 (40 s thinking time from the moment the question appears, answer) →
+  self-rating → loading → feedback → post-survey → debriefing → completion (payment form link).
+  Leaving the question screen resumes at the answer instructions; the countdown starts over.
   The browser check (desktop Chrome with speech recognition + recording) runs before any API call, so an
   unsupported browser leaves the link untouched. Expired / locked links and a second window get notice screens.
 - `/` without a token asks for the participant link.
@@ -22,7 +24,9 @@ researcher's spreadsheet.
 `prompts.js` is auto-generated from `experiment/prompts/*.md`. Regenerate if prompts change.
 
 ## Wording and timing
-- All participant-facing text is in `src/copy.js` (static page text is bound with `data-copy`). Survey items:
+- All participant-facing text is in `src/copy.js` (static page text is bound with `data-copy`, lists with `data-copy-list`).
+  The question text the LLM receives is `QUESTIONS` (src/questions.js); the hint shown under it (`COPY.questionHints`)
+  is screen-only and test-flow checks that it never reaches an LLM request. Survey items:
   `survey_items.json`. Consent text: placeholder in `COPY.consentBody`.
 - Timing values are in `lib/config.js` (`THINK_TIME_MS`, `ANSWER_MAX_MS`, `FEEDBACK_MIN_WAIT_MS`,
   `TEXT_MIN_DWELL_MS_PER_CHAR`, `AUDIO_CHUNK_MS`) and are copied into each session's `config` snapshot.

@@ -10,11 +10,21 @@ import { SURVEY, orderBlock } from "../lib/survey.js";
 import { sweep } from "../lib/lifecycle.js";
 import { purgeWithdrawn, purgeVerifiedAudio } from "../lib/purge.js";
 import { AUDIO_UPLOAD_ENABLED } from "../lib/config.js";
+import { QUESTIONS } from "../src/questions.js";
+import { COPY } from "../src/copy.js";
 import { requireEndpoint } from "./cli.js";
 import { createHarness, fill, sleep } from "./test-lib.js";
 
 const { values } = parseArgs({ options: { host: { type: "string" } } });
 requireEndpoint(values.host);
+
+// Everything the OpenAI client sends. The client is created on the first LLM call, so it picks up this wrapper.
+const sentToLLM = [];
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  if (String(url).includes("api.openai.com")) sentToLLM.push(typeof init?.body === "string" ? init.body : "");
+  return realFetch(url, init);
+};
 
 const H = createHarness();
 const { sql, check, issue, tab, started } = H;
@@ -57,7 +67,11 @@ try {
   check("survey order stored; background keeps config order", row.survey_order?.pre?.pre_background?.join() === "D1,D2,D3,E1,E2,AI1,AI2");
 
   // device test
-  await A.event("speaker_tone_played"); await A.event("speaker_tone_played");
+  await A.event("speaker_tone_start", null, { count: 1 }); await A.event("speaker_tone_stop", null, { count: 1, duration_ms: 2300 });
+  await A.event("speaker_tone_start", null, { count: 2 }); await A.event("speaker_tone_stop", null, { count: 2, duration_ms: 1500 });
+  const tone = await sql`SELECT type, data FROM events WHERE session_id = ${s.id} AND type LIKE 'speaker_tone_%' ORDER BY seq`;
+  check("speaker test: starts, stops and play durations are logged", tone.length === 4
+    && tone.filter((e) => e.type === "speaker_tone_start").length === 2 && tone.filter((e) => e.type === "speaker_tone_stop").map((e) => e.data.duration_ms).join() === "2300,1500");
   await A.event("mic_test_attempt", null, { attempt: 1, text: "오늘은 하늘이 맑고" });
   const [mt] = await sql`SELECT data FROM events WHERE session_id = ${s.id} AND type = 'mic_test_attempt'`;
   check("mic test attempt stores its result text", mt.data.attempt === 1 && mt.data.text === "오늘은 하늘이 맑고");
@@ -66,7 +80,12 @@ try {
   check("oversized event data refused", (await A.event("tab_hidden", null, { stage: "x".repeat(3000) })).code === 400);
   check("in_progress after the first activity", (await sql`SELECT status FROM sessions WHERE id = ${s.id}`)[0].status === "in_progress");
   await A.event("device_test_done");
-  check("device_test_done -> pre_survey", (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "pre_survey");
+  check("device_test_done -> notice", (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "notice");
+  check("reload on the notice -> the notice again", (await A.claim()).resume_to.to === "notice");
+  await A.event("notice_confirmed");
+  const [nc] = await sql`SELECT server_ts FROM events WHERE session_id = ${s.id} AND type = 'notice_confirmed'`;
+  check("notice_confirmed -> pre_survey, confirmation time recorded", !!nc?.server_ts
+    && (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "pre_survey");
 
   // pre survey: responses carry the position they were shown at
   for (const b of SURVEY.pre) await A.survey("pre", b.block, fill(b));
@@ -77,6 +96,10 @@ try {
   check("reload keeps the same survey order", JSON.stringify(reloaded.survey_order) === JSON.stringify(row.survey_order)
     && reloaded.resume_to.to === "pre_survey" && reloaded.surveys.pre.length === SURVEY.pre.length);
   await A.event("survey_pre_submitted"); await A.event("scenario_shown");
+  await A.event("question_guide_shown");
+  const qg = await A.claim();
+  check("reload on the answer instructions -> the instructions again", qg.resume_to.to === "question_guide" && qg.resume_to.question_id === "q2"
+    && (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "question_guide");
 
   // question: empty first answer -> the one retry
   await A.event("question_shown", "q2"); await A.event("answer_start", "q2", { auto_started: true });
@@ -143,7 +166,7 @@ try {
   await th.T.event("question_shown", "q2");
   await th.T.release();
   const th2 = await tab(th.s).claim();
-  check("exit while thinking -> question again, no chance spent", th2.claim === "resume" && th2.resume_to.to === "question" && !th2.resume_to.reanswer
+  check("exit from the question screen -> the instructions again, no chance spent", th2.claim === "resume" && th2.resume_to.to === "question_guide" && !th2.resume_to.reanswer
     && th2.attempt === 1 && (await sql`SELECT retry_used FROM sessions WHERE id = ${th.s.id}`)[0].retry_used === false);
 
   // ---------- 4. exit while answering, almost nothing saved -> re-answer ----------
@@ -153,7 +176,7 @@ try {
   await r.T.release();
   const R2 = tab(r.s);
   const rc = await R2.claim();
-  check("resume after short partial -> re-answer", rc.claim === "resume" && rc.resume_to.to === "question" && rc.resume_to.reanswer && rc.attempt === 2);
+  check("resume after short partial -> re-answer", rc.claim === "resume" && rc.resume_to.to === "question_guide" && rc.resume_to.reanswer && rc.attempt === 2);
   await R2.event("question_shown", "q2"); await R2.event("answer_start", "q2");
   await R2.segment("q2", 2, 0, "제가 주도한 일은 학과 행사였습니다");
   await R2.release();
@@ -226,6 +249,14 @@ try {
   const inj = await ts.T.answer({ injected: true, transcript: GOOD_ANSWER });
   const injf = await ts.T.waitFeedback();
   check("test session: injected answer -> feedback with scores + stance", inj.state === "pending" && injf.state === "done" && injf.stance === "direct" && injf.scores?.situation);
+
+  // ---------- 10b. the screen-only hint under the question never reaches the LLM ----------
+  const hint = COPY.questionHints.q2;
+  check("the question text itself carries no hint", !QUESTIONS.q2.includes(hint) && !QUESTIONS.q2.includes("어떤 경험이든 괜찮습니다"));
+  check("LLM requests were captured, and carry the question", sentToLLM.length >= 4 && sentToLLM.filter((b) => b.includes(QUESTIONS.q2)).length >= 2, `${sentToLLM.length} requests`);
+  check("... none of them contains the hint", sentToLLM.every((b) => !b.includes(hint) && !b.includes("어떤 경험이든 괜찮습니다")));
+  const ctx = await sql`SELECT context FROM answers WHERE context IS NOT NULL`;
+  check("... nor does any stored Stage 2 input", ctx.length > 0 && ctx.every((r) => !r.context.includes("어떤 경험이든 괜찮습니다")), `${ctx.length} checked`);
 
   // ---------- 11. withdrawal with 'destroy' -> destroy_pending on abandonment -> purge keeps the bookkeeping ----------
   const d = await started("TF-010", {});

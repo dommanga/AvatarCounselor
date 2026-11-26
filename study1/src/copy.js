@@ -37,7 +37,7 @@ export const COPY = {
   consentNotifyYes: "원합니다.",
   consentNotifyNo: "원하지 않습니다.",
   consentAgree: "위 내용을 읽고 연구 참여에 동의합니다.",
-  consentPaymentNote: "사례비 지급에 필요한 정보는 실험이 끝난 뒤 별도 양식으로 받습니다.",
+  consentPaymentNote: "사례비 지급에 필요한 정보는 실험이 끝난 뒤 별도 양식으로 수집할 예정입니다.",
   consentStart: "참여 시작하기",
   consentChoicesMissing: "동의 확인과 두 가지 선택 항목에 모두 응답해 주세요.",
   consentFail: (msg) => `처리하지 못했습니다 (${msg}). 다시 눌러주세요.`,
@@ -48,9 +48,9 @@ export const COPY = {
   // ---------- device test ----------
   deviceTitle: "장치 테스트",
   speakerTitle: "1. 스피커",
-  speakerGuide: "소리가 들리면 편하게 들리는 크기로 볼륨을 조절한 뒤 다음으로 넘어가 주세요. 소리가 들리지 않으면 스피커나 이어폰 연결과 볼륨을 확인해 주세요.",
+  speakerGuide: "아래 버튼을 눌러 소리를 재생해 주세요. 소리가 나는 동안 편하게 들리는 크기로 볼륨을 조절한 뒤, [정지]를 누르고 다음으로 넘어가 주세요.",
   speakerPlay: "재생",
-  speakerReplay: "다시 재생",
+  speakerStop: "정지",
   speakerNext: "다음",
   micTitle: "2. 마이크",
   micGuide: "아래 문장을 소리 내어 읽어 주세요.",
@@ -80,19 +80,37 @@ export const COPY = {
   surveyFill: "테스트 응답 채우기",
 
   // ---------- scenario ----------
-  scenarioTitle: "안내",
+  scenarioTitle: "상황 안내",
+  scenarioIntro: "아래 상황을 읽고, 그 상황에 있다고 생각하며 진행해 주세요.",
   scenarioBody: [
     "당신은 꼭 가고 싶었던 회사의 서류 전형에 합격해, 일주일 뒤 면접을 앞두고 있습니다.",
     "면접을 준비하기 위해 AI 코치와 면접 연습을 해보기로 했습니다.",
-    "면접 질문에 답변하면 AI 코치가 답변에 대한 피드백을 줍니다.",
+    "면접 질문에 답변하면 AI 코치가 당신의 답변을 분석하고 피드백을 제공합니다.",
     "질문에는 본인의 실제 경험을 바탕으로 답변해 주세요.",
   ].join("\n"),
   scenarioStart: "면접 연습 시작",
 
+  // ---------- before the device test ends / before the question ----------
+  noticeTitle: "진행 전 안내",
+  noticeItems: [
+    "실험이 끝날 때까지 이 창에서만 진행해 주세요. 다른 창이나 탭으로 이동하지 말아 주세요.",
+    "다른 AI 도구, 검색, 휴대전화 등을 사용하지 말아 주세요.",
+    "조용한 곳에서 중간에 멈추지 않고 진행해 주세요.",
+  ],
+  noticeConfirm: "확인했습니다",
+  qguideTitle: "면접 질문 안내",
+  qguideItems: [
+    "다음 화면에 면접 질문이 나오면, 생각할 시간 40초가 주어집니다.",
+    "준비가 되면 40초가 지나기 전에 먼저 답변을 시작할 수 있고, 40초가 지나면 답변이 자동으로 시작됩니다.",
+    "답변은 최대 2분이며, 한 번만 가능합니다. 답변을 마치면 [답변 완료]를 눌러 주세요.",
+    "답변하는 동안 다른 AI 도구나 휴대전화를 사용하지 말아 주세요.",
+  ],
+  qguideStart: "시작하기",
+
   // ---------- question / answering ----------
   coachLabel: "AI 코치",
-  questionTitle: "면접 질문",
-  questionGuide: "질문을 읽고 생각할 시간 40초가 주어집니다. 준비가 되면 먼저 답변을 시작해도 됩니다. 답변은 최대 2분이며, 답변하는 동안 인식 결과는 화면에 표시되지 않습니다.",
+  // screen-only wording under the question; never part of the question text the LLM receives (src/questions.js)
+  questionHints: { q2: "학교, 일, 동아리, 개인 활동 등 어떤 경험이든 괜찮습니다." },
   thinkLabel: "남은 생각 시간",
   answerStart: "답변 시작",
   answerStarting: "마이크를 준비하는 중…",
@@ -117,8 +135,8 @@ export const COPY = {
   debriefTitle: "연구 안내",
   debriefBody: [
     "참여해 주셔서 감사합니다.",
-    "이 연구는 AI 코치가 피드백을 전달하는 방식에 따라 사람들이 피드백을 어떻게 경험하는지 알아보기 위한 연구입니다.",
-    "참여자마다 서로 다른 방식으로 표현된 피드백을 받았으며, 오늘 받은 피드백은 연구를 위해 설계된 것으로 실제 면접 역량을 평가한 결과가 아닙니다.",
+    "오늘 받은 AI 코치의 피드백은 연구를 위해 만들어진 것으로, 답변 수준에 대한 객관적이거나 전문적인 평가가 아닙니다.",
+    "실제 면접 준비에는 오늘 받은 피드백만으로 판단하지 마시고, 다른 방법도 함께 활용하시기를 바랍니다.",
     "연구가 진행 중이므로, 실험 내용을 다른 분께 공유하지 말아 주시기를 부탁드립니다.",
   ].join("\n"),
   debriefConfirm: "확인",
@@ -127,7 +145,7 @@ export const COPY = {
   endTitle: "참여 완료",
   endBody: "실험이 모두 끝났습니다. 감사합니다.\n사례비 지급을 위해 아래 양식을 작성해 주세요. 참가자 번호는 자동으로 입력되어 있습니다.",
   endPaymentBtn: "사례비 지급 정보 입력",
-  endClose: "이제 이 창을 닫으셔도 됩니다.",
+  endClose: "위 링크에 접속하셨다면 이 창을 닫으셔도 됩니다. 참여해 주셔서 감사합니다.",
 
   // ---------- dev mode ----------
   devInject: "— 테스트 대본 주입 —",
