@@ -1,30 +1,85 @@
--- Study 1 main-experiment schema. Idempotent: `npm run db:init` can be re-run safely.
+-- Study 1 (online) schema. Idempotent: `npm run db:init` can be re-run safely.
+-- No personal data: a participant is only a participant_id (S1-001) and a link token. The link to
+-- names/contacts lives in the researcher's spreadsheet, never here.
 
--- Pilot-era assignment sequence (10 blocks x 3 conditions). No longer filled by db-init;
--- condition assignment is redesigned in Phase 2.
-CREATE TABLE IF NOT EXISTS block_sequence (
-  slot      int  PRIMARY KEY,               -- 1..30
-  block     int  NOT NULL,                  -- 1..10
-  condition text NOT NULL CHECK (condition IN ('reversing', 'minimizing', 'direct'))
+-- Condition sequence: SLOT_BLOCKS blocks x 6 cells (stance x modality), each block a seeded permutation.
+-- Generated once by scripts/gen-slots.js; the seed makes it reproducible.
+CREATE TABLE IF NOT EXISTS slot_meta (
+  id           int PRIMARY KEY CHECK (id = 1),
+  seed         text NOT NULL,
+  block_size   int NOT NULL,
+  blocks       int NOT NULL,
+  algorithm    text NOT NULL,
+  generated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS slots (
+  seq      int PRIMARY KEY,                -- 1..block_size*blocks, assignment order
+  block    int NOT NULL,
+  stance   text NOT NULL CHECK (stance IN ('reversing', 'minimizing', 'direct')),
+  modality text NOT NULL CHECK (modality IN ('text', 'voice'))
+);
+
+-- One row per issued link token. Lifecycle:
+--   issued -> opened -> consented -> in_progress -> completed | expired | abandoned | locked
 CREATE TABLE IF NOT EXISTS sessions (
-  id                  uuid PRIMARY KEY,
-  participant_id      text NOT NULL,
-  condition           text NOT NULL CHECK (condition IN ('reversing', 'minimizing', 'direct')),
-  suggested_condition text,                 -- block_sequence condition at creation; differs if overridden
-  slot                int REFERENCES block_sequence(slot),   -- NULL for test sessions
-  is_test             boolean NOT NULL DEFAULT false,
-  token_hash          text NOT NULL,        -- sha256 of the participant-device bearer token
-  current_stage       text NOT NULL DEFAULT 'pre_survey',
-  created_at          timestamptz NOT NULL DEFAULT now(),
-  updated_at          timestamptz NOT NULL DEFAULT now()
+  id                uuid PRIMARY KEY,
+  participant_id    text NOT NULL UNIQUE,   -- S1-001 (real) / T1-001 (test)
+  batch_id          text NOT NULL,          -- issuing week, e.g. W1
+  is_test           boolean NOT NULL DEFAULT false,
+  token_hash        text NOT NULL UNIQUE,   -- sha256 of the link token; the token itself is never stored
+  status            text NOT NULL DEFAULT 'issued'
+                    CHECK (status IN ('issued', 'opened', 'consented', 'in_progress', 'completed', 'expired', 'abandoned', 'locked')),
+  issued_at         timestamptz NOT NULL DEFAULT now(),
+  expires_at        timestamptz NOT NULL,   -- only applies before consent
+  opened_at         timestamptz,
+  consented_at      timestamptz,
+  completed_at      timestamptz,
+  ended_at          timestamptz,            -- when it became expired / abandoned / locked / completed
+  stance            text CHECK (stance IN ('reversing', 'minimizing', 'direct')),  -- NULL until consent (test: preset)
+  modality          text CHECK (modality IN ('text', 'voice')),
+  current_stage     text NOT NULL DEFAULT 'consent',
+  resume_count      int NOT NULL DEFAULT 0,
+  retry_used        boolean NOT NULL DEFAULT false,  -- the one re-answer chance (empty answer or resume)
+  retry_granted_at  timestamptz,
+  active_client_key text,                   -- the one browser tab allowed to drive this session
+  client_seen_at    timestamptz,
+  client_released   boolean NOT NULL DEFAULT false,
+  last_activity_at  timestamptz,
+  valid             boolean,                -- set on completion from the attention checks
+  config            jsonb,                  -- settings snapshot at consent (model, temperatures, prompt hashes, ...)
+  survey_version    text,
+  updated_at        timestamptz NOT NULL DEFAULT now()
 );
--- added after first deploy; ALTER keeps `npm run db:init` working on an existing database
-ALTER TABLE sessions ADD COLUMN IF NOT EXISTS survey_version text;   -- survey_items.json "version" at creation
-CREATE UNIQUE INDEX IF NOT EXISTS sessions_slot_key ON sessions (slot) WHERE slot IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS sessions_participant_key ON sessions (participant_id) WHERE NOT is_test;
-CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_key ON sessions (token_hash);
+
+-- Every claim of a session by a browser tab (first open, reload, resume, rejected second window).
+CREATE TABLE IF NOT EXISTS session_clients (
+  id          bigserial PRIMARY KEY,
+  session_id  uuid NOT NULL REFERENCES sessions(id),
+  client_key  text NOT NULL,
+  kind        text NOT NULL CHECK (kind IN ('first', 'reload', 'takeover', 'resume', 'other_window', 'locked')),
+  user_agent  text,
+  screen      jsonb,                        -- {w, h, vw, vh, dpr}
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS session_clients_session_idx ON session_clients (session_id, id);
+
+-- One row per assignment of a slot to a session. A returned row (returned_at set) waits in the refill
+-- queue until a later assignment points at it through refill_of.
+CREATE TABLE IF NOT EXISTS slot_assignments (
+  id            bigserial PRIMARY KEY,
+  slot_seq      int NOT NULL REFERENCES slots(seq),
+  session_id    uuid NOT NULL UNIQUE REFERENCES sessions(id),
+  source        text NOT NULL CHECK (source IN ('sequence', 'refill')),
+  refill_of     bigint REFERENCES slot_assignments(id),
+  assigned_at   timestamptz NOT NULL DEFAULT now(),
+  returned_at   timestamptz,
+  return_reason text CHECK (return_reason IN ('abandoned', 'locked', 'expired', 'invalid', 'admin')),
+  exposed       boolean,                    -- had feedback_shown before the return
+  CHECK ((source = 'refill') = (refill_of IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS slot_assignments_sequence_key ON slot_assignments (slot_seq) WHERE source = 'sequence';
+CREATE UNIQUE INDEX IF NOT EXISTS slot_assignments_refill_key ON slot_assignments (refill_of) WHERE refill_of IS NOT NULL;
 
 -- Append-only. id is generated on the client so a retried POST is deduplicated.
 CREATE TABLE IF NOT EXISTS events (
@@ -32,35 +87,67 @@ CREATE TABLE IF NOT EXISTS events (
   seq         bigserial,
   session_id  uuid NOT NULL REFERENCES sessions(id),
   type        text NOT NULL,
-  question_id text,                         -- q1|q2|q3, NULL otherwise
+  question_id text,                         -- QUESTION_SEQUENCE id, NULL otherwise
   client_ts   bigint,                       -- Date.now() on the participant device (timing measures use this)
   server_ts   timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX IF NOT EXISTS events_session_idx ON events (session_id, seq);
 
--- One row per submission (practice included, flagged by question_id = 'practice'). Retries after an
--- LLM error add rows; the latest row with feedback IS NOT NULL is the one shown to the participant.
+-- One row per submission (practice included). Feedback is generated once: at most one 'pending' or
+-- 'done' row per question; 'error' / 'stale' rows are kept for debugging.
 CREATE TABLE IF NOT EXISTS answers (
-  id          bigserial PRIMARY KEY,
-  session_id  uuid NOT NULL REFERENCES sessions(id),
-  question_id text NOT NULL,                -- practice|q1|q2|q3
-  transcript  text NOT NULL,
-  injected    boolean NOT NULL DEFAULT false, -- dev-mode corpus injection (test sessions only)
-  condition   text,
-  model       text,
-  stage1_raw  text,
-  scores      jsonb,                        -- {situation:{rating,quote}, task_and_action:{…}, result:{…}}
-  strong      text,
-  weak        text,
-  context     text,
-  stage2_raw  text,                         -- GROUNDING + FEEDBACK
-  feedback    text,                         -- FEEDBACK part, as shown to the participant
-  error       text,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id               bigserial PRIMARY KEY,
+  session_id       uuid NOT NULL REFERENCES sessions(id),
+  question_id      text NOT NULL,           -- practice | QUESTION_SEQUENCE id
+  attempt          int NOT NULL DEFAULT 1,
+  transcript       text NOT NULL,
+  answer_truncated boolean NOT NULL DEFAULT false, -- built from the saved segments after an interruption
+  injected         boolean NOT NULL DEFAULT false, -- dev-mode corpus injection (test sessions only)
+  status           text NOT NULL CHECK (status IN ('pending', 'done', 'error', 'stale')),
+  stance           text,
+  model            text,
+  stage1_raw       text,
+  scores           jsonb,                   -- {situation:{rating,quote}, task_and_action:{…}, result:{…}}
+  strong           text,
+  weak             text,
+  context          text,
+  stage2_raw       text,                    -- GROUNDING + FEEDBACK
+  feedback         text,                    -- FEEDBACK part, as shown to the participant
+  error            text,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  finished_at      timestamptz
 );
 CREATE INDEX IF NOT EXISTS answers_session_idx ON answers (session_id, question_id, id);
+CREATE UNIQUE INDEX IF NOT EXISTS answers_live_key ON answers (session_id, question_id)
+  WHERE status IN ('pending', 'done') AND question_id <> 'practice';
 
--- Phase 2: survey responses.
+-- Finalized STT segments saved while the participant is still answering.
+CREATE TABLE IF NOT EXISTS answer_segments (
+  session_id  uuid NOT NULL REFERENCES sessions(id),
+  question_id text NOT NULL,
+  attempt     int NOT NULL,
+  seq         int NOT NULL,
+  text        text NOT NULL,
+  client_ts   bigint,
+  server_ts   timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (session_id, question_id, attempt, seq)
+);
+
+-- Recorded audio chunks (bytes live in a private Vercel Blob store; this is the index).
+CREATE TABLE IF NOT EXISTS audio_chunks (
+  session_id  uuid NOT NULL REFERENCES sessions(id),
+  question_id text NOT NULL,
+  attempt     int NOT NULL,
+  seq         int NOT NULL,
+  pathname    text NOT NULL,
+  bytes       int NOT NULL,
+  mime        text,
+  client_ts   bigint,
+  server_ts   timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (session_id, question_id, attempt, seq)
+);
+
+-- Survey responses.
 CREATE TABLE IF NOT EXISTS responses (
   session_id uuid NOT NULL REFERENCES sessions(id),
   phase      text NOT NULL CHECK (phase IN ('pre', 'post')),
@@ -70,3 +157,15 @@ CREATE TABLE IF NOT EXISTS responses (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, phase, item_id)
 );
+
+-- Every issue / open / consent / assignment / return / lock, by the system, scripts or (Phase 5) admin.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         bigserial PRIMARY KEY,
+  ts         timestamptz NOT NULL DEFAULT clock_timestamp(),
+  actor      text NOT NULL,                 -- system | script | admin
+  action     text NOT NULL,
+  session_id uuid REFERENCES sessions(id),
+  slot_seq   int,
+  detail     jsonb
+);
+CREATE INDEX IF NOT EXISTS audit_log_session_idx ON audit_log (session_id, id);

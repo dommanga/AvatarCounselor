@@ -66,3 +66,22 @@ export function validateBlock(phase, blockId, answers) {
   if (extra) return { error: `unexpected item ${extra}` };
   return { rows, clear };
 }
+
+// Attention checks: items carrying "check": {"correct": value | [values]} in survey_items.json.
+// responses: [{ phase, item_id, value }] -> { defined: [item_id], failed: [item_id], valid }
+// With no check items configured, valid is true (defined.length === 0 shows that it was unchecked).
+export function evaluateChecks(responses) {
+  const got = new Map(responses.map((r) => [`${r.phase}:${r.item_id}`, r.value]));
+  const defined = [], failed = [];
+  for (const phase of ["pre", "post"]) {
+    for (const block of SURVEY[phase] || []) {
+      for (const item of block.items) {
+        if (!item.check) continue;
+        defined.push(item.id);
+        const ok = [].concat(item.check.correct).some((c) => JSON.stringify(c) === JSON.stringify(got.get(`${phase}:${item.id}`)));
+        if (!ok) failed.push(item.id);
+      }
+    }
+  }
+  return { defined, failed, valid: failed.length === 0 };
+}

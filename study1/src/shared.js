@@ -166,10 +166,11 @@ export function createAnswerInput({ statusEl, statusText, transcriptEl, recBtn, 
 
 // Participant flow: [답변 시작] -> [답변 완료], one button that flips. onEnd fires at the click itself
 // (that click time is answer_end); onSubmit fires only once STT has delivered its final result.
-// If nothing was recognized, a [다시 답변하기] button appears instead (which calls onStart again).
+// If nothing was recognized, a [다시 답변하기] button appears instead (which calls onStart again) —
+// unless submitEmpty() says to submit anyway (interview questions: the server owns the one retry chance).
 const STT_FLUSH_TIMEOUT_MS = 5000; // fallback if the browser never fires onend after stop()
 
-export function createTwoStepInput({ statusEl, statusText, transcriptEl, actionBtn, retryBtn, timeEl, timeHintEl, onStart, onEnd, onSubmit }) {
+export function createTwoStepInput({ statusEl, statusText, transcriptEl, actionBtn, retryBtn, timeEl, timeHintEl, onStart, onEnd, onSubmit, submitEmpty }) {
   const stt = new SpeechRecognitionManager();
   const stopwatch = createStopwatch(timeEl, timeHintEl);
   let finalText = "", interimText = "";
@@ -231,7 +232,7 @@ export function createTwoStepInput({ statusEl, statusText, transcriptEl, actionB
     const transcript = [finalText, interimText].filter(Boolean).join(" ").trim();
     actionBtn.classList.add("hidden");
     actionBtn.classList.remove("live");
-    if (transcript) {
+    if (transcript || submitEmpty?.()) {
       phase = "done";
       if (timeEl) timeEl.classList.add("hidden");
       if (timeHintEl) timeHintEl.classList.add("hidden");

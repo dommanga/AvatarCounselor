@@ -1,31 +1,42 @@
-// Participant-device side of /api/session/*: token storage, authed calls, and an ordered,
-// retrying event queue. Each event carries a client-generated id, so a retried POST is a no-op.
+// Participant-device side of /api/session/*: link token, per-tab client key, authed calls, and an
+// ordered, retrying event queue. Each event carries a client-generated id, so a retried POST is a no-op.
 
-const TOKEN_KEY = "study1.participantToken";
+const TOKEN_PATH = /^\/s\/([A-Za-z0-9_-]{20,})\/?$/;
+const CLIENT_KEY = "study1.clientKey";
 
-// sessionStorage: survives reloads in this tab (same tab, same origin).
+// The participant link is /s/{token}; the token is read from the URL on every load.
 export function getToken() {
-  try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
+  return TOKEN_PATH.exec(location.pathname)?.[1] ?? null;
 }
-export function setToken(token) {
-  try { sessionStorage.setItem(TOKEN_KEY, token); return true; } catch { return false; }
-}
-export function clearToken() {
-  try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ }
+
+// One random key per browser tab: sessionStorage is per tab and survives reloads, so the server can
+// tell a reload of the session's tab from a second window.
+function getClientKey() {
+  try {
+    let k = sessionStorage.getItem(CLIENT_KEY);
+    if (!k) { k = crypto.randomUUID(); sessionStorage.setItem(CLIENT_KEY, k); }
+    return k;
+  } catch {
+    return crypto.randomUUID(); // storage blocked: every load looks like a new tab
+  }
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createSessionClient(token, { onAuthError } = {}) {
+// onAuthError: unknown token (401). onBlocked(screen): another tab holds the session (409) or it has
+// ended (410) — screen is other_window | expired | completed | abandoned | locked.
+export function createSessionClient(token, { onAuthError, onBlocked } = {}) {
+  const clientKey = getClientKey();
+  const headers = (body) => ({
+    authorization: `Bearer ${token}`, "x-client-key": clientKey, ...(body && { "content-type": "application/json" }),
+  });
+
   async function call(method, path, body) {
-    const r = await fetch(path, {
-      method,
-      headers: { authorization: `Bearer ${token}`, ...(body && { "content-type": "application/json" }) },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const r = await fetch(path, { method, headers: headers(body), body: body ? JSON.stringify(body) : undefined });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       if (r.status === 401) onAuthError?.();
+      if (r.status === 409 || r.status === 410) onBlocked?.(data.screen || "other_window");
       throw Object.assign(new Error(data.error || `HTTP ${r.status}`), { status: r.status });
     }
     return data;
@@ -57,8 +68,18 @@ export function createSessionClient(token, { onAuthError } = {}) {
 
   return {
     state: () => call("GET", "/api/session/state"),
-    answer: (question_id, transcript, injected = false) =>
-      call("POST", "/api/session/answer", { question_id, transcript, injected }),
+    claim: () => call("POST", "/api/session/claim", {
+      user_agent: navigator.userAgent,
+      screen: { w: screen.width, h: screen.height, vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio },
+    }),
+    consent: () => call("POST", "/api/session/consent", {}),
+    heartbeat: () => call("POST", "/api/session/heartbeat", {}),
+    // pagehide: keepalive lets the request outlive the page; lets a new tab take over immediately
+    release() {
+      fetch("/api/session/release", { method: "POST", keepalive: true, headers: headers({}), body: "{}" }).catch(() => {});
+    },
+    answer: (question_id, transcript, injected = false, from_saved = false) =>
+      call("POST", "/api/session/answer", { question_id, transcript, injected, from_saved }),
     survey: (phase, block, answers) => call("POST", "/api/session/survey", { phase, block, answers }),
     // client_ts is taken right here, at the moment of the user action
     log(type, question_id = null) {

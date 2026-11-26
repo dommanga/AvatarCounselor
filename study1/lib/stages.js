@@ -6,17 +6,18 @@ export const CLIENT_EVENT_TYPES = [
   "survey_pre_submitted", "scenario_shown",
   "practice_start", "practice_end",
   "question_shown", "answer_start", "answer_end",
-  "feedback_shown", "next_clicked",
+  "feedback_shown", "audio_started", "audio_ended", "next_clicked",
   "survey_post_submitted",
 ];
-// session_created is written by the server only.
+// consented is written by the server only (in the assignment transaction, which also sets pre_survey).
 
-export const QUESTION_EVENT_TYPES = ["question_shown", "answer_start", "answer_end", "feedback_shown", "next_clicked"];
+export const QUESTION_EVENT_TYPES = [
+  "question_shown", "answer_start", "answer_end", "feedback_shown", "audio_started", "audio_ended", "next_clicked",
+];
 
 // Stage after this event, or null to leave it unchanged.
 export function stageAfter(type, questionId) {
   switch (type) {
-    case "session_created": return "pre_survey";
     case "survey_pre_submitted":
     case "scenario_shown": return "scenario";
     case "practice_start":

@@ -5,9 +5,16 @@
   "type": "module",
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
+    "@vercel/blob": "^2.9.0",
     "openai": "^6.8.1"
   },
   "scripts": {
-    "db:init": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-init.js"
+    "db:init": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-init.js",
+    "db:reset": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-reset.js",
+    "gen-slots": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/gen-slots.js",
+    "issue-tokens": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/issue-tokens.js",
+    "sweep": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/sweep.js",
+    "test:assign": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-assign.js",
+    "test:flow": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-flow.js"
   }
 }

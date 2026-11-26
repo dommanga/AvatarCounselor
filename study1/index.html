@@ -189,12 +189,30 @@
         <span class="devnavstage" id="p-devStageLabel"></span>
         <button type="button" id="p-devNext">다음 ▶</button>
       </div>
-      <!-- no session on this device -->
+      <!-- loading, or opened without a participant link -->
       <section class="screen" id="p-nosession">
         <div class="landing">
           <h2>잠시만 기다려 주세요</h2>
-          <p class="muted" id="p-nosessionText">연구자가 세션을 시작하면 진행할 수 있습니다.</p>
+          <p class="muted" id="p-nosessionText">불러오는 중…</p>
           <button class="hidden" id="p-bootRetry">다시 시도</button>
+        </div>
+      </section>
+
+      <!-- electronic consent (placeholder: the consent text comes in a later phase) -->
+      <section class="screen hidden" id="p-consent">
+        <div class="landing">
+          <h2>연구 참여 동의</h2>
+          <div class="pbox">[자리표시] 동의서 본문이 여기에 들어갑니다.</div>
+          <button class="primary" id="p-consentBtn">동의합니다</button>
+          <div class="err" id="p-consentErr"></div>
+        </div>
+      </section>
+
+      <!-- expired / completed / locked / abandoned / another window / invalid link -->
+      <section class="screen hidden" id="p-blocked">
+        <div class="landing">
+          <h2 id="p-blockedTitle"></h2>
+          <p id="p-blockedText"></p>
         </div>
       </section>
 
@@ -269,7 +287,7 @@
       <section class="screen hidden" id="p-end">
         <div class="landing">
           <h2>감사합니다</h2>
-          <p>설문이 끝났습니다. 연구자를 불러주세요.</p>
+          <p>참여해 주셔서 감사합니다. 이제 이 창을 닫으셔도 됩니다.</p>
         </div>
       </section>
     </div>
@@ -313,6 +331,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js"></script>
+  <script type="module" src="/src/app.js"></script>
 </body>
 </html>

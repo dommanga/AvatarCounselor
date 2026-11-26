@@ -1,13 +1,26 @@
 import { QUESTIONS, QUESTION_SEQUENCE, LAST_QUESTION, CLABEL, RLABEL, ELNAME, escapeHtml, createTwoStepInput } from "./shared.js";
 import { PRACTICE_ID, PRACTICE_PROMPT } from "./questions.js";
-import { getToken, clearToken, createSessionClient } from "./session-client.js";
+import { getToken, createSessionClient } from "./session-client.js";
 import { loadSurveyConfig, renderSurveyBlock } from "./survey.js";
 import { CORPUS } from "./corpus.js";
 
-// Main-experiment participant flow. This page only holds the bearer token for the session.
-//   pre-survey (blocks from survey_items.json) -> scenario -> practice -> QUESTION_SEQUENCE -> post-survey -> done
-// Every step is logged as a server event; a reload resumes at the stage the server recorded.
-// The condition is never sent to this page for real sessions; dev mode works only in test sessions.
+// Main-experiment participant flow, entered through the participant link /s/{token}.
+//   consent -> pre-survey (blocks from survey_items.json) -> scenario -> practice -> QUESTION_SEQUENCE
+//   -> post-survey -> done
+// This tab first claims the session (one active tab per session); the server decides where a
+// (re)loaded page continues (resume_to). Every step is logged as a server event.
+// The stance is never sent to this page for real sessions; dev mode works only in test sessions.
+
+// Copy for the screens that end or block the flow.
+const BLOCKED = {
+  expired: ["기간이 지났습니다", "기간이 지났습니다. 연구자에게 문의해 주세요."],
+  completed: ["참여 완료", "이미 참여를 완료하셨습니다. 감사합니다."],
+  locked: ["진행할 수 없습니다", "더 이상 진행할 수 없습니다. 연구자에게 문의해 주세요."],
+  abandoned: ["진행할 수 없습니다", "더 이상 진행할 수 없습니다. 연구자에게 문의해 주세요."],
+  other_window: ["다른 창에서 진행 중입니다",
+    "이 연구는 다른 창(탭)에서 이미 진행 중입니다. 원래 창에서 계속해 주세요. 원래 창을 이미 닫았다면 1–2분 뒤 이 페이지를 새로고침해 주세요."],
+  invalid: ["링크를 확인해 주세요", "유효하지 않은 링크입니다. 받으신 링크를 다시 확인하시거나 연구자에게 문의해 주세요."],
+};
 
 // dev-nav stage list (test sessions only)
 const STAGES = ["pre_survey", "scenario", "practice", ...QUESTION_SEQUENCE, "post_survey", "done"];
@@ -18,7 +31,7 @@ const STAGE_LABELS = {
 
 export function initParticipantView(root) {
   const $ = (id) => root.querySelector("#" + id);
-  const screens = ["p-nosession", "p-survey", "p-scenario", "p-interview", "p-end"].map($);
+  const screens = ["p-nosession", "p-consent", "p-blocked", "p-survey", "p-scenario", "p-interview", "p-end"].map($);
 
   const progressEl = $("p-progress");
   const practiceGuide = $("p-practiceGuide");
@@ -40,8 +53,9 @@ export function initParticipantView(root) {
   let finished = false;
   let stage = null;          // dev-nav position: one of STAGES
   let turn = null;           // current interview turn: PRACTICE_ID | one of QUESTION_SEQUENCE
-  let answers = {};          // qid -> { transcript, feedback, scores?, strong?, weak? } (from server)
+  let answers = {};          // qid -> { transcript, feedback, pending, scores?, strong?, weak? } (from server)
   let pendingTranscript = null; // kept for [다시 시도] after an LLM error
+  let heartbeat = null;
   let survey = null;         // survey_items.json
   let surveyDone = { pre: [], post: [] }; // block ids already saved on the server
   let surveyPhase = null, surveyIdx = 0, surveyForm = null;
@@ -55,45 +69,90 @@ export function initParticipantView(root) {
     onStart: () => client.log(turn === PRACTICE_ID ? "practice_start" : "answer_start", turn === PRACTICE_ID ? null : turn),
     onEnd: () => client.log(turn === PRACTICE_ID ? "practice_end" : "answer_end", turn === PRACTICE_ID ? null : turn),
     onSubmit: (t) => (turn === PRACTICE_ID ? submitPractice(t) : submitAnswer(t)),
+    submitEmpty: () => turn !== PRACTICE_ID, // practice retries locally; questions go to the server
   });
 
-  // ---------- boot / resume ----------
+  // ---------- boot / claim / consent ----------
   async function boot() {
     const token = getToken();
     if (!token) return noSession();
-    client = createSessionClient(token, { onAuthError: () => { clearToken(); noSession(); } });
+    client = createSessionClient(token, { onAuthError: () => showBlocked("invalid"), onBlocked: showBlocked });
     let st;
     try {
-      [st, survey] = await Promise.all([client.state(), loadSurveyConfig()]);
+      [st, survey] = await Promise.all([client.claim(), loadSurveyConfig()]);
     } catch (e) {
-      if (e.status === 401) return; // onAuthError already switched screens
-      $("p-nosessionText").innerHTML = `<span class="err">서버에 연결하지 못했습니다 (${escapeHtml(e.message)}). 연구자에게 알려주세요.</span>`;
+      if ([401, 409, 410].includes(e.status)) return; // already on the matching screen
+      $("p-nosessionText").innerHTML = `<span class="err">서버에 연결하지 못했습니다 (${escapeHtml(e.message)}). 잠시 후 다시 시도해 주세요.</span>`;
       $("p-bootRetry").classList.remove("hidden");
       return show("p-nosession");
     }
+    enter(st);
+  }
+
+  // st: claim / consent payload from the server
+  function enter(st) {
+    if (st.screen !== "consent" && st.screen !== "active") return showBlocked(st.screen);
+    startHeartbeat(st.heartbeat_ms);
+    if (st.screen === "consent") return show("p-consent");
     isTest = st.is_test;
     answers = st.answers || {};
     surveyDone = st.surveys || surveyDone;
     window.dispatchEvent(new CustomEvent("study1:session", { detail: { active: true, isTest } }));
     guardNavigation();
-    resume(st.stage);
+    resume(st.resume_to);
   }
 
   function noSession() {
     window.dispatchEvent(new CustomEvent("study1:session", { detail: { active: false, isTest: false } }));
+    $("p-nosessionText").textContent = "받으신 참여 링크로 접속해 주세요.";
     show("p-nosession");
+  }
+
+  function showBlocked(screen) {
+    const [title, text] = BLOCKED[screen] || BLOCKED.locked;
+    finished = true; // nothing left to protect from an accidental close
+    clearInterval(heartbeat);
+    $("p-blockedTitle").textContent = title;
+    $("p-blockedText").textContent = text;
+    show("p-blocked");
+  }
+
+  // Keeps this tab's claim alive; pagehide hands it back so a reopened tab can continue right away.
+  function startHeartbeat(ms) {
+    if (heartbeat) return;
+    heartbeat = setInterval(() => client.heartbeat().catch(() => {}), ms);
+    window.addEventListener("pagehide", () => client.release());
+    window.addEventListener("pageshow", (e) => { if (e.persisted) client.heartbeat().catch(() => {}); }); // back from bfcache
   }
 
   $("p-bootRetry").addEventListener("click", () => location.reload());
 
-  function resume(serverStage) {
-    if (serverStage === "pre_survey") return showSurvey("pre");
-    if (serverStage === "scenario") return showScenario();
-    if (serverStage === "practice") return showTurn(PRACTICE_ID);
-    const m = /^(.+)_(answering|feedback)$/.exec(serverStage);
-    if (m && QUESTIONS[m[1]]) return showTurn(m[1]);
-    if (serverStage === "post_survey") return showSurvey("post");
-    return showEnd();
+  $("p-consentBtn").addEventListener("click", async () => {
+    const btn = $("p-consentBtn");
+    btn.disabled = true;
+    $("p-consentErr").textContent = "";
+    try {
+      enter(await client.consent());
+    } catch (e) {
+      if ([401, 409, 410].includes(e.status)) return;
+      $("p-consentErr").textContent = e.status === 503 ? e.message : `처리하지 못했습니다 (${e.message}). 다시 눌러주세요.`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // rt: resume_to from the server
+  function resume(rt) {
+    switch (rt?.to) {
+      case "pre_survey": return showSurvey("pre");
+      case "scenario": return showScenario();
+      case "practice": return showTurn(PRACTICE_ID);
+      case "question": return showTurn(rt.question_id, { reanswer: rt.reanswer });
+      case "submit_saved": return showTurn(rt.question_id, { submitSaved: true });
+      case "feedback": return showTurn(rt.question_id); // stored feedback (or the one still generating)
+      case "post_survey": return showSurvey("post");
+      default: return showEnd();
+    }
   }
 
   // Once a session is running, the browser's back button and accidental tab closes shouldn't
@@ -171,7 +230,9 @@ export function initParticipantView(root) {
   function showEnd() { stage = "done"; finished = true; show("p-end"); updateDevPanel(); }
 
   // ---------- interview turns ----------
-  function showTurn(qid) {
+  // reanswer: the server granted the re-answer chance after an interrupted answer.
+  // submitSaved: interrupted mid-answer with enough saved text — submit what the server saved.
+  function showTurn(qid, { reanswer = false, submitSaved = false } = {}) {
     turn = qid;
     stage = qid;
     pendingTranscript = null;
@@ -188,16 +249,30 @@ export function initParticipantView(root) {
     populateInject();
     updateDevPanel();
 
-    // reload while this question's feedback was already generated: show it again, don't re-ask
+    // reload after the answer was submitted: show the stored feedback (or wait for the one being
+    // generated) — never re-ask and never generate again
     if (isPractice && answers[PRACTICE_ID]) {
       input.showDone(answers[PRACTICE_ID].transcript);
       practiceDone();
-    } else if (!isPractice && answers[qid]?.feedback) {
+    } else if (!isPractice && answers[qid]) {
       input.showDone(answers[qid].transcript);
-      renderFeedback(answers[qid]);
+      if (answers[qid].feedback) renderFeedback(answers[qid]);
+      else submitAnswer(answers[qid].transcript); // pending: the server answers 202 until it's done
+    } else if (!isPractice && submitSaved) {
+      input.showDone("");
+      submitAnswer("", false, true);
     } else if (!isPractice) {
       client.log("question_shown", qid);
+      if (reanswer) statusText.textContent = "이전 답변이 저장되지 않았습니다. 한 번 더 답변해 주세요.";
     }
+  }
+
+  // The server spent the one re-answer chance on an (almost) empty answer: ask once more.
+  function askAgain(qid) {
+    feedbackWrap.classList.add("hidden");
+    input.reset();
+    statusText.textContent = "답변이 거의 인식되지 않았습니다. 마이크를 확인한 뒤 한 번 더 답변해 주세요.";
+    client.log("question_shown", qid);
   }
 
   async function submitPractice(transcript) {
@@ -212,16 +287,21 @@ export function initParticipantView(root) {
     nextBtn.classList.remove("hidden");
   }
 
-  async function submitAnswer(transcript, injected = false) {
+  async function submitAnswer(transcript, injected = false, fromSaved = false) {
     const qid = turn;
-    pendingTranscript = { transcript, injected };
+    pendingTranscript = { transcript, injected, fromSaved };
     answerRetryBtn.classList.add("hidden");
     statusText.textContent = "피드백을 준비하는 중…";
     feedbackWrap.classList.remove("hidden");
     feedbackEl.innerHTML = '<span class="muted">…</span>';
     try {
-      const r = await client.answer(qid, transcript, injected);
+      const r = await client.answer(qid, transcript, injected, fromSaved);
       if (turn !== qid) return; // dev nav moved on meanwhile
+      if (r.retry) return askAgain(qid);
+      if (r.pending) { // generated by an earlier request: poll until it's stored
+        setTimeout(() => { if (turn === qid) submitAnswer(transcript, injected, fromSaved); }, 3000);
+        return;
+      }
       answers[qid] = { transcript, ...r };
       statusText.textContent = "";
       renderFeedback(answers[qid]);
@@ -234,7 +314,7 @@ export function initParticipantView(root) {
   }
 
   answerRetryBtn.addEventListener("click", () => {
-    if (pendingTranscript) submitAnswer(pendingTranscript.transcript, pendingTranscript.injected);
+    if (pendingTranscript) submitAnswer(pendingTranscript.transcript, pendingTranscript.injected, pendingTranscript.fromSaved);
   });
 
   function renderFeedback(a) {
@@ -271,7 +351,7 @@ export function initParticipantView(root) {
       else if (el === a.weak) badge = '<span class="badge weak">weakness</span>';
       return `<div class="score"><span class="sname">${ELNAME[el]}</span><span class="sval">${r} · ${RLABEL[r]}</span>${badge}</div>`;
     }).join("");
-    $("p-devInfoStyle").textContent = a.condition ? `Coach style: ${CLABEL[a.condition]}` : "";
+    $("p-devInfoStyle").textContent = a.stance ? `Coach style: ${CLABEL[a.stance]}` : "";
     devInfo.classList.remove("hidden");
   }
 
