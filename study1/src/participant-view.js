@@ -72,13 +72,13 @@ export function initParticipantView(root) {
     isTest = st.is_test;
     answers = st.answers || {};
     surveyDone = st.surveys || surveyDone;
-    window.dispatchEvent(new CustomEvent("pilot:session", { detail: { active: true, isTest } }));
+    window.dispatchEvent(new CustomEvent("study1:session", { detail: { active: true, isTest } }));
     guardNavigation();
     resume(st.stage);
   }
 
   function noSession() {
-    window.dispatchEvent(new CustomEvent("pilot:session", { detail: { active: false, isTest: false } }));
+    window.dispatchEvent(new CustomEvent("study1:session", { detail: { active: false, isTest: false } }));
     show("p-nosession");
   }
 
@@ -253,7 +253,7 @@ export function initParticipantView(root) {
   });
 
   // ---------- dev mode (test sessions only) ----------
-  window.addEventListener("pilot:devmode", (e) => {
+  window.addEventListener("study1:devmode", (e) => {
     devMode = e.detail.on;
     updateDevPanel();
     if (!devMode) devInfo.classList.add("hidden");

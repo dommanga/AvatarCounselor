@@ -25,7 +25,7 @@ applyView(); // default: participant view (toggle off)
 // ---------- dev mode: unlocked via keyboard shortcut, off by default ----------
 let devMode = false;
 let devAllowed = true; // false while a real session is active
-window.addEventListener("pilot:session", (e) => {
+window.addEventListener("study1:session", (e) => {
   devAllowed = !e.detail.active || e.detail.isTest;
   if (!devAllowed && devMode) setDevMode(false);
 });
@@ -34,7 +34,7 @@ function setDevMode(on) {
   devSwitch.classList.toggle("hidden", !on);
   devBanner.classList.toggle("hidden", !on);
   if (!on) { devToggle.checked = false; applyView(); } // locking dev mode always returns to participant view
-  window.dispatchEvent(new CustomEvent("pilot:devmode", { detail: { on } }));
+  window.dispatchEvent(new CustomEvent("study1:devmode", { detail: { on } }));
 }
 window.addEventListener("keydown", (e) => {
   if (e.shiftKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {

@@ -1,7 +1,7 @@
 // Participant-device side of /api/session/*: token storage, authed calls, and an ordered,
 // retrying event queue. Each event carries a client-generated id, so a retried POST is a no-op.
 
-const TOKEN_KEY = "pilot.participantToken";
+const TOKEN_KEY = "study1.participantToken";
 
 // sessionStorage: survives reloads in this tab, and /researcher -> / hand-off (same tab, same origin).
 export function getToken() {
