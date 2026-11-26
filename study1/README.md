@@ -6,7 +6,7 @@ researcher's spreadsheet.
 
 ## Pages
 - `/s/{token}` — participant flow:
-  browser check → consent → device test (speaker chime that loops until [정지], microphone) → notice → pre-survey →
+  browser check → consent → device test (speaker chime that loops until [정지], microphone) → pre-survey → notice →
   scenario → answer instructions → Q2 (40 s thinking time from the moment the question appears, answer) →
   self-rating → loading → feedback → post-survey → debriefing → completion (payment form link).
   Leaving the question screen resumes at the answer instructions; the countdown starts over.

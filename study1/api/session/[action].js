@@ -126,7 +126,7 @@ async function payload(s) {
 }
 
 // Where a (re)loaded page continues.
-//   { to: device_test | notice | pre_survey | scenario | post_survey }
+//   { to: device_test | pre_survey | notice | scenario | post_survey }
 //   { to: question_guide, question_id, reanswer? }  the answering instructions come first, the thinking time starts
 //                                              over after them; reanswer = the re-answer chance was just spent
 //   { to: submit_saved, question_id }          interrupted mid-answer with enough text: confirm what was saved

@@ -11,14 +11,14 @@ import { createVoiceFeedback } from "./voice-feedback.js";
 import { CORPUS } from "./corpus.js";
 
 // Main-experiment participant flow, entered through the participant link /s/{token}.
-//   environment check -> consent -> device test -> notice -> pre-survey -> scenario -> answer instructions ->
+//   environment check -> consent -> device test -> pre-survey -> notice -> scenario -> answer instructions ->
 //   question (thinking time, answer) -> self-rating -> loading -> feedback -> post-survey -> debriefing -> done
 // The page first claims the session (one active tab per session); the server decides where a
 // (re)loaded page continues (resume_to). Every step is logged as a server event.
 // The stance is never sent to this page for real sessions; dev mode works only in test sessions.
 
 // dev-nav stage list (test sessions only)
-const STAGES = ["device_test", "notice", "pre_survey", "scenario", "question_guide", ...QUESTION_SEQUENCE, "self_rating", "feedback", "post_survey", "debrief", "done"];
+const STAGES = ["device_test", "pre_survey", "notice", "scenario", "question_guide", ...QUESTION_SEQUENCE, "self_rating", "feedback", "post_survey", "debrief", "done"];
 const STAGE_LABELS = {
   device_test: "장치 테스트", notice: "진행 전 안내", pre_survey: "사전설문", scenario: "시나리오", question_guide: "답변 안내",
   self_rating: "자기평가", feedback: "피드백",
@@ -34,7 +34,7 @@ const mmss = (ms) => `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${Strin
 function applyCopy(root) {
   for (const el of root.querySelectorAll("[data-copy]")) {
     const v = COPY[el.dataset.copy];
-    if (typeof v === "string") el.textContent = v;
+    if (typeof v === "string") { el.textContent = v; el.classList.toggle("hidden", v === ""); } // an empty wording leaves no empty line
   }
   for (const el of root.querySelectorAll("[data-copy-list]")) { // one <li> per string
     el.replaceChildren(...COPY[el.dataset.copyList].map((t) => Object.assign(document.createElement("li"), { textContent: t })));
@@ -191,12 +191,12 @@ export function initParticipantView(root) {
   function showDevice() {
     stage = "device_test";
     show("p-device");
-    device ??= createDeviceTest({ $, client, onDone: showNotice });
+    device ??= createDeviceTest({ $, client, onDone: () => showSurvey("pre") });
     device.reset();
     updateDevPanel();
   }
 
-  // ---------- notice before the survey part ----------
+  // ---------- notice after the pre-survey, before the scenario ----------
   function showNotice() {
     stage = "notice";
     show("p-notice");
@@ -204,7 +204,7 @@ export function initParticipantView(root) {
   }
   $("p-noticeConfirm").addEventListener("click", () => {
     client.log("notice_confirmed"); // the confirmation time
-    showSurvey("pre");
+    showScenario();
   });
 
   // ---------- surveys: one block per screen, saved block by block ----------
@@ -267,7 +267,7 @@ export function initParticipantView(root) {
   $("p-surveyFill").addEventListener("click", () => surveyForm?.fillRandom());
 
   async function finishSurvey(phase) {
-    if (phase === "pre") { client.log("survey_pre_submitted"); return showScenario(); }
+    if (phase === "pre") { client.log("survey_pre_submitted"); return showNotice(); }
     if (phase === "mid") return showLoading(turn || QUESTION_SEQUENCE[0], {});
     // post-survey: the server completes the session; the page moves on only once that has happened
     try {
@@ -323,7 +323,6 @@ export function initParticipantView(root) {
     stage = qid;
     show("p-question");
     $("p-questionText").textContent = QUESTIONS[qid];
-    $("p-questionHint").textContent = COPY.questionHints?.[qid] ?? ""; // screen only: the LLM gets QUESTIONS[qid] alone
     qMessage.textContent = reanswer ? COPY.answerReanswer : message;
     qError.textContent = "";
     submitRetry.classList.add("hidden");

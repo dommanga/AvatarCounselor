@@ -172,7 +172,6 @@
     .guide li { margin-bottom: 6px; }
     .guide.big { font-size: 17px; margin-bottom: 24px; }
     .guide.big li { margin-bottom: 10px; }
-    .qhint { margin-top: 10px; font-size: 15px; }
     .center-row { justify-content: center; margin-bottom: 14px; }
     .wave { display: flex; justify-content: center; align-items: center; gap: 6px; height: 56px; margin: 22px 0; }
     .wave span { width: 8px; height: 14px; border-radius: 4px; background: var(--accent); animation: wave 1.1s ease-in-out infinite; }
@@ -297,7 +296,7 @@
         </div>
       </section>
 
-      <!-- notice before the survey part -->
+      <!-- notice after the pre-survey, before the scenario -->
       <section class="screen hidden" id="p-notice">
         <div class="landing">
           <h2 data-copy="noticeTitle"></h2>
@@ -341,10 +340,8 @@
           <label for="p-devInject">테스트 대본 주입</label>
           <select id="p-devInject"></select>
         </div>
-        <div class="bubble coach">
-          <div class="who" data-copy="coachLabel"></div>
+        <div class="bubble">
           <div class="text" id="p-questionText"></div>
-          <div class="muted qhint" id="p-questionHint"></div>
         </div>
         <div class="muted" id="p-qMessage"></div>
 

@@ -93,12 +93,7 @@ try {
   check("oversized event data refused", (await A.event("tab_hidden", null, { stage: "x".repeat(3000) })).code === 400);
   check("in_progress after the first activity", (await sql`SELECT status FROM sessions WHERE id = ${s.id}`)[0].status === "in_progress");
   await A.event("device_test_done");
-  check("device_test_done -> notice", (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "notice");
-  check("reload on the notice -> the notice again", (await A.claim()).resume_to.to === "notice");
-  await A.event("notice_confirmed");
-  const [nc] = await sql`SELECT server_ts FROM events WHERE session_id = ${s.id} AND type = 'notice_confirmed'`;
-  check("notice_confirmed -> pre_survey, confirmation time recorded", !!nc?.server_ts
-    && (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "pre_survey");
+  check("device_test_done -> pre_survey", (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "pre_survey");
 
   // pre survey: responses carry the position they were shown at
   for (const b of SURVEY.pre) await A.survey("pre", b.block, fill(b));
@@ -108,7 +103,14 @@ try {
   const reloaded = await A.claim();
   check("reload keeps the same survey order", JSON.stringify(reloaded.survey_order) === JSON.stringify(row.survey_order)
     && reloaded.resume_to.to === "pre_survey" && reloaded.surveys.pre.length === SURVEY.pre.length);
-  await A.event("survey_pre_submitted"); await A.event("scenario_shown");
+  await A.event("survey_pre_submitted");
+  check("survey_pre_submitted -> notice; a reload shows the notice again", (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "notice"
+    && (await A.claim()).resume_to.to === "notice");
+  await A.event("notice_confirmed");
+  const [nc] = await sql`SELECT server_ts FROM events WHERE session_id = ${s.id} AND type = 'notice_confirmed'`;
+  check("notice_confirmed -> scenario, confirmation time recorded", !!nc?.server_ts
+    && (await sql`SELECT current_stage FROM sessions WHERE id = ${s.id}`)[0].current_stage === "scenario" && (await A.claim()).resume_to.to === "scenario");
+  await A.event("scenario_shown");
   await A.event("question_guide_shown");
   const qg = await A.claim();
   check("reload on the answer instructions -> the instructions again", qg.resume_to.to === "question_guide" && qg.resume_to.question_id === "q2"

@@ -303,16 +303,10 @@ try {
   const tones = await sql`SELECT type, data FROM events WHERE session_id = ${b.id} AND type LIKE 'speaker_tone_%' ORDER BY seq`;
   check("speaker starts / stops and play durations logged", tones.map((e) => e.type).join() === "speaker_tone_start,speaker_tone_stop,speaker_tone_start,speaker_tone_stop"
     && tones[1].data.duration_ms >= 1400 && tones[3].data.duration_ms >= 400, tones.filter((e) => e.type.endsWith("stop")).map((e) => e.data.duration_ms).join("/") + " ms");
-  await p.waitFor(p.screen("p-notice"), 8000, "notice screen");
-  const notice = await p.ev(`({ title: document.querySelector("#p-notice h2").textContent, items: [...document.querySelectorAll("#p-notice li")].map((l) => l.textContent), btn: document.getElementById("p-noticeConfirm").textContent })`);
-  check("notice before the survey: wording and [확인했습니다]", notice.title === COPY.noticeTitle && notice.items.join("|") === COPY.noticeItems.join("|") && notice.btn === COPY.noticeConfirm);
-  await p.reloadTo("p-notice");
-  check("reload on the notice -> the notice again", true);
-  await p.click("p-noticeConfirm");
   const stored = await storedOrder(b.id);
   const bValues = {};
   let smiOrderSeen;
-  await runSurvey(p, "pre", stored, p.screen("p-scenario"), {
+  await runSurvey(p, "pre", stored, p.screen("p-notice"), { // after the device test the pre-survey comes first, then the notice
     values: bValues,
     async onBlock(id, pg) {
       if (id === "pre_background") { // the "기타(직접 입력)" option opens a free-text box
@@ -333,10 +327,23 @@ try {
       }
     },
   });
-  check("pre-survey done -> scenario", await p.ev(p.screen("p-scenario")));
-  check("notice confirmation time recorded", (await sql`SELECT count(*)::int AS n FROM events WHERE session_id = ${b.id} AND type = 'notice_confirmed'`)[0].n === 1);
-  const sc = await p.ev(`({ title: document.querySelector("#p-scenario h2").textContent, intro: document.querySelector("#p-scenario .muted").textContent, body: document.querySelector("#p-scenario .text").textContent })`);
-  check("scenario: title, the line under it, body (as in copy.js)", sc.title === COPY.scenarioTitle && sc.intro === COPY.scenarioIntro && sc.body === COPY.scenarioBody);
+  check("pre-survey done -> notice", await p.ev(p.screen("p-notice")));
+  const notice = await p.ev(`({ title: document.querySelector("#p-notice h2").textContent, items: [...document.querySelectorAll("#p-notice li")].map((l) => l.textContent), btn: document.getElementById("p-noticeConfirm").textContent })`);
+  check("notice: wording and the confirm button", notice.title === COPY.noticeTitle && notice.items.join("|") === COPY.noticeItems.join("|") && notice.btn === COPY.noticeConfirm);
+  await p.reloadTo("p-notice");
+  check("reload on the notice -> the notice again", true);
+  await p.click("p-noticeConfirm");
+  await p.waitFor(p.screen("p-scenario"), 8000, "scenario after the notice");
+  let noticeAt = [];
+  for (let i = 0; i < 25 && !noticeAt.length; i++) { // sent in the background
+    noticeAt = await sql`SELECT server_ts FROM events WHERE session_id = ${b.id} AND type = 'notice_confirmed'`;
+    if (!noticeAt.length) await sleep(200);
+  }
+  check("notice confirmation time recorded", noticeAt.length === 1 && !!noticeAt[0].server_ts);
+  const sc = await p.ev(`({ title: document.querySelector("#p-scenario h2").textContent, introHidden: document.querySelector('#p-scenario [data-copy="scenarioIntro"]').classList.contains("hidden"),
+    intro: document.querySelector('#p-scenario [data-copy="scenarioIntro"]').textContent, body: document.querySelector("#p-scenario .text").textContent })`);
+  check("scenario: title and body as in copy.js; the line under the title only when copy.js has one (empty -> not rendered)",
+    sc.title === COPY.scenarioTitle && sc.body === COPY.scenarioBody && (COPY.scenarioIntro === "" ? sc.introHidden : !sc.introHidden && sc.intro === COPY.scenarioIntro));
   await p.click("p-scenarioNext");
 
   // answer instructions: the countdown must not run here
@@ -349,10 +356,18 @@ try {
   await p.waitFor(p.screen("p-question"), 5000, "question screen");
   const think0 = await p.ev(`document.getElementById("p-thinkTime").textContent`);
   check("the countdown starts when the question appears (still 40 after 3.5 s on the instructions)", /^(40|39)초$/.test(think0), think0);
-  const qs = await p.ev(`({ text: document.getElementById("p-questionText").textContent, hint: document.getElementById("p-questionHint").textContent, visible: document.getElementById("p-question").innerText })`);
-  check("question screen: the question and its screen-only hint (if copy.js has one)", qs.text === QUESTIONS.q2 && qs.hint === (COPY.questionHints?.q2 ?? ""));
+  const qs = await p.ev(`({ text: document.getElementById("p-questionText").textContent, visible: document.getElementById("p-question").innerText,
+    label: !!document.querySelector("#p-question .who"), hint: !!document.getElementById("p-questionHint"), icons: document.querySelectorAll("#participantView img, #participantView svg, #participantView canvas").length })`);
+  check("question screen: only the question in its box — no coach label or icon, no hint line", qs.text === QUESTIONS.q2 && !qs.label && !qs.hint && qs.icons === 0 && !qs.visible.includes("AI 코치"));
   check("... countdown and [답변 시작], without the long instructions or any header",
     qs.visible.includes(COPY.thinkLabel) && qs.visible.includes(COPY.answerStart) && !qs.visible.includes("주어집니다") && !qs.visible.includes("최대 2분") && !qs.visible.includes("AI 면접 코치"));
+  let flowEvents = [];
+  for (let i = 0; i < 25 && !flowEvents.includes("question_shown"); i++) { // sent in the background
+    flowEvents = [...new Set((await sql`SELECT type FROM events WHERE session_id = ${b.id} AND type IN ('device_test_done','survey_pre_submitted','notice_confirmed','scenario_shown','question_guide_shown','question_shown') ORDER BY seq`).map((e) => e.type))];
+    if (!flowEvents.includes("question_shown")) await sleep(200);
+  }
+  check("event order: device test, pre-survey, notice, scenario, answer instructions, question",
+    flowEvents.join() === "device_test_done,survey_pre_submitted,notice_confirmed,scenario_shown,question_guide_shown,question_shown", flowEvents.join(" > "));
   let ge = [];
   for (let i = 0; i < 25 && ge.length < 2; i++) { // events are sent in the background
     ge = await sql`SELECT type, client_ts FROM events WHERE session_id = ${b.id} AND type IN ('question_guide_shown','question_shown') ORDER BY seq`;
@@ -384,6 +399,9 @@ try {
   await runSurvey(p, "mid", stored, p.screen("p-feedback"), { overrides: { SA_pre: 7 }, values: bValues });
   await p.waitFor(p.screen("p-feedback"), 90000, "feedback");
   check("feedback shown whole", (await p.ev(`document.getElementById("p-feedbackText").textContent`)).length > 20);
+  const coachRefs = (id) => p.ev(`({ marks: [...document.querySelectorAll("#${id} .who, #${id} h2")].map((e) => e.textContent), icons: document.querySelectorAll("#participantView img, #participantView svg, #participantView canvas").length })`);
+  const tc = await coachRefs("p-feedback");
+  check("text feedback screen: the coach is named once (the label above the text), no icon or image", tc.marks.length === 1 && tc.marks[0] === COPY.feedbackTitle && tc.icons === 0, tc.marks.join(" | "));
   await sleep(500);
   await p.click("p-toSurvey");
 
@@ -456,7 +474,7 @@ try {
   } else {
     // a real session consented through the API and set to voice, then continued in the browser
     const d = await H.started("UI-D", { modality: "voice" });
-    for (const t of ["device_test_done", "notice_confirmed", "survey_pre_submitted", "scenario_shown"]) await d.T.event(t);
+    for (const t of ["device_test_done", "survey_pre_submitted", "notice_confirmed", "scenario_shown"]) await d.T.event(t);
     await d.T.release();
     const pd = await newPage();
     await pd.send("Page.addScriptToEvaluateOnNewDocument", { source: STUB });
@@ -482,6 +500,8 @@ try {
     const dom = await pd.ev(`({ html: document.documentElement.outerHTML, text: document.body.innerText, media: document.querySelectorAll("audio, video").length,
       title: document.querySelector("#p-voice h2").textContent, replay: document.getElementById("p-voiceReplay").disabled, next: document.getElementById("p-voiceNext").disabled })`);
     check("voice: only the neutral line is shown, no <audio> element or controls in the page", dom.title === COPY.voiceTitle && dom.media === 0);
+    const vc = await pd.ev(`({ marks: [...document.querySelectorAll("#p-voice .who, #p-voice h2")].map((e) => e.textContent), icons: document.querySelectorAll("#participantView img, #participantView svg, #participantView canvas").length })`);
+    check("voice feedback screen: the coach is named once (the line), no icon or image — as many references as the text screen", vc.marks.length === 1 && vc.marks[0] === COPY.voiceTitle && vc.icons === 0 && vc.marks.length === tc.marks.length);
     check("voice: the feedback text is nowhere in the DOM or the visible text", chunks.length >= 2 && chunks.every((c) => !dom.html.includes(c) && !dom.text.includes(c)), `${chunks.length} passages checked`);
     check("voice: autoplay refused -> [피드백 듣기]; replay and next are still disabled", dom.replay && dom.next);
     let evs = [];

@@ -1,5 +1,5 @@
 // Event vocabulary + how each event moves sessions.current_stage (used to resume after a reload).
-//   consent -> device_test -> notice -> pre_survey -> scenario -> question_guide -> q2_answering ->
+//   consent -> device_test -> pre_survey -> notice -> scenario -> question_guide -> q2_answering ->
 //   q2_selfrating -> q2_feedback -> post_survey -> debrief -> done
 // consented (-> device_test) and debrief_confirmed (-> done) are written by the server only.
 
@@ -27,9 +27,9 @@ export const MAX_EVENT_DATA_CHARS = 2000;
 // Stage after this event, or null to leave it unchanged.
 export function stageAfter(type, questionId) {
   switch (type) {
-    case "device_test_done": return "notice";
-    case "notice_confirmed": return "pre_survey";
-    case "survey_pre_submitted":
+    case "device_test_done": return "pre_survey";
+    case "survey_pre_submitted": return "notice";
+    case "notice_confirmed":
     case "scenario_shown": return "scenario";
     case "question_guide_shown": return "question_guide";
     case "question_shown":
