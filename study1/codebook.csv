@@ -1,0 +1,53 @@
+survey_version,phase,block,id,scale,subscale,group,stem,text,format,options,range,anchors,reverse,check,fixed
+2026-11-26.3,pre,pre_background,D1,background,,,,성별을 선택해 주세요.,single,남성|여성|기타,,,,,false
+2026-11-26.3,pre,pre_background,D2,background,,,,만 나이를 입력해 주세요.,number,,10-99,,,,false
+2026-11-26.3,pre,pre_background,D3,background,,,,현재 신분을 선택해 주세요.,single,대학생(휴학 포함)|대학원생|재직 중(직장인)|프리랜서·자영업|기타(직접 입력),,,,,false
+2026-11-26.3,pre,pre_background,E1,background,,,,"지금까지 실제 면접(예: 채용, 인턴, 입시, 장학금 면접 등)을 몇 번 경험하셨나요? 대면과 화상 면접을 모두 포함하며, AI 면접은 제외합니다.",single,없음|1–2회|3–5회|6회 이상,,,,,false
+2026-11-26.3,pre,pre_background,E2,background,,,,AI 면접(AI 역량검사 등)이나 AI 면접 연습 도구를 사용해 본 적이 있나요?,single,있음|없음,,,,,false
+2026-11-26.3,pre,pre_background,AI1,background,,,,"ChatGPT, Claude, Gemini 같은 AI 챗봇을 얼마나 자주 사용하시나요?",single,거의 사용하지 않음|한 달에 몇 번|일주일에 몇 번|거의 매일,,,,,false
+2026-11-26.3,pre,pre_background,AI2,background,,,,"AI 챗봇을 자신의 작업물이나 수행에 대한 피드백을 받는 용도로 사용해 봤나요? (최근 2주, 과제 첨삭, 글 교정, 발표 자료 검토 등)",single,없음|1–2회|3–5회|6회 이상,,,,,false
+2026-11-26.3,pre,pre_ise,ISE1,ISE,ISE,,다음 각 항목을 성공적으로 해낼 수 있다고 얼마나 자신하나요?,면접을 준비하는 것,likert,,1-7,1=전혀 아니다;4=어느 정도;7=매우 그렇다,false,,false
+2026-11-26.3,pre,pre_ise,ISE2,ISE,ISE,,다음 각 항목을 성공적으로 해낼 수 있다고 얼마나 자신하나요?,면접에서 채용 기업이 나를 채용 후보로 고려하도록 설득하는 것,likert,,1-7,1=전혀 아니다;4=어느 정도;7=매우 그렇다,false,,false
+2026-11-26.3,pre,pre_ise,ISE3,ISE,ISE,,다음 각 항목을 성공적으로 해낼 수 있다고 얼마나 자신하나요?,면접에서 나의 기술과 능력을 어필하는 것,likert,,1-7,1=전혀 아니다;4=어느 정도;7=매우 그렇다,false,,false
+2026-11-26.3,pre,pre_ise,ISE4,ISE,ISE,,다음 각 항목을 성공적으로 해낼 수 있다고 얼마나 자신하나요?,면접에서 최고의 인상을 남기는 것,likert,,1-7,1=전혀 아니다;4=어느 정도;7=매우 그렇다,false,,false
+2026-11-26.3,pre,pre_ise,ISE5,ISE,ISE,,다음 각 항목을 성공적으로 해낼 수 있다고 얼마나 자신하나요?,면접에서 하고자 하는 말을 전달하는 것,likert,,1-7,1=전혀 아니다;4=어느 정도;7=매우 그렇다,false,,false
+2026-11-26.3,pre,pre_smi,H-Enh,SMI,enhancement,like_to_hear,"일반적으로, 나는 … 듣는 것을 좋아한다.",내가 훌륭한 사람이라는 말을,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,pre,pre_smi,H-Asm,SMI,assessment,like_to_hear,"일반적으로, 나는 … 듣는 것을 좋아한다.",한 사람으로서의 나에 대한 진실을,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,pre,pre_smi,H-Ver,SMI,verification,like_to_hear,"일반적으로, 나는 … 듣는 것을 좋아한다.",내가 스스로 생각하는 바로 그런 유형의 사람이라는 말을,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,pre,pre_smi,H-Imp,SMI,improvement,like_to_hear,"일반적으로, 나는 … 듣는 것을 좋아한다.",내가 더 나은 사람이 될 수 있다는 말을,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,pre,pre_smi,AT1,SMI,,,,이 문항은 응답 확인을 위한 것입니다. '동의하지 않음(2)'을 선택해 주세요.,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,correct=2,true
+2026-11-26.3,pre,pre_smi,D-Enh,SMI,enhancement,want_to_discover,"일반적으로, 나는 … 알게 되기를 원한다.",나에게 뛰어난 자질이 있다는 것을,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,pre,pre_smi,D-Asm,SMI,assessment,want_to_discover,"일반적으로, 나는 … 알게 되기를 원한다.",내가 실제로 어떤 사람인지를,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,pre,pre_smi,D-Ver,SMI,verification,want_to_discover,"일반적으로, 나는 … 알게 되기를 원한다.",내가 이미 스스로 생각하는 그대로의 사람이라는 것을,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,pre,pre_smi,D-Imp,SMI,improvement,want_to_discover,"일반적으로, 나는 … 알게 되기를 원한다.",내가 나 자신을 발전시킬 수 있다는 것을,likert,,1-7,1=전혀 동의하지 않음;7=매우 동의함,false,,false
+2026-11-26.3,mid,mid_sa,SA_pre,SA,SA,,,"스스로 생각했을 때, 방금 한 답변은 몇 점이라고 생각하나요?",likert,,0-10,0=매우 부족;10=매우 훌륭,false,,false
+2026-11-26.3,post,post_sa,SA_post,SA,SA,,,"스스로 생각했을 때, 방금 한 답변은 몇 점이라고 생각하나요?",likert,,0-10,0=매우 부족;10=매우 훌륭,false,,false
+2026-11-26.3,post,post_oe1,OE1,OE,,,,"[다를 때] 자기평가 문항에서 처음에는 {pre}점, 피드백을 받은 후에는 {post}점을 주셨습니다. 점수가 달라진 이유는 무엇인가요? [같을 때] 자기평가 문항에서 처음과 피드백을 받은 후 모두 {pre}점을 주셨습니다. 점수가 그대로인 이유는 무엇인가요?",text,,,,,,false
+2026-11-26.3,post,post_fpq,US1,FPQ,usefulness,usefulness,,이 피드백은 유용하다고 생각한다.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,US2,FPQ,usefulness,usefulness,,이 피드백은 도움이 된다고 생각한다.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,US3,FPQ,usefulness,usefulness,,이 피드백은 나에게 많은 도움을 준다.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,AT2,FPQ,,,,이 문항은 응답 확인을 위한 것입니다. 8을 선택해 주세요.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,correct=8,true
+2026-11-26.3,post,post_fpq,AF2,FPQ,affect_positive,affect,"이 피드백을 받고 나니, 나는 …",만족스럽다,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,AF4,FPQ,affect_positive,affect,"이 피드백을 받고 나니, 나는 …",자신감이 든다,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,AF6,FPQ,affect_positive,affect,"이 피드백을 받고 나니, 나는 …",잘 해냈다고 느낀다,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,AF1,FPQ,affect_negative,affect,"이 피드백을 받고 나니, 나는 …",기분이 상한다,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,AF3,FPQ,affect_negative,affect,"이 피드백을 받고 나니, 나는 …",화가 난다,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_fpq,AF5,FPQ,affect_negative,affect,"이 피드백을 받고 나니, 나는 …",좌절감이 든다,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_competence,C1,Competence,,,,똑똑한 ↔ 똑똑하지 않은,semantic,,1-7,1=똑똑한;7=똑똑하지 않은,true,,false
+2026-11-26.3,post,post_competence,C2,Competence,,,,훈련되지 않은 ↔ 훈련된,semantic,,1-7,1=훈련되지 않은;7=훈련된,false,,false
+2026-11-26.3,post,post_competence,C3,Competence,,,,비전문적인 ↔ 전문적인,semantic,,1-7,1=비전문적인;7=전문적인,false,,false
+2026-11-26.3,post,post_competence,C4,Competence,,,,잘 아는 ↔ 잘 모르는,semantic,,1-7,1=잘 아는;7=잘 모르는,true,,false
+2026-11-26.3,post,post_competence,C5,Competence,,,,무능한 ↔ 유능한,semantic,,1-7,1=무능한;7=유능한,false,,false
+2026-11-26.3,post,post_competence,C6,Competence,,,,명석한 ↔ 어리석은,semantic,,1-7,1=명석한;7=어리석은,true,,false
+2026-11-26.3,post,post_likeability,L1,Likeability,,,,싫음 ↔ 좋음,semantic,,1-5,1=싫음;5=좋음,false,,false
+2026-11-26.3,post,post_likeability,L2,Likeability,,,,친해지기 어려운 ↔ 친해지기 쉬운,semantic,,1-5,1=친해지기 어려운;5=친해지기 쉬운,false,,false
+2026-11-26.3,post,post_likeability,L3,Likeability,,,,불친절한 ↔ 친절한,semantic,,1-5,1=불친절한;5=친절한,false,,false
+2026-11-26.3,post,post_likeability,L4,Likeability,,,,불쾌한 ↔ 유쾌한,semantic,,1-5,1=불쾌한;5=유쾌한,false,,false
+2026-11-26.3,post,post_likeability,L5,Likeability,,,,형편없는 ↔ 좋은,semantic,,1-5,1=형편없는;5=좋은,false,,false
+2026-11-26.3,post,post_sycophancy,S1,PerceivedSycophancy,excess_praise,,,AI 코치는 내 답변을 지나치게 칭찬하는 것 같았다.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_sycophancy,S2,PerceivedSycophancy,excess_avoidance,,,AI 코치는 내 답변의 부족한 부분을 분명하게 짚지 않는 것 같았다.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_sycophancy,S3,PerceivedSycophancy,sincerity,,,AI 코치는 진심으로 말하지 않는 것 같았다.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_sycophancy,S4,PerceivedSycophancy,motive,,,AI 코치는 그저 내 기분을 좋게 하려고 꾸며서 말하는 것 같았다.,likert,,0-10,0=전혀 동의하지 않음;10=완전히 동의함,false,,false
+2026-11-26.3,post,post_oe,OE2,OE,,,,"방금 받은 AI 코치의 피드백은 어땠나요? 피드백을 받으면서 든 생각이나 느낌, AI 코치에 대한 인상을 자유롭게 적어 주세요.",text,,,,,,false
+2026-11-26.3,post,post_oe,OE3,OE,,,,"피드백에서 특히 기억에 남는 표현이나 말투가 있었다면, 예시를 들어 설명해 주세요. 그리고 그것이 어떤 인상을 주었는지 함께 적어 주세요.",text,,,,,,false
+2026-11-26.3,post,post_oe,OE4,OE,,,,"실제로 면접 연습에서 AI 코치를 사용한다면, 어떤 방식으로 피드백을 받고 싶나요? 그 이유는 무엇인가요?",text,,,,,,false

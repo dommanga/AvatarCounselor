@@ -30,6 +30,7 @@ export function configSnapshot(stance) {
       feedback_min_wait_ms: C.FEEDBACK_MIN_WAIT_MS,
       text_min_dwell_ms_per_char: C.TEXT_MIN_DWELL_MS_PER_CHAR,
       audio_chunk_ms: C.AUDIO_CHUNK_MS,
+      oe_min_chars: C.OE_MIN_CHARS,
       audio_upload_enabled: C.AUDIO_UPLOAD_ENABLED,
     },
     tts: null, // Phase 4: voice_id, model_id, voice settings

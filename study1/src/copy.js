@@ -72,6 +72,7 @@ export const COPY = {
   // ---------- surveys ----------
   surveyProgress: { pre: "사전 설문", mid: "자기 평가", post: "사후 설문" },
   surveyOf: (phase, i, n) => (n > 1 ? `${COPY.surveyProgress[phase]} ${i} / ${n}` : COPY.surveyProgress[phase]),
+  surveyTextPlaceholder: (n) => `${n}자 이상 입력해 주세요.`,
   surveyNext: "다음",
   surveySubmit: "제출",
   surveyMissing: (n) => `응답하지 않은 문항이 ${n}개 있습니다. 모든 문항에 응답해주세요.`,

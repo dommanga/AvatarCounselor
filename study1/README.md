@@ -26,8 +26,15 @@ researcher's spreadsheet.
   `survey_items.json`. Consent text: placeholder in `COPY.consentBody`.
 - Timing values are in `lib/config.js` (`THINK_TIME_MS`, `ANSWER_MAX_MS`, `FEEDBACK_MIN_WAIT_MS`,
   `TEXT_MIN_DWELL_MS_PER_CHAR`, `AUDIO_CHUNK_MS`) and are copied into each session's `config` snapshot.
-- Survey items are shown in a per-session random order drawn at consent (`sessions.survey_order`; `"fixed": true`
-  items keep their position, `"shuffle": false` blocks keep config order); every response stores `display_order`.
+- Survey items: `survey_items.json` (version in `sessions.survey_version`). Blocks run in a fixed order; items inside a
+  block are shown in a per-session random order drawn at consent (`sessions.survey_order`) — only within their
+  `group` (SMI: like-to-hear / want-to-discover; FPQ: usefulness / affect), `"fixed": true` items (AT1, AT2) keep their
+  position, and `"shuffle": false` blocks (pre_background, post_oe) keep the config order. Every response stores
+  `display_order`, `scale_id` and `block_id`. Scores are stored raw; `"reverse": true` items are recoded at analysis.
+- Text in the config supports `**bold**`. OE1's wording depends on SA_pre / SA_post (`conditional`); the wording shown is
+  stored in `responses.shown_text`. Open-ended answers need `OE_MIN_CHARS` (lib/config.js) characters.
+- `npm run codebook` writes `codebook.csv` (one row per item: scale, subscale, group, range, anchors, reverse, check,
+  fixed, ...) from `survey_items.json`; `npm run codebook -- --check` fails if the committed file is stale.
 
 ## Answering and feedback
 - While answering, STT final results are saved as segments and audio is uploaded in 5 s chunks; nothing is
@@ -50,7 +57,9 @@ researcher's spreadsheet.
     npm run issue-tokens -- --n 1 --batch W1 --test --stance direct --modality text
     npm run sweep                                     # expire / abandon now (also done lazily)
     npm run test:assign -- --host <dev endpoint id>   # concurrent assignment + return + claim test
-    npm run test:flow -- --host <dev endpoint id>     # end-to-end participant API test (2 LLM calls)
+    npm run test:flow -- --host <dev endpoint id>     # end-to-end participant API test (several LLM calls)
+    npm run test:survey -- --host <dev endpoint id>   # survey definition, ordering, validation, OE1, valid judgement (no LLM)
+    npm run test:ui -- --host <dev endpoint id> [--full] [--audio]   # headless Chrome: flow + every survey block rendered
     npm run test:assign-http -- --host <dev endpoint id> --url https://<preview> [--audio]
     npm run purge-audio [-- --dry-run]                # destroy audio of transcript-verified sessions
     npm run purge-withdrawn [-- --dry-run]            # destroy data of 'destroy'-choice sessions that ended early

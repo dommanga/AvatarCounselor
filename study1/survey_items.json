@@ -1,15 +1,15 @@
 {
-  "_note": "문구 수정은 이 파일만 바꾼다. 2026-10-05 사전·사후설문 문서 수정본 기준. 문항을 바꾸면 version도 올린다 (세션 생성 시 sessions.survey_version에 저장됨). \"check\": {\"correct\": 값} = 주의 확인 문항 (척도 계산 제외, 사후설문 제출 시 valid 판정). \"fixed\": true = Phase 3 무작위 제시에서 위치 고정. \"shuffle\": false = 블록 안 문항을 섞지 않음. 블록 안 문항 순서는 세션마다 무작위이며(fixed 제외) 동의 시 sessions.survey_order에 저장된다. \"mid\" = 답변 직후·피드백 직전 자기평가.",
-  "version": "2026-11-26.2",
+  "_note": "문구 수정은 이 파일만 바꾼다 (문구 모음: src/copy.js, 코드북: npm run codebook). 문항을 바꾸면 version도 올린다 (동의 시 sessions.survey_version에 저장됨). 블록: scale = 척도 id, range/anchors = 기본 범위와 라벨(문항에서 덮어쓸 수 있음), instruction = 지시문, stem = 블록 줄기 문구, groups = 묶음(id, stem). 문항: type = likert | semantic | single | multi | number | text, subscale, group(묶음 id), reverse(분석 때 역코딩, 저장은 원점수), check = 주의 확인(정답), fixed = 무작위 제시에서 위치 고정, hint = 보조 문구, other = '기타' 직접 입력 선택지의 문구, conditional = 이전 응답에 따라 문구가 바뀌는 문항. **굵게**는 굵은 글씨. 블록 순서는 고정, 블록 안 문항은 세션마다 무작위(묶음 안에서만, fixed 제외; shuffle:false 블록은 제외)이며 동의 시 sessions.survey_order에 저장된다. mid = 답변 직후·피드백 직전 자기평가.",
+  "version": "2026-11-26.3",
   "pre": [
     {
-      "block": "background",
-      "title": "기본 정보",
-      "scored": false,
+      "block": "pre_background",
+      "scale": "background",
+      "shuffle": false,
       "items": [
         {
           "id": "D1",
-          "text": "성별을 선택해주세요.",
+          "text": "성별을 선택해 주세요.",
           "type": "single",
           "options": [
             "남성",
@@ -19,22 +19,29 @@
         },
         {
           "id": "D2",
-          "text": "만 나이를 입력해주세요.",
-          "type": "number"
-        },
-        {
-          "id": "D3",
-          "text": "현재 신분을 선택해주세요.",
-          "type": "single",
-          "options": [
-            "학부생",
-            "대학원생",
-            "기타"
+          "text": "만 나이를 입력해 주세요.",
+          "type": "number",
+          "range": [
+            10,
+            99
           ]
         },
         {
+          "id": "D3",
+          "text": "현재 신분을 선택해 주세요.",
+          "type": "single",
+          "options": [
+            "대학생(휴학 포함)",
+            "대학원생",
+            "재직 중(직장인)",
+            "프리랜서·자영업",
+            "기타(직접 입력)"
+          ],
+          "other": "기타(직접 입력)"
+        },
+        {
           "id": "E1",
-          "text": "지금까지 실제 면접(예: 채용, 인턴, 대학원 입학, 장학금 면접 등)을 몇 번 경험하셨나요? 대면과 화상 면접을 모두 포함합니다.",
+          "text": "지금까지 실제 면접(예: 채용, 인턴, 입시, 장학금 면접 등)을 몇 번 경험하셨나요? 대면과 화상 면접을 모두 포함하며, AI 면접은 제외합니다.",
           "type": "single",
           "options": [
             "없음",
@@ -42,6 +49,16 @@
             "3–5회",
             "6회 이상"
           ]
+        },
+        {
+          "id": "E2",
+          "text": "AI 면접(AI 역량검사 등)이나 AI 면접 연습 도구를 사용해 본 적이 있나요?",
+          "type": "single",
+          "options": [
+            "있음",
+            "없음"
+          ],
+          "hint": "실제 채용 과정의 AI 면접, AI와 텍스트나 음성으로 모의 면접을 하고 피드백을 받는 경험 등을 모두 포함합니다."
         },
         {
           "id": "AI1",
@@ -56,522 +73,526 @@
         },
         {
           "id": "AI2",
-          "text": "AI 챗봇을 주로 어떤 목적으로 사용하시나요? 해당하는 것을 모두 골라주세요.",
-          "type": "multi",
+          "text": "AI 챗봇을 자신의 작업물이나 수행에 대한 피드백을 받는 용도로 사용해 봤나요? (최근 2주, 과제 첨삭, 글 교정, 발표 자료 검토 등)",
+          "type": "single",
           "options": [
-            "정보 검색",
-            "공부, 학습",
-            "어떤 일을 하는 방법 알아보기 (기기 사용법, 요리 레시피 등)",
-            "새 글 작성 (이메일, 보고서 등)",
-            "내가 쓴 글이나 작업물에 대한 첨삭/피드백 받기 (과제 첨삭, 글 교정, 발표 자료 검토 등)",
-            "번역",
-            "코딩, 데이터 분석, 계산",
-            "아이디어 구상",
-            "이미지/영상 등 미디어 생성 또는 분석",
-            "개인적인 결정이나 고민에 대한 조언 구하기 (진로, 인간관계, 건강, 돈 관리 등)",
-            "감정이나 속마음 털어놓기 (스트레스, 외로움 등)",
-            "가벼운 대화나 놀이 (잡담, 게임 등)"
-          ],
-          "other": true
-        }
-      ],
-      "shuffle": false
-    },
-    {
-      "block": "MH",
-      "title": "AI에 대한 생각",
-      "scored": true,
-      "instruction": "다음 문장에 얼마나 동의하시는지 골라주세요.",
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 그렇지 않다",
-        "maxLabel": "매우 그렇다",
-        "midpoint": 4
-      },
-      "extreme": {
-        "low": [
-          1,
-          2
-        ],
-        "high": [
-          6,
-          7
-        ]
-      },
-      "subscales": {
-        "MH": [
-          "MH1",
-          "MH3",
-          "MH5"
-        ]
-      },
-      "items": [
-        {
-          "id": "MH1",
-          "text": "AI가 어떤 결과물을 평가하면, 같은 결과물을 사람이 평가할 때보다 더 객관적이다."
-        },
-        {
-          "id": "MH3",
-          "text": "AI는 정밀하기 때문에, AI의 판단은 사람의 판단보다 정확하다."
-        },
-        {
-          "id": "MH5",
-          "text": "어떤 것에 대한 평가를 받을 때, 사람보다 AI에게 받는 것이 더 믿을 만하다."
+            "없음",
+            "1–2회",
+            "3–5회",
+            "6회 이상"
+          ]
         }
       ]
     },
     {
-      "block": "ISE_pre",
-      "title": "면접에 대한 자신감",
-      "scored": true,
-      "instruction": "다음을 성공적으로 해낼 수 있다고 얼마나 자신하나요?",
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 자신 없다",
-        "maxLabel": "매우 자신 있다",
-        "midpoint": 4
+      "block": "pre_ise",
+      "scale": "ISE",
+      "range": [
+        1,
+        7
+      ],
+      "anchors": {
+        "1": "전혀 아니다",
+        "4": "어느 정도",
+        "7": "매우 그렇다"
       },
-      "extreme": {
-        "low": [
-          1,
-          2
-        ],
-        "high": [
-          6,
-          7
-        ]
-      },
-      "subscales": {
-        "ISE": [
-          "ISE1",
-          "ISE2",
-          "ISE3",
-          "ISE4",
-          "ISE5"
-        ]
-      },
+      "instruction": "자신을 가장 잘 나타내는 응답을 골라 주세요.",
+      "stem": "다음 각 항목을 성공적으로 해낼 수 있다고 얼마나 자신하나요?",
       "items": [
         {
           "id": "ISE1",
-          "text": "면접을 준비하는 것"
+          "text": "면접을 준비하는 것",
+          "type": "likert",
+          "subscale": "ISE",
+          "reverse": false
         },
         {
           "id": "ISE2",
-          "text": "면접에서 면접관이 나를 선발 대상으로 고려하도록 설득하는 것"
+          "text": "면접에서 채용 기업이 나를 채용 후보로 고려하도록 설득하는 것",
+          "type": "likert",
+          "subscale": "ISE",
+          "reverse": false
         },
         {
           "id": "ISE3",
-          "text": "면접에서 나의 역량과 능력을 효과적으로 드러내는 것"
+          "text": "면접에서 나의 기술과 능력을 어필하는 것",
+          "type": "likert",
+          "subscale": "ISE",
+          "reverse": false
         },
         {
           "id": "ISE4",
-          "text": "면접에서 최대한 좋은 인상을 남기는 것"
+          "text": "면접에서 최고의 인상을 남기는 것",
+          "type": "likert",
+          "subscale": "ISE",
+          "reverse": false
         },
         {
           "id": "ISE5",
-          "text": "면접에서 내가 전달하려는 요점을 명확하게 전달하는 것"
+          "text": "면접에서 하고자 하는 말을 전달하는 것",
+          "type": "likert",
+          "subscale": "ISE",
+          "reverse": false
         }
       ]
     },
     {
-      "block": "FOS",
-      "title": "피드백에 대한 생각",
-      "scored": true,
-      "instruction": "다음은 피드백에 대한 평소 생각을 묻는 문항입니다. 여기서 피드백은 학업, 과제, 취업 준비 등에서 다른 사람에게 받는 평가나 조언을 말합니다.",
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 그렇지 않다",
-        "maxLabel": "매우 그렇다",
-        "midpoint": 4
+      "block": "pre_smi",
+      "scale": "SMI",
+      "range": [
+        1,
+        7
+      ],
+      "anchors": {
+        "1": "전혀 동의하지 않음",
+        "7": "매우 동의함"
       },
-      "extreme": {
-        "low": [
-          1,
-          2
-        ],
-        "high": [
-          6,
-          7
-        ]
-      },
-      "subscales": {
-        "U": [
-          "U1",
-          "U2",
-          "U3",
-          "U5"
-        ],
-        "A": [
-          "A1",
-          "A4",
-          "A5"
-        ],
-        "SA": [
-          "SA1",
-          "SA2",
-          "SA4"
-        ],
-        "SE": [
-          "SE1",
-          "SE2",
-          "SE3",
-          "SE4",
-          "SE5"
-        ]
-      },
-      "items": [
+      "instruction": "다음 각 문장에 얼마나 동의하는지 골라 주세요.",
+      "groups": [
         {
-          "id": "U1",
-          "text": "피드백은 학업이나 취업 준비에서 내가 성공하는 데 기여한다."
+          "id": "like_to_hear",
+          "stem": "일반적으로, 나는 … 듣는 것을 좋아한다."
         },
         {
-          "id": "U2",
-          "text": "나의 역량을 키우기 위해, 나는 피드백에 의지한다."
-        },
-        {
-          "id": "U3",
-          "text": "피드백은 수행을 향상시키는 데 매우 중요하다."
-        },
-        {
-          "id": "U5",
-          "text": "나는 피드백이 목표를 달성하는 데 매우 중요하다고 생각한다."
-        },
-        {
-          "id": "A1",
-          "text": "피드백을 적용해 나의 수행을 향상시키는 것은 나의 책임이다."
-        },
-        {
-          "id": "A4",
-          "text": "나를 지도하거나 평가하는 사람(예: 교수님, 선배, 면접관)이 피드백을 주면, 그에 반응하는 것은 나의 책임이다."
-        },
-        {
-          "id": "A5",
-          "text": "나는 피드백에 따라 변화해야 한다는 의무감을 느낀다."
-        },
-        {
-          "id": "SA1",
-          "text": "나는 다른 사람들이 나를 어떻게 생각하는지 알아차리려고 노력한다."
-        },
-        {
-          "id": "SA2",
-          "text": "피드백을 통해, 나는 사람들이 나를 어떻게 생각하는지 더 잘 알게 된다."
-        },
-        {
-          "id": "SA4",
-          "text": "피드백은 내가 다른 사람들에게 어떻게 보이는지 알게 해준다."
-        },
-        {
-          "id": "SE1",
-          "text": "나는 피드백을 다룰 때 자신감이 있다."
-        },
-        {
-          "id": "SE2",
-          "text": "다른 사람들에 비해, 나는 피드백을 더 잘 다룬다."
-        },
-        {
-          "id": "SE3",
-          "text": "나는 피드백을 효과적으로 다룰 능력이 있다고 믿는다."
-        },
-        {
-          "id": "SE4",
-          "text": "긍정적인 피드백이든 부정적인 피드백이든, 나는 그에 대응할 때 자신감을 느낀다."
-        },
-        {
-          "id": "SE5",
-          "text": "나는 내가 받는 피드백을 감당할 수 있다는 것을 안다."
+          "id": "want_to_discover",
+          "stem": "일반적으로, 나는 … 알게 되기를 원한다."
         }
-      ]
-    },
-    {
-      "block": "SMI",
-      "title": "[Phase 3에서 채움] SMI",
-      "scored": false,
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 동의하지 않음",
-        "maxLabel": "매우 동의함",
-        "midpoint": 4
-      },
-      "_todo": "Phase 3: LIKE to hear 하위 묶음 → AT1 → WANT to discover 하위 묶음",
+      ],
       "items": [
+        {
+          "id": "H-Enh",
+          "text": "내가 **훌륭한** 사람이라는 말을",
+          "type": "likert",
+          "subscale": "enhancement",
+          "reverse": false,
+          "group": "like_to_hear"
+        },
+        {
+          "id": "H-Asm",
+          "text": "한 사람으로서의 나에 대한 **진실**을",
+          "type": "likert",
+          "subscale": "assessment",
+          "reverse": false,
+          "group": "like_to_hear"
+        },
+        {
+          "id": "H-Ver",
+          "text": "내가 **스스로 생각하는** 바로 그런 **유형**의 사람이라는 말을",
+          "type": "likert",
+          "subscale": "verification",
+          "reverse": false,
+          "group": "like_to_hear"
+        },
+        {
+          "id": "H-Imp",
+          "text": "내가 더 **나은** 사람이 될 수 있다는 말을",
+          "type": "likert",
+          "subscale": "improvement",
+          "reverse": false,
+          "group": "like_to_hear"
+        },
         {
           "id": "AT1",
           "text": "이 문항은 응답 확인을 위한 것입니다. '동의하지 않음(2)'을 선택해 주세요.",
+          "type": "likert",
+          "reverse": false,
           "check": {
             "correct": 2
           },
           "fixed": true
+        },
+        {
+          "id": "D-Enh",
+          "text": "나에게 **뛰어난** 자질이 있다는 것을",
+          "type": "likert",
+          "subscale": "enhancement",
+          "reverse": false,
+          "group": "want_to_discover"
+        },
+        {
+          "id": "D-Asm",
+          "text": "내가 **실제로** 어떤 사람인지를",
+          "type": "likert",
+          "subscale": "assessment",
+          "reverse": false,
+          "group": "want_to_discover"
+        },
+        {
+          "id": "D-Ver",
+          "text": "내가 **이미** 스스로 생각하는 그대로의 사람이라는 것을",
+          "type": "likert",
+          "subscale": "verification",
+          "reverse": false,
+          "group": "want_to_discover"
+        },
+        {
+          "id": "D-Imp",
+          "text": "내가 나 자신을 **발전시킬** 수 있다는 것을",
+          "type": "likert",
+          "subscale": "improvement",
+          "reverse": false,
+          "group": "want_to_discover"
         }
       ]
     }
   ],
   "mid": [
     {
-      "block": "self_eval",
-      "title": "",
-      "scored": true,
-      "scale": {
-        "min": 0,
-        "max": 10,
-        "minLabel": "매우 부족",
-        "maxLabel": "매우 훌륭",
-        "midpoint": 5
-      },
-      "subscales": {
-        "SelfEval": [
-          "SELF1"
-        ]
+      "block": "mid_sa",
+      "scale": "SA",
+      "range": [
+        0,
+        10
+      ],
+      "anchors": {
+        "0": "매우 부족",
+        "10": "매우 훌륭"
       },
       "items": [
         {
-          "id": "SELF1",
-          "text": "스스로 생각했을 때, 방금 한 답변은 몇 점이라고 생각하나요?"
+          "id": "SA_pre",
+          "text": "스스로 생각했을 때, 방금 한 답변은 몇 점이라고 생각하나요?",
+          "type": "likert",
+          "subscale": "SA",
+          "reverse": false
         }
       ]
     }
   ],
   "post": [
     {
-      "block": "FPQ",
-      "title": "[Phase 3에서 채움] FPQ",
-      "scored": false,
-      "scale": {
-        "min": 0,
-        "max": 10,
-        "minLabel": "전혀 그렇지 않다",
-        "maxLabel": "매우 그렇다",
-        "midpoint": 5
+      "block": "post_sa",
+      "scale": "SA",
+      "range": [
+        0,
+        10
+      ],
+      "anchors": {
+        "0": "매우 부족",
+        "10": "매우 훌륭"
       },
-      "_todo": "Phase 3: Usefulness 묶음 → AT2 → Affect 묶음",
+      "instruction": "피드백을 받은 지금, 다시 생각해서 답해 주세요. 앞에서 준 점수와 같아도, 달라도 괜찮습니다.",
       "items": [
+        {
+          "id": "SA_post",
+          "text": "스스로 생각했을 때, 방금 한 답변은 몇 점이라고 생각하나요?",
+          "type": "likert",
+          "subscale": "SA",
+          "reverse": false
+        }
+      ]
+    },
+    {
+      "block": "post_oe1",
+      "scale": "OE",
+      "items": [
+        {
+          "id": "OE1",
+          "type": "text",
+          "conditional": {
+            "vars": {
+              "pre": "SA_pre",
+              "post": "SA_post"
+            },
+            "compare": [
+              "pre",
+              "post"
+            ],
+            "different": "자기평가 문항에서 처음에는 {pre}점, 피드백을 받은 후에는 {post}점을 주셨습니다. 점수가 달라진 이유는 무엇인가요?",
+            "same": "자기평가 문항에서 처음과 피드백을 받은 후 모두 {pre}점을 주셨습니다. 점수가 그대로인 이유는 무엇인가요?"
+          }
+        }
+      ]
+    },
+    {
+      "block": "post_fpq",
+      "scale": "FPQ",
+      "range": [
+        0,
+        10
+      ],
+      "anchors": {
+        "0": "전혀 동의하지 않음",
+        "10": "완전히 동의함"
+      },
+      "instruction": "방금 받은 AI 코치의 피드백에 대해, 각 문장에 얼마나 동의하는지 골라 주세요.",
+      "groups": [
+        {
+          "id": "usefulness"
+        },
+        {
+          "id": "affect",
+          "stem": "이 피드백을 받고 나니, 나는 …"
+        }
+      ],
+      "items": [
+        {
+          "id": "US1",
+          "text": "이 피드백은 유용하다고 생각한다.",
+          "type": "likert",
+          "subscale": "usefulness",
+          "reverse": false,
+          "group": "usefulness"
+        },
+        {
+          "id": "US2",
+          "text": "이 피드백은 도움이 된다고 생각한다.",
+          "type": "likert",
+          "subscale": "usefulness",
+          "reverse": false,
+          "group": "usefulness"
+        },
+        {
+          "id": "US3",
+          "text": "이 피드백은 나에게 많은 도움을 준다.",
+          "type": "likert",
+          "subscale": "usefulness",
+          "reverse": false,
+          "group": "usefulness"
+        },
         {
           "id": "AT2",
           "text": "이 문항은 응답 확인을 위한 것입니다. 8을 선택해 주세요.",
+          "type": "likert",
+          "reverse": false,
           "check": {
             "correct": 8
           },
           "fixed": true
+        },
+        {
+          "id": "AF2",
+          "text": "만족스럽다",
+          "type": "likert",
+          "subscale": "affect_positive",
+          "reverse": false,
+          "group": "affect"
+        },
+        {
+          "id": "AF4",
+          "text": "자신감이 든다",
+          "type": "likert",
+          "subscale": "affect_positive",
+          "reverse": false,
+          "group": "affect"
+        },
+        {
+          "id": "AF6",
+          "text": "잘 해냈다고 느낀다",
+          "type": "likert",
+          "subscale": "affect_positive",
+          "reverse": false,
+          "group": "affect"
+        },
+        {
+          "id": "AF1",
+          "text": "기분이 상한다",
+          "type": "likert",
+          "subscale": "affect_negative",
+          "reverse": false,
+          "group": "affect"
+        },
+        {
+          "id": "AF3",
+          "text": "화가 난다",
+          "type": "likert",
+          "subscale": "affect_negative",
+          "reverse": false,
+          "group": "affect"
+        },
+        {
+          "id": "AF5",
+          "text": "좌절감이 든다",
+          "type": "likert",
+          "subscale": "affect_negative",
+          "reverse": false,
+          "group": "affect"
         }
       ]
     },
     {
-      "block": "S",
-      "title": "코치의 피드백",
-      "scored": true,
-      "instruction": "방금 사용하신 AI 코치와 코치가 준 피드백에 대해, 다음 문장에 얼마나 동의하시는지 골라주세요.",
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 그렇지 않다",
-        "maxLabel": "매우 그렇다",
-        "midpoint": 4
-      },
-      "extreme": {
-        "low": [
-          1,
-          2
-        ],
-        "high": [
-          6,
-          7
-        ]
-      },
-      "subscales": {
-        "Sycophancy": [
-          "S1",
-          "S2",
-          "S3",
-          "S4"
-        ]
-      },
-      "items": [
-        {
-          "id": "S1",
-          "text": "피드백은 내 답변의 약점을 실제보다 가볍게 다룬 것 같다."
-        },
-        {
-          "id": "S2",
-          "text": "피드백은 내 답변을 실제보다 더 좋게 표현한 것 같다."
-        },
-        {
-          "id": "S3",
-          "text": "피드백은 나를 기분 좋게 하려는 데 치중한 것 같다."
-        },
-        {
-          "id": "S4",
-          "text": "피드백은 내가 부족한 점을 숨기지 않고 말해주었다.",
-          "reverse": true
-        }
-      ]
-    },
-    {
-      "block": "C",
-      "title": "AI 코치에 대한 인상 1",
-      "scored": true,
-      "instruction": "방금 사용하신 AI 코치와 코치가 준 피드백에 대해, 다음 문장에 얼마나 동의하시는지 골라주세요.",
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 그렇지 않다",
-        "maxLabel": "매우 그렇다",
-        "midpoint": 4
-      },
-      "extreme": {
-        "low": [
-          1,
-          2
-        ],
-        "high": [
-          6,
-          7
-        ]
-      },
-      "subscales": {
-        "Competence": [
-          "C1",
-          "C2",
-          "C3",
-          "C4",
-          "C5",
-          "C6"
-        ]
-      },
+      "block": "post_competence",
+      "scale": "Competence",
+      "range": [
+        1,
+        7
+      ],
+      "instruction": "아래 각 형용사 쌍에서, AI 코치에 대한 인상에 해당하는 숫자를 골라 주세요. 한쪽 형용사에 가까운 숫자일수록 평가를 더 확신한다는 의미입니다.",
       "items": [
         {
           "id": "C1",
-          "text": "이 AI 코치는 지적이다."
+          "type": "semantic",
+          "reverse": true,
+          "anchors": {
+            "1": "똑똑한",
+            "7": "똑똑하지 않은"
+          }
         },
         {
           "id": "C2",
-          "text": "이 AI 코치는 잘 훈련되어 있다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "훈련되지 않은",
+            "7": "훈련된"
+          }
         },
         {
           "id": "C3",
-          "text": "이 AI 코치는 면접 피드백에 전문성이 있다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "비전문적인",
+            "7": "전문적인"
+          }
         },
         {
           "id": "C4",
-          "text": "이 AI 코치는 면접에 대해 잘 알고 있다."
+          "type": "semantic",
+          "reverse": true,
+          "anchors": {
+            "1": "잘 아는",
+            "7": "잘 모르는"
+          }
         },
         {
           "id": "C5",
-          "text": "이 AI 코치는 유능하다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "무능한",
+            "7": "유능한"
+          }
         },
         {
           "id": "C6",
-          "text": "이 AI 코치는 명석하다."
+          "type": "semantic",
+          "reverse": true,
+          "anchors": {
+            "1": "명석한",
+            "7": "어리석은"
+          }
         }
       ]
     },
     {
-      "block": "L",
-      "title": "AI 코치에 대한 인상 2",
-      "scored": true,
-      "instruction": "방금 사용하신 AI 코치와 코치가 준 피드백에 대해, 다음 문장에 얼마나 동의하시는지 골라주세요.",
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 그렇지 않다",
-        "maxLabel": "매우 그렇다",
-        "midpoint": 4
-      },
-      "extreme": {
-        "low": [
-          1,
-          2
-        ],
-        "high": [
-          6,
-          7
-        ]
-      },
-      "subscales": {
-        "Likeability": [
-          "L1",
-          "L2",
-          "L3",
-          "L4",
-          "L5"
-        ]
-      },
+      "block": "post_likeability",
+      "scale": "Likeability",
+      "range": [
+        1,
+        5
+      ],
+      "instruction": "다음의 척도에 따라 AI 코치의 인상을 평가해 주세요.",
       "items": [
         {
           "id": "L1",
-          "text": "이 AI 코치가 마음에 든다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "싫음",
+            "5": "좋음"
+          }
         },
         {
           "id": "L2",
-          "text": "이 AI 코치는 친근하다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "친해지기 어려운",
+            "5": "친해지기 쉬운"
+          }
         },
         {
           "id": "L3",
-          "text": "이 AI 코치는 친절하다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "불친절한",
+            "5": "친절한"
+          }
         },
         {
           "id": "L4",
-          "text": "이 AI 코치와의 상호작용은 유쾌했다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "불쾌한",
+            "5": "유쾌한"
+          }
         },
         {
           "id": "L5",
-          "text": "이 AI 코치는 호감이 간다."
+          "type": "semantic",
+          "reverse": false,
+          "anchors": {
+            "1": "형편없는",
+            "5": "좋은"
+          }
         }
       ]
     },
     {
-      "block": "ISE_post",
-      "title": "면접에 대한 자신감",
-      "scored": true,
-      "instruction": "다음을 성공적으로 해낼 수 있다고 얼마나 자신하나요?",
-      "scale": {
-        "min": 1,
-        "max": 7,
-        "minLabel": "전혀 자신 없다",
-        "maxLabel": "매우 자신 있다",
-        "midpoint": 4
+      "block": "post_sycophancy",
+      "scale": "PerceivedSycophancy",
+      "range": [
+        0,
+        10
+      ],
+      "anchors": {
+        "0": "전혀 동의하지 않음",
+        "10": "완전히 동의함"
       },
-      "extreme": {
-        "low": [
-          1,
-          2
-        ],
-        "high": [
-          6,
-          7
-        ]
-      },
-      "subscales": {
-        "ISE": [
-          "ISE1",
-          "ISE2",
-          "ISE3",
-          "ISE4",
-          "ISE5"
-        ]
-      },
+      "instruction": "아래 문장들은 방금 받은 피드백과 AI 코치에 대한 것입니다. 정답은 없으니, 피드백을 받으면서 본인이 느끼고 경험한 대로 응답해 주세요.",
       "items": [
         {
-          "id": "ISE1",
-          "text": "면접을 준비하는 것"
+          "id": "S1",
+          "text": "AI 코치는 내 답변을 지나치게 칭찬하는 것 같았다.",
+          "type": "likert",
+          "subscale": "excess_praise",
+          "reverse": false
         },
         {
-          "id": "ISE2",
-          "text": "면접에서 면접관이 나를 선발 대상으로 고려하도록 설득하는 것"
+          "id": "S2",
+          "text": "AI 코치는 내 답변의 부족한 부분을 분명하게 짚지 않는 것 같았다.",
+          "type": "likert",
+          "subscale": "excess_avoidance",
+          "reverse": false
         },
         {
-          "id": "ISE3",
-          "text": "면접에서 나의 역량과 능력을 효과적으로 드러내는 것"
+          "id": "S3",
+          "text": "AI 코치는 진심으로 말하지 않는 것 같았다.",
+          "type": "likert",
+          "subscale": "sincerity",
+          "reverse": false
         },
         {
-          "id": "ISE4",
-          "text": "면접에서 최대한 좋은 인상을 남기는 것"
+          "id": "S4",
+          "text": "AI 코치는 그저 내 기분을 좋게 하려고 꾸며서 말하는 것 같았다.",
+          "type": "likert",
+          "subscale": "motive",
+          "reverse": false
+        }
+      ]
+    },
+    {
+      "block": "post_oe",
+      "scale": "OE",
+      "shuffle": false,
+      "items": [
+        {
+          "id": "OE2",
+          "type": "text",
+          "text": "방금 받은 AI 코치의 피드백은 어땠나요? 피드백을 받으면서 든 생각이나 느낌, AI 코치에 대한 인상을 자유롭게 적어 주세요."
         },
         {
-          "id": "ISE5",
-          "text": "면접에서 내가 전달하려는 요점을 명확하게 전달하는 것"
+          "id": "OE3",
+          "type": "text",
+          "text": "피드백에서 특히 기억에 남는 표현이나 말투가 있었다면, 예시를 들어 설명해 주세요. 그리고 그것이 어떤 인상을 주었는지 함께 적어 주세요."
+        },
+        {
+          "id": "OE4",
+          "type": "text",
+          "text": "실제로 면접 연습에서 AI 코치를 사용한다면, 어떤 방식으로 피드백을 받고 싶나요? 그 이유는 무엇인가요?"
         }
       ]
     }

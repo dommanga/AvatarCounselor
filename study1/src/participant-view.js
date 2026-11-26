@@ -46,6 +46,7 @@ export function initParticipantView(root) {
   let session = null;        // claim / consent payload: timing, survey_order, attempt, audio_upload, ...
   let survey = null;         // survey_items.json
   let surveyDone = { pre: [], mid: [], post: [] };
+  let surveyValues = {};     // earlier answers that later questions quote (OE1 shows both self-ratings)
   let surveyPhase = null, surveyIdx = 0, surveyForm = null;
   let isTest = false, devMode = false, finished = false;
   let stage = null;          // dev-nav position and the stage label on tab events
@@ -89,6 +90,7 @@ export function initParticipantView(root) {
     startHeartbeat(st.heartbeat_ms);
     if (st.screen === "consent") return show("p-consent");
     surveyDone = { pre: [], mid: [], post: [], ...st.surveys };
+    surveyValues = { ...st.values };
     window.dispatchEvent(new CustomEvent("study1:session", { detail: { active: true, isTest } }));
     guardNavigation();
     startTracker();
@@ -209,7 +211,7 @@ export function initParticipantView(root) {
     $("p-surveyInstr").classList.toggle("hidden", !block.instruction);
     $("p-surveyErr").textContent = "";
     $("p-surveyNext").textContent = surveyPhase === "post" && i === blocks.length - 1 ? COPY.surveySubmit : COPY.surveyNext;
-    surveyForm = renderSurveyBlock($("p-surveyItems"), block);
+    surveyForm = renderSurveyBlock($("p-surveyItems"), block, { values: surveyValues, oeMinChars: session.rules?.oe_min_chars });
     updateDevPanel();
   }
 
@@ -231,6 +233,7 @@ export function initParticipantView(root) {
         if (!BLOCKED_STATUS.includes(e.status)) $("p-surveyErr").textContent = COPY.surveySaveFail(e.message);
         return;
       }
+      Object.assign(surveyValues, values);
       if (!surveyDone[surveyPhase].includes(block.block)) surveyDone[surveyPhase].push(block.block);
       if (surveyIdx < survey[surveyPhase].length - 1) renderSurvey(surveyIdx + 1);
       else await finishSurvey(surveyPhase);

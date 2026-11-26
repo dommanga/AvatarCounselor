@@ -22,7 +22,7 @@ import { db, isUniqueViolation } from "../../lib/db.js";
 import { requireParticipant } from "../../lib/auth.js";
 import { assess, generateFeedback, MODEL } from "../../lib/llm.js";
 import { CLIENT_EVENT_TYPES, QUESTION_EVENT_TYPES, MAX_EVENT_DATA_CHARS, QUESTION_STAGE_RE, stageAfter } from "../../lib/stages.js";
-import { SURVEY, PHASES, validateBlock, evaluateChecks } from "../../lib/survey.js";
+import { SURVEY, PHASES, findBlock, blockHasConditional, CONDITION_SOURCE_IDS, validateBlock, evaluateChecks } from "../../lib/survey.js";
 import * as C from "../../lib/config.js";
 import {
   ACTIVE, screenFor, sweep, claim, consent, grantRetry, savedTranscript, touchStatement, idleTooLong,
@@ -95,9 +95,9 @@ async function payload(s) {
     WHERE session_id = ${s.id} AND status IN ('pending', 'done', 'error') ORDER BY question_id, id DESC`;
   const answers = Object.fromEntries(rows.map((r) => [r.question_id, { state: r.status }]));
   // survey blocks already submitted, so a reload resumes at the first unanswered block
-  const done = await sql`SELECT DISTINCT phase, scale_id FROM responses WHERE session_id = ${s.id}`;
+  const done = await sql`SELECT DISTINCT phase, block_id FROM responses WHERE session_id = ${s.id}`;
   const surveys = Object.fromEntries(PHASES.map((p) => [p, []]));
-  for (const r of done) surveys[r.phase]?.push(r.scale_id);
+  for (const r of done) surveys[r.phase]?.push(r.block_id);
   const resume_to = await resumeTarget(s, answers, surveys);
   return {
     ...base,
@@ -106,6 +106,8 @@ async function payload(s) {
     resume_to,
     surveys,
     survey_order: s.survey_order,
+    values: await conditionValues(s.id), // earlier answers that later questions quote (OE1 shows both self-ratings)
+    rules: { oe_min_chars: C.OE_MIN_CHARS },
     audio_upload: C.AUDIO_UPLOAD_ENABLED,
     timing: {
       think_ms: C.THINK_TIME_MS,
@@ -158,6 +160,13 @@ async function resumeTarget(s, answers, surveys) {
     return { to: "question", question_id: q, reanswer: true };
   }
   return { to: "submit_saved", question_id: q };
+}
+
+// { item_id: value } of the answers conditional questions depend on, as stored so far.
+async function conditionValues(sessionId) {
+  if (!CONDITION_SOURCE_IDS.length) return {};
+  const rows = await db()`SELECT item_id, value FROM responses WHERE session_id = ${sessionId} AND item_id = ANY(${CONDITION_SOURCE_IDS}::text[])`;
+  return Object.fromEntries(rows.map((r) => [r.item_id, r.value]));
 }
 
 async function state(req, res, s) {
@@ -241,9 +250,9 @@ async function event(req, res, s) {
 // The debriefing follows (current_stage 'debrief'); its confirmation is recorded by /debrief.
 async function complete(res, s, insertEvent) {
   const sql = db();
-  const saved = await sql`SELECT phase, item_id, value, scale_id FROM responses WHERE session_id = ${s.id}`;
+  const saved = await sql`SELECT phase, item_id, value, block_id FROM responses WHERE session_id = ${s.id}`;
   const missing = (SURVEY.post || []).map((b) => b.block)
-    .filter((b) => !saved.some((r) => r.phase === "post" && r.scale_id === b));
+    .filter((b) => !saved.some((r) => r.phase === "post" && r.block_id === b));
   if (missing.length) return res.status(400).json({ error: `post-survey blocks missing: ${missing.join(", ")}` });
 
   const checks = evaluateChecks(saved);
@@ -284,16 +293,18 @@ async function debrief(req, res, s) {
 async function survey(req, res, s) {
   const { phase, block, answers } = req.body || {};
   if (!PHASES.includes(phase)) return res.status(400).json({ error: "unknown survey phase" });
-  const { rows, clear, error } = validateBlock(phase, block, answers, s.survey_order?.[phase]?.[block] ?? null);
+  const blk = findBlock(phase, block);
+  const values = blk && blockHasConditional(blk) ? await conditionValues(s.id) : {};
+  const { rows, clear, error } = validateBlock(phase, block, answers, s.survey_order?.[phase]?.[block] ?? null, values);
   if (error) return res.status(400).json({ error });
   const sql = db();
   await sql.transaction([
     ...clear.map((id) => sql`DELETE FROM responses WHERE session_id = ${s.id} AND phase = ${phase} AND item_id = ${id}`),
     ...rows.map((r) => sql`
-      INSERT INTO responses (session_id, phase, scale_id, item_id, value, display_order)
-      VALUES (${s.id}, ${phase}, ${r.scale_id}, ${r.item_id}, ${JSON.stringify(r.value)}::jsonb, ${r.display_order})
+      INSERT INTO responses (session_id, phase, scale_id, block_id, item_id, value, display_order, shown_text)
+      VALUES (${s.id}, ${phase}, ${r.scale_id}, ${r.block_id}, ${r.item_id}, ${JSON.stringify(r.value)}::jsonb, ${r.display_order}, ${r.shown_text})
       ON CONFLICT (session_id, phase, item_id)
-      DO UPDATE SET value = EXCLUDED.value, display_order = EXCLUDED.display_order, created_at = now()`),
+      DO UPDATE SET value = EXCLUDED.value, display_order = EXCLUDED.display_order, shown_text = EXCLUDED.shown_text, created_at = now()`),
     touchStatement(sql, s.id),
   ]);
   return res.status(200).json({ ok: true });

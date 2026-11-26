@@ -19,5 +19,7 @@ export const FEEDBACK_MIN_WAIT_MS = 0;        // loading screen stays at least t
 export const TEXT_MIN_DWELL_MS_PER_CHAR = 0;  // text feedback: next button waits chars x this (Phase 4 sets it)
 export const AUDIO_CHUNK_MS = 5_000;          // MediaRecorder timeslice
 
+export const OE_MIN_CHARS = 5;                // open-ended survey answers: minimum characters (trimmed)
+
 export const AUDIO_UPLOAD_ENABLED = process.env.AUDIO_UPLOAD_ENABLED === "true"; // off until IRB/consent covers audio
 export const AUDIO_MAX_BYTES = 4 * 1024 * 1024; // under Vercel's 4.5 MB request body limit

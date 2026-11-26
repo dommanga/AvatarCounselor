@@ -119,17 +119,24 @@
     .evalitem { margin-bottom: 20px; }
     .evalitem:last-child { margin-bottom: 0; }
     .qlabel { font-size: 16px; line-height: 1.5; margin-bottom: 12px; }
-    .likert { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-    .likert .anchor { font-size: 14px; color: var(--muted); }
-    .likert-opts { display: flex; gap: 10px; }
-    .likert-opts label { cursor: pointer; }
-    .likert-opts input { position: absolute; opacity: 0; width: 0; height: 0; }
-    .likert-opts .pill { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border: 1px solid var(--border); border-radius: 10px; font-size: 17px; font-weight: 600; background: var(--surface); transition: transform .1s ease; }
-    .likert-opts label:hover .pill { border-color: #cfd4dc; }
+    /* scale: numbered choices in a row, anchor labels under their numbers */
+    .scale { max-width: 640px; }
+    .pills, .anchors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; }
+    .pills label { cursor: pointer; display: block; }
+    .pills input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .pills .pill { display: flex; align-items: center; justify-content: center; height: 48px; border: 1px solid var(--border); border-radius: 10px; font-size: 17px; font-weight: 600; background: var(--surface); transition: transform .1s ease; }
+    .pills label:hover .pill { border-color: #cfd4dc; }
     /* selected value: fill + ring + slight scale, so the chosen rating is unambiguous at a glance */
-    .likert-opts input:checked + .pill { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 0 3px var(--accent-weak); transform: scale(1.06); }
-    .likert-opts input:focus-visible + .pill { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .evalitem.openended textarea { width: 100%; font: inherit; font-size: 16px; line-height: 1.5; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; resize: vertical; }
+    .pills input:checked + .pill { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 0 3px var(--accent-weak); transform: scale(1.06); }
+    .pills input:focus-visible + .pill { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .anchors { margin-top: 6px; }
+    .anchor { font-size: 14px; color: var(--muted); white-space: nowrap; }
+    .blockstem { font-size: 17px; font-weight: 600; margin: 4px 0 18px; }
+    .groupstem { font-size: 17px; font-weight: 600; margin: 22px 0 14px; }
+    .groupstem:first-child { margin-top: 4px; }
+    .hint { font-size: 14px; color: var(--muted); margin: -6px 0 10px; }
+    .oetext { width: 100%; font: inherit; font-size: 16px; line-height: 1.5; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; resize: vertical; }
+    .qlabel strong { font-weight: 800; }
 
     /* dev nav: persistent stage-jumping bar, shown above every screen in dev mode */
     .devnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 16px; border: 1px dashed var(--dev-border); border-radius: 8px; background: #fffbeb; }
@@ -159,10 +166,6 @@
     .numinput { width: 120px; }
     .othertext { width: 100%; max-width: 420px; margin-left: 28px; }
     .surveyerr { min-height: 22px; margin-bottom: 10px; }
-    @media (max-width: 520px) {
-      .likert-opts { gap: 4px; }
-      .likert-opts .pill { width: 38px; height: 44px; }
-    }
     .devbtn { font-size: 12px; font-weight: 500; padding: 5px 10px; min-height: auto; animation: none; border-style: dashed; border-color: var(--dev-border); background: #fffbeb; }
 
     .guide { margin: 0 0 16px; padding-left: 22px; font-size: 15px; }

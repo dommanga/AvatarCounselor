@@ -165,10 +165,12 @@ CREATE TABLE IF NOT EXISTS audio_chunks (
 CREATE TABLE IF NOT EXISTS responses (
   session_id uuid NOT NULL REFERENCES sessions(id),
   phase      text NOT NULL CHECK (phase IN ('pre', 'mid', 'post')),
-  scale_id   text NOT NULL,
+  scale_id   text NOT NULL,                 -- the item's scale (ISE, SMI, SA, FPQ, ...)
+  block_id   text NOT NULL,                 -- survey_items.json block, to resume at the first unsaved block
   item_id    text NOT NULL,
-  value      jsonb NOT NULL,
+  value      jsonb NOT NULL,                -- raw score as given; reverse coding happens at analysis
   display_order int,                        -- 1-based position the item was shown at
+  shown_text text,                          -- the wording actually shown, for items whose text depends on earlier answers (OE1)
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, phase, item_id)
 );

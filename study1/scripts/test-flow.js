@@ -6,113 +6,21 @@
 
 import crypto from "crypto";
 import { parseArgs } from "node:util";
-import { db } from "../lib/db.js";
 import { SURVEY, orderBlock } from "../lib/survey.js";
-import { newParticipantToken } from "../lib/auth.js";
 import { sweep } from "../lib/lifecycle.js";
 import { purgeWithdrawn, purgeVerifiedAudio } from "../lib/purge.js";
 import { AUDIO_UPLOAD_ENABLED } from "../lib/config.js";
-import { OTHER_LABEL, optionsOf } from "../src/survey-shared.js";
-import handler from "../api/session/[action].js";
 import { requireEndpoint } from "./cli.js";
+import { createHarness, fill, sleep } from "./test-lib.js";
 
 const { values } = parseArgs({ options: { host: { type: "string" } } });
 requireEndpoint(values.host);
 
-const sql = db();
-const created = [];
-let passed = 0, failed = 0;
-function check(name, ok, info = "") {
-  if (ok) passed++; else failed++;
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${info ? `  (${info})` : ""}`);
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const H = createHarness();
+const { sql, check, issue, tab, started } = H;
 
-async function issue(pid, { expiresInMs = 86400_000, test = false } = {}) {
-  const id = crypto.randomUUID();
-  const { token, hash } = newParticipantToken();
-  await sql`INSERT INTO sessions (id, participant_id, batch_id, is_test, token_hash, expires_at, stance, modality)
-            VALUES (${id}, ${pid}, 'TEST', ${test}, ${hash}, ${new Date(Date.now() + expiresInMs).toISOString()},
-                    ${test ? "direct" : null}, ${test ? "text" : null})`;
-  created.push(id);
-  return { id, token };
-}
-
-// one browser tab
-function tab({ token }) {
-  const key = crypto.randomUUID();
-  const run = (req) => new Promise((resolve, reject) => {
-    const res = { code: 200, status(c) { this.code = c; return this; }, json(d) { resolve({ code: this.code, ...d }); } };
-    handler(req, res).catch(reject);
-  });
-  const call = (method, action, body, query = {}) =>
-    run({ query: { action, ...query }, method, body, headers: { authorization: `Bearer ${token}`, "x-client-key": key } });
-  // raw-body upload: the handler reads the request as a stream
-  const upload = (query, bytes, mime) => run({
-    query: { action: "audio", ...query }, method: "POST",
-    headers: { authorization: `Bearer ${token}`, "x-client-key": key, "content-type": mime },
-    async *[Symbol.asyncIterator]() { yield bytes; },
-  });
-  const T = {
-    key,
-    claim: () => call("POST", "claim", { user_agent: "test-flow", screen: { w: 1440, h: 900, vw: 1200, vh: 800, dpr: 2 } }),
-    consent: (choices = { withdraw_data: "use", notify: "no" }) => call("POST", "consent", { agree: true, ...choices }),
-    release: () => call("POST", "release", {}),
-    event: (type, question_id = null, data) =>
-      call("POST", "event", { id: crypto.randomUUID(), type, question_id, client_ts: Date.now(), ...(data && { data }) }),
-    survey: (phase, block, answers) => call("POST", "survey", { phase, block, answers }),
-    segment: (question_id, attempt, seq, text) => call("POST", "segment", { question_id, attempt, seq, text, client_ts: Date.now() }),
-    answer: (body) => call("POST", "answer", { question_id: "q2", ...body }),
-    feedback: (question_id = "q2") => call("GET", "feedback", undefined, { question_id }),
-    debrief: (kind) => call("POST", "debrief", { kind, id: crypto.randomUUID(), client_ts: Date.now() }),
-    audio: (question_id, attempt, seq, bytes) =>
-      upload({ question_id, attempt: String(attempt), seq: String(seq), client_ts: String(Date.now()) }, bytes, "audio/webm"),
-    // the participant says something: saved as a segment, then the answer is confirmed from the saved segments
-    async say(attempt, text, extra = {}) {
-      if (text) await T.segment("q2", attempt, 0, text);
-      return T.answer(extra);
-    },
-    async waitFeedback(timeoutMs = 90_000) {
-      const t0 = Date.now();
-      for (;;) {
-        const f = await T.feedback();
-        if (f.state === "done" || f.state === "error" || Date.now() - t0 > timeoutMs) return f;
-        await sleep(1000);
-      }
-    },
-  };
-  return T;
-}
-
-// a valid answer for every item of a block; attention checks correct unless failChecks
-function fill(block, { failChecks = false } = {}) {
-  const a = {};
-  for (const item of block.items) {
-    if (item.check) {
-      const correct = [].concat(item.check.correct)[0];
-      a[item.id] = failChecks ? (correct === block.scale.min ? correct + 1 : correct - 1) : correct;
-      continue;
-    }
-    switch (item.type) {
-      case undefined: a[item.id] = block.scale.min; break;
-      case "single": a[item.id] = optionsOf(item).find((o) => o !== OTHER_LABEL); break;
-      case "multi": a[item.id] = [optionsOf(item).find((o) => o !== OTHER_LABEL)]; break;
-      case "number": a[item.id] = 25; break;
-    }
-  }
-  return a;
-}
 const GOOD_ANSWER = "작년 학과 학생회에서 신입생 멘토링 프로그램을 제가 처음 기획했습니다. 지원자가 적어서 직접 공지를 돌리고 "
   + "선배 열두 명을 모아 일정을 짰고, 한 학기 동안 운영해서 신입생 만족도 조사에서 평균 4.5점을 받았습니다.";
-
-// consented tab, ready for the interview part
-async function started(pid, opts = {}) {
-  const s = await issue(pid, opts);
-  const T = tab(s);
-  await T.claim();
-  const c = await T.consent();
-  return { s, T, c };
-}
 
 try {
   // ---------- unit-ish: survey order ----------
@@ -140,13 +48,13 @@ try {
   check("consent without the choices refused", (await A.consent({ withdraw_data: "use" })).code === 400);
   const c2 = await A.consent({ withdraw_data: "use", notify: "yes" });
   check("consent -> device test first", c2.screen === "active" && c2.resume_to.to === "device_test" && !("stance" in c2));
-  check("payload carries timing + survey order", c2.timing?.think_ms === 40000 && c2.timing?.answer_max_ms === 120000 && c2.survey_order?.pre?.MH?.length === 3);
+  check("payload carries timing + survey order", c2.timing?.think_ms === 40000 && c2.timing?.answer_max_ms === 120000 && c2.survey_order?.pre?.pre_ise?.length === 5);
   const [row] = await sql`SELECT * FROM sessions WHERE id = ${s.id}`;
   check("consented with a cell + snapshot", row.status === "consented" && row.stance && row.modality && row.config?.prompts?.stage1_sha256);
   check("snapshot records temperatures + timing", row.config.llm.stage1_temperature === 0 && row.config.llm.stage2_temperature === 0.3
     && row.config.app.think_time_ms === 40000 && row.config.app.answer_max_ms === 120000);
   check("consent choices stored", row.consent_withdraw_data === "use" && row.consent_notify === "yes");
-  check("survey order stored; background keeps config order", row.survey_order?.pre?.background?.join() === "D1,D2,D3,E1,AI1,AI2");
+  check("survey order stored; background keeps config order", row.survey_order?.pre?.pre_background?.join() === "D1,D2,D3,E1,E2,AI1,AI2");
 
   // device test
   await A.event("speaker_tone_played"); await A.event("speaker_tone_played");
@@ -162,9 +70,9 @@ try {
 
   // pre survey: responses carry the position they were shown at
   for (const b of SURVEY.pre) await A.survey("pre", b.block, fill(b));
-  const mh = await sql`SELECT item_id, display_order FROM responses WHERE session_id = ${s.id} AND scale_id = 'MH'`;
-  const order = row.survey_order.pre.MH;
-  check("display_order matches the stored order", mh.every((r) => order.indexOf(r.item_id) + 1 === r.display_order) && mh.length === 3);
+  const mh = await sql`SELECT item_id, display_order FROM responses WHERE session_id = ${s.id} AND block_id = 'pre_ise'`;
+  const order = row.survey_order.pre.pre_ise;
+  check("display_order matches the stored order", mh.every((r) => order.indexOf(r.item_id) + 1 === r.display_order) && mh.length === 5);
   const reloaded = await A.claim();
   check("reload keeps the same survey order", JSON.stringify(reloaded.survey_order) === JSON.stringify(row.survey_order)
     && reloaded.resume_to.to === "pre_survey" && reloaded.surveys.pre.length === SURVEY.pre.length);
@@ -195,8 +103,8 @@ try {
   await A.event("self_rating_shown", "q2");
   const rs = await A.claim();
   check("reload after the answer -> self-rating", rs.claim === "reload" && rs.resume_to.to === "self_rating" && !JSON.stringify(rs).includes("transcript"));
-  check("self-rating needs a value 0-10", (await A.survey("mid", "self_eval", { SELF1: 11 })).code === 400);
-  check("self-rating saved (phase mid, one item)", (await A.survey("mid", "self_eval", { SELF1: 7 })).code === 200
+  check("self-rating needs a value 0-10", (await A.survey("mid", "mid_sa", { SA_pre: 11 })).code === 400);
+  check("self-rating saved (phase mid, one item)", (await A.survey("mid", "mid_sa", { SA_pre: 7 })).code === 200
     && (await sql`SELECT value, display_order FROM responses WHERE session_id = ${s.id} AND phase = 'mid'`)[0].display_order === 1);
   await A.event("feedback_loading_shown", "q2");
   const rl = await A.claim();
@@ -284,7 +192,8 @@ try {
 
   // ---------- 7. attention check failed -> valid=false, slot returned (not exposed) ----------
   const w = await started("TF-006");
-  for (const b of SURVEY.pre) await w.T.survey("pre", b.block, fill(b, { failChecks: b.block === "SMI" }));
+  for (const b of SURVEY.pre) await w.T.survey("pre", b.block, fill(b, { failChecks: b.block === "pre_smi" }));
+  await w.T.survey("mid", "mid_sa", { SA_pre: 3 });
   for (const b of SURVEY.post) await w.T.survey("post", b.block, fill(b));
   await w.T.event("survey_post_submitted");
   const [wv] = await sql`SELECT s.status, s.valid, a.return_reason, a.exposed FROM sessions s JOIN slot_assignments a ON a.session_id = s.id WHERE s.id = ${w.s.id}`;
@@ -363,15 +272,7 @@ try {
     }
   }
 } finally {
-  // let background generations settle before their rows disappear
-  await sleep(1500);
-  for (const t of ["audit_log", "events", "session_clients", "answers", "answer_segments", "audio_chunks", "responses"]) {
-    await sql.query(`DELETE FROM ${t} WHERE session_id = ANY($1::uuid[])`, [created]);
-  }
-  const assigns = await sql`SELECT id FROM slot_assignments WHERE session_id = ANY(${created}::uuid[]) ORDER BY id DESC`;
-  for (const a of assigns) await sql`DELETE FROM slot_assignments WHERE id = ${a.id}`;
-  await sql`DELETE FROM sessions WHERE id = ANY(${created}::uuid[])`;
-  console.log(`cleaned up ${created.length} test session(s)`);
+  await sleep(1500); // let background generations settle before their rows disappear
+  await H.cleanup();
 }
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+H.finish();
