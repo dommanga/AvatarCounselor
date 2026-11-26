@@ -6,6 +6,33 @@
       "destination": "/"
     }
   ],
+  "redirects": [
+    {
+      "source": "/prompts.js",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/lib/:path*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/package.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/package-lock.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/vercel.json",
+      "destination": "/",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
