@@ -1,5 +1,4 @@
-# Not needed at runtime, and SPEC.md describes the manipulation — keep it off the public site.
-SPEC.md
+# Not needed at runtime — keep it off the public site.
 README.md
 scripts
 lib/schema.sql

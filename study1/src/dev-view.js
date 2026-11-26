@@ -1,5 +1,5 @@
 import { CORPUS } from "./corpus.js";
-import { QUESTIONS, CONDITIONS, CLABEL, RLABEL, ELNAME, api, escapeHtml, createAnswerInput } from "./shared.js";
+import { QUESTIONS, QUESTION_SEQUENCE, CONDITIONS, CLABEL, RLABEL, ELNAME, api, escapeHtml, createAnswerInput } from "./shared.js";
 
 // v0 inspection tool: pick/inject an answer -> PHASE 1 scores + all 3 condition feedbacks side by side.
 export function initDevView(root) {
@@ -16,7 +16,7 @@ export function initDevView(root) {
     o.value = id; o.textContent = `${id.toUpperCase()} — ${text.slice(0, 48)}…`;
     qsel.appendChild(o);
   }
-  qsel.value = "q3";
+  qsel.value = QUESTION_SEQUENCE[0];
 
   // inject list is scoped to whichever question is currently selected above
   function populateInject() {

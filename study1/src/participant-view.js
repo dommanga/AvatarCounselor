@@ -1,18 +1,20 @@
-import { QUESTIONS, QUESTION_SEQUENCE, CLABEL, RLABEL, ELNAME, escapeHtml, createTwoStepInput } from "./shared.js";
+import { QUESTIONS, QUESTION_SEQUENCE, LAST_QUESTION, CLABEL, RLABEL, ELNAME, escapeHtml, createTwoStepInput } from "./shared.js";
 import { PRACTICE_ID, PRACTICE_PROMPT } from "./questions.js";
 import { getToken, clearToken, createSessionClient } from "./session-client.js";
 import { loadSurveyConfig, renderSurveyBlock } from "./survey.js";
 import { CORPUS } from "./corpus.js";
 
-// Main-experiment participant flow. The session (participant ID, condition) is created by the
-// researcher at /researcher on this device; this page only holds the bearer token for it.
-//   pre-survey (blocks from survey_items.json) -> scenario -> practice -> Q1 -> Q2 -> Q3 -> post-survey -> done
+// Main-experiment participant flow. This page only holds the bearer token for the session.
+//   pre-survey (blocks from survey_items.json) -> scenario -> practice -> QUESTION_SEQUENCE -> post-survey -> done
 // Every step is logged as a server event; a reload resumes at the stage the server recorded.
 // The condition is never sent to this page for real sessions; dev mode works only in test sessions.
 
 // dev-nav stage list (test sessions only)
-const STAGES = ["pre_survey", "scenario", "practice", "q1", "q2", "q3", "post_survey", "done"];
-const STAGE_LABELS = { pre_survey: "사전설문", scenario: "시나리오", practice: "연습", q1: "질문 1", q2: "질문 2", q3: "질문 3", post_survey: "사후설문", done: "완료" };
+const STAGES = ["pre_survey", "scenario", "practice", ...QUESTION_SEQUENCE, "post_survey", "done"];
+const STAGE_LABELS = {
+  pre_survey: "사전설문", scenario: "시나리오", practice: "연습", post_survey: "사후설문", done: "완료",
+  ...Object.fromEntries(QUESTION_SEQUENCE.map((q) => [q, q.toUpperCase()])),
+};
 
 export function initParticipantView(root) {
   const $ = (id) => root.querySelector("#" + id);
@@ -37,7 +39,7 @@ export function initParticipantView(root) {
   let devMode = false;
   let finished = false;
   let stage = null;          // dev-nav position: one of STAGES
-  let turn = null;           // current interview turn: PRACTICE_ID | q1 | q2 | q3
+  let turn = null;           // current interview turn: PRACTICE_ID | one of QUESTION_SEQUENCE
   let answers = {};          // qid -> { transcript, feedback, scores?, strong?, weak? } (from server)
   let pendingTranscript = null; // kept for [다시 시도] after an LLM error
   let survey = null;         // survey_items.json
@@ -88,14 +90,14 @@ export function initParticipantView(root) {
     if (serverStage === "pre_survey") return showSurvey("pre");
     if (serverStage === "scenario") return showScenario();
     if (serverStage === "practice") return showTurn(PRACTICE_ID);
-    const m = /^(q[123])_(answering|feedback)$/.exec(serverStage);
-    if (m) return showTurn(m[1]);
+    const m = /^(.+)_(answering|feedback)$/.exec(serverStage);
+    if (m && QUESTIONS[m[1]]) return showTurn(m[1]);
     if (serverStage === "post_survey") return showSurvey("post");
     return showEnd();
   }
 
   // Once a session is running, the browser's back button and accidental tab closes shouldn't
-  // take the participant out of the flow. (/researcher itself needs the password again anyway.)
+  // take the participant out of the flow.
   function guardNavigation() {
     history.pushState(null, "", location.href);
     window.addEventListener("popstate", () => history.pushState(null, "", location.href));
@@ -175,7 +177,7 @@ export function initParticipantView(root) {
     pendingTranscript = null;
     const isPractice = qid === PRACTICE_ID;
     show("p-interview");
-    progressEl.textContent = isPractice ? "연습" : `질문 ${QUESTION_SEQUENCE.indexOf(qid) + 1} / ${QUESTION_SEQUENCE.length}`;
+    progressEl.textContent = isPractice ? "연습" : "면접 질문";
     practiceGuide.classList.toggle("hidden", !isPractice);
     questionEl.textContent = isPractice ? PRACTICE_PROMPT : QUESTIONS[qid];
     feedbackWrap.classList.add("hidden");
@@ -240,13 +242,13 @@ export function initParticipantView(root) {
     feedbackEl.textContent = a.feedback; // participant sees ONLY the feedback text
     client.log("feedback_shown", turn);
     renderDevInfo(a);
-    nextBtn.textContent = turn === "q3" ? "설문으로 넘어가기" : "다음 질문";
+    nextBtn.textContent = turn === LAST_QUESTION ? "설문으로 넘어가기" : "다음 질문";
     nextBtn.classList.remove("hidden");
   }
 
   nextBtn.addEventListener("click", () => {
     if (turn === PRACTICE_ID) return showTurn(QUESTION_SEQUENCE[0]);
-    client.log("next_clicked", turn); // for Q3 this click ends the Q3 dwell time
+    client.log("next_clicked", turn); // for the last question this click ends its dwell time
     const i = QUESTION_SEQUENCE.indexOf(turn);
     if (i < QUESTION_SEQUENCE.length - 1) showTurn(QUESTION_SEQUENCE[i + 1]);
     else showSurvey("post");
@@ -295,7 +297,7 @@ export function initParticipantView(root) {
     const idx = STAGES.indexOf(stage);
     $("p-devPrev").disabled = idx <= 0;
     $("p-devNext").disabled = idx < 0 || idx >= STAGES.length - 1;
-    devInjectRow.classList.toggle("hidden", !(devMode && /^q[123]$/.test(stage || "")));
+    devInjectRow.classList.toggle("hidden", !(devMode && QUESTION_SEQUENCE.includes(stage)));
     $("p-surveyDevRow").classList.toggle("hidden", !(devMode && /_survey$/.test(stage || "")));
   }
 
@@ -303,7 +305,7 @@ export function initParticipantView(root) {
     if (s === "pre_survey") showSurvey("pre", { fromStart: true });
     else if (s === "scenario") showScenario();
     else if (s === "practice") showTurn(PRACTICE_ID);
-    else if (/^q[123]$/.test(s)) showTurn(s);
+    else if (QUESTION_SEQUENCE.includes(s)) showTurn(s);
     else if (s === "post_survey") showSurvey("post", { fromStart: true });
     else showEnd();
   }

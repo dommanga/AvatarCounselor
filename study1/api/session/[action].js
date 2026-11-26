@@ -1,4 +1,4 @@
-// Participant-device API. Auth: `Authorization: Bearer <token>` issued by /api/researcher/create.
+// Participant-device API. Auth: `Authorization: Bearer <token>` issued at session creation.
 //   GET  /api/session/state   -> where to resume after a reload
 //   POST /api/session/event   { id, type, question_id?, client_ts }
 //   POST /api/session/answer  { question_id, transcript, injected? }  -> { feedback }

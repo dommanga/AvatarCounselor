@@ -49,7 +49,7 @@ export function isResearcher(req) {
 // Sends the 401 itself; callers just `if (!requireResearcher(req, res)) return;`
 export function requireResearcher(req, res) {
   if (isResearcher(req)) return true;
-  res.status(401).json({ error: "연구자 로그인이 필요합니다 (/researcher)." });
+  res.status(401).json({ error: "연구자 로그인이 필요합니다." });
   return false;
 }
 

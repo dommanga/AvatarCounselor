@@ -1,4 +1,6 @@
-// Event vocabulary + how each event moves sessions.current_stage (used for note auto-tagging).
+// Event vocabulary + how each event moves sessions.current_stage (used to resume after a reload).
+
+import { LAST_QUESTION } from "../src/questions.js";
 
 export const CLIENT_EVENT_TYPES = [
   "survey_pre_submitted", "scenario_shown",
@@ -23,7 +25,7 @@ export function stageAfter(type, questionId) {
     case "answer_start":
     case "answer_end": return `${questionId}_answering`;
     case "feedback_shown": return `${questionId}_feedback`;
-    case "next_clicked": return questionId === "q3" ? "post_survey" : null; // q1/q2: next question_shown moves it
+    case "next_clicked": return questionId === LAST_QUESTION ? "post_survey" : null; // otherwise the next question_shown moves it
     case "survey_post_submitted": return "done";
     default: return null;
   }

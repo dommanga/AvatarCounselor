@@ -3,7 +3,7 @@
 
 const TOKEN_KEY = "study1.participantToken";
 
-// sessionStorage: survives reloads in this tab, and /researcher -> / hand-off (same tab, same origin).
+// sessionStorage: survives reloads in this tab (same tab, same origin).
 export function getToken() {
   try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
 }

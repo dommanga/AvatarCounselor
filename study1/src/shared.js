@@ -1,7 +1,7 @@
 import { SpeechRecognitionManager } from "./speech.js";
-import { QUESTIONS, QUESTION_SEQUENCE, CONDITIONS } from "./questions.js";
+import { QUESTIONS, QUESTION_SEQUENCE, LAST_QUESTION, CONDITIONS } from "./questions.js";
 
-export { QUESTIONS, QUESTION_SEQUENCE, CONDITIONS };
+export { QUESTIONS, QUESTION_SEQUENCE, LAST_QUESTION, CONDITIONS };
 export const CLABEL = { direct: "Direct", minimizing: "Minimizing", reversing: "Reversing" };
 export const RLABEL = { 1:"absent", 2:"vague", 3:"specific", 4:"specific and developed", 5:"specific and fully realized" };
 export const ELNAME = { situation: "Situation", task_and_action: "Task & Action", result: "Result" };

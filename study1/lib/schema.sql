@@ -1,7 +1,7 @@
 -- Study 1 main-experiment schema. Idempotent: `npm run db:init` can be re-run safely.
 
--- Pre-generated assignment sequence: 10 blocks x 3 slots, each block a random permutation of the
--- 3 conditions (30 = IRB cap). Filled once by scripts/db-init.js; a real session consumes one slot.
+-- Pilot-era assignment sequence (10 blocks x 3 conditions). No longer filled by db-init;
+-- condition assignment is redesigned in Phase 2.
 CREATE TABLE IF NOT EXISTS block_sequence (
   slot      int  PRIMARY KEY,               -- 1..30
   block     int  NOT NULL,                  -- 1..10
@@ -70,15 +70,3 @@ CREATE TABLE IF NOT EXISTS responses (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, phase, item_id)
 );
-
--- Phase 3: researcher observation notes. Insert-only rows, so two devices never conflict.
-CREATE TABLE IF NOT EXISTS notes (
-  id         uuid PRIMARY KEY,
-  session_id uuid NOT NULL REFERENCES sessions(id),
-  ts         timestamptz NOT NULL DEFAULT now(),
-  stage_tag  text,
-  code       text CHECK (code IN ('찡그림', '미소', '웃음', '갸우뚱', '끄덕임')),
-  text       text,
-  starred    boolean NOT NULL DEFAULT false
-);
-CREATE INDEX IF NOT EXISTS notes_session_idx ON notes (session_id, ts);
