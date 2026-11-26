@@ -123,7 +123,7 @@ export const COPY = {
   debriefConfirm: "확인",
   debriefFail: (msg) => `처리하지 못했습니다 (${msg}). 다시 눌러주세요.`,
   completeFail: (msg) => `제출하지 못했습니다 (${msg}). 다시 눌러주세요.`,
-  endTitle: "실험이 모두 끝났습니다",
+  endTitle: "참여 완료",
   endBody: "실험이 모두 끝났습니다. 감사합니다.\n사례비 지급을 위해 아래 양식을 작성해 주세요. 참가자 번호는 자동으로 입력되어 있습니다.",
   endPaymentBtn: "사례비 지급 정보 입력",
   endClose: "이제 이 창을 닫으셔도 됩니다.",
