@@ -131,7 +131,7 @@ export const COPY = {
   feedbackError: "문제가 발생했습니다. [다시 시도]를 눌러주세요. 계속되면 연구자에게 알려주세요.",
   toSurvey: "설문으로 넘어가기",
   // voice condition: the text is never shown; only this neutral line and a play indicator
-  voiceTitle: "AI 코치가 피드백을 전달하고 있습니다.",
+  voiceTitle: "AI 코치 피드백",
   voiceListen: "피드백 듣기",
   voiceReplay: "다시 듣기",
   voiceLoadError: "음성을 불러오지 못했습니다. [다시 시도]를 눌러주세요. 계속되면 연구자에게 알려주세요.",

@@ -12,7 +12,7 @@ requireEndpoint(values.host);
 
 const TABLES = [
   "audit_log", "audio_chunks", "answer_segments", "responses", "feedback_timing", "feedback_audio", "answers", "events", "slot_assignments",
-  "session_clients", "sessions", "slots", "slot_meta",
+  "session_clients", "sessions", "slots", "slot_meta", "cell_targets", "admin_login_failures",
   "notes", "block_sequence", // pilot-era
 ];
 const sql = db();

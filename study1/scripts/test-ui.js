@@ -16,7 +16,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-const { values: args } = parseArgs({ options: { host: { type: "string" }, full: { type: "boolean", default: false }, audio: { type: "boolean", default: false } } });
+const { values: args } = parseArgs({ options: { host: { type: "string" }, full: { type: "boolean", default: false }, audio: { type: "boolean", default: false }, "admin-only": { type: "boolean", default: false } } });
 process.env.AUDIO_UPLOAD_ENABLED = args.audio ? "true" : "false"; // read by lib/config.js at import time
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,6 +24,8 @@ const { requireEndpoint } = await import("./cli.js");
 requireEndpoint(args.host);
 const { createHarness, sleep } = await import("./test-lib.js");
 const { default: handler } = await import("../api/session/[action].js");
+const adminHandler = (await import("../api/admin/[action].js")).default;
+const researcherHandler = (await import("../api/researcher/[action].js")).default;
 const { SURVEY, PHASES } = await import("../lib/survey.js");
 const { conditionalText, rangeOf, anchorsOf, optionsOf, otherLabelOf } = await import("../src/survey-shared.js");
 const { COPY } = await import("../src/copy.js");
@@ -45,13 +47,14 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), "study1-chrome-"));
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css" };
 const server = http.createServer(async (rq, rs) => {
   const url = new URL(rq.url, "http://localhost");
-  if (url.pathname.startsWith("/api/session/")) {
+  const route = url.pathname.startsWith("/api/session/") ? handler : url.pathname.startsWith("/api/admin/") ? adminHandler : url.pathname.startsWith("/api/researcher/") ? researcherHandler : null;
+  if (route) {
     const chunks = [];
     for await (const c of rq) chunks.push(c);
     const raw = Buffer.concat(chunks);
     const json = (rq.headers["content-type"] || "").includes("application/json");
     const req = {
-      method: rq.method, headers: rq.headers, query: { action: url.pathname.split("/").pop(), ...Object.fromEntries(url.searchParams) },
+      method: rq.method, headers: rq.headers, cookies: Object.fromEntries((rq.headers.cookie || "").split(/;\s*/).filter(Boolean).map((c) => [c.slice(0, c.indexOf("=")), c.slice(c.indexOf("=") + 1)])), query: { action: url.pathname.split("/").pop(), ...Object.fromEntries(url.searchParams) },
       body: json ? JSON.parse(raw.toString() || "{}") : undefined, async *[Symbol.asyncIterator]() { yield raw; },
     };
     const headers = {};
@@ -60,10 +63,10 @@ const server = http.createServer(async (rq, rs) => {
       json(d) { rs.writeHead(this.code, { ...headers, "content-type": "application/json" }); rs.end(JSON.stringify(d)); },
       end(buf) { rs.writeHead(this.code, headers); rs.end(buf); }, // the spoken feedback (mp3)
     };
-    try { await handler(req, res); } catch (e) { rs.writeHead(500); rs.end(String(e)); }
+    try { await route(req, res); } catch (e) { rs.writeHead(500); rs.end(String(e)); }
     return;
   }
-  const file = url.pathname.startsWith("/s/") || url.pathname === "/" ? "/index.html" : url.pathname;
+  const file = url.pathname.startsWith("/s/") || url.pathname === "/" ? "/index.html" : url.pathname === "/admin" ? "/admin.html" : url.pathname;
   const p = path.join(ROOT, file);
   if (!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { rs.writeHead(404); return rs.end("not found"); }
   rs.writeHead(200, { "content-type": TYPES[path.extname(p)] || "application/octet-stream", "referrer-policy": "no-referrer" });
@@ -315,6 +318,112 @@ async function toQuestion(p, token, sessionId) {
 try {
   const missingCopy = missingCopyKeys();
   check("every wording key the page uses exists in copy.js", missingCopy.length === 0, missingCopy.map((m) => m.key).join(", "));
+
+  // ---------- G: /admin ----------
+  {
+    const { lockSession } = await import("../lib/lifecycle.js");
+    const { paymentFormLink } = await import("../src/copy.js");
+    const adminStart = new Date().toISOString();
+    const P1 = await H.started("UIA-P1");               // locked before the stimulus
+    await P1.T.say(1, ""); await P1.T.say(2, "");
+    const X1 = await H.started("UIA-X1");               // locked after the stimulus
+    await X1.T.event("feedback_shown", "q2");
+    await lockSession(X1.s.id, "resume_limit");
+    await H.started("UIA-A1");                          // in progress
+    await H.issue("UIA-I1");                            // never opened
+    await H.issue("UIA-T1", { test: true });            // test session: hidden by default
+    const pa = await newPage();
+    const rowOf = (pid) => `[...document.querySelectorAll("#ptable tr.row")].find((tr) => tr.firstElementChild.textContent.startsWith("${pid}"))`;
+    const pids = () => pa.ev(`[...document.querySelectorAll("#ptable tr.row")].map((tr) => tr.firstElementChild.textContent.trim().split(" ")[0])`);
+    const setVal = (id, v) => pa.ev(`(() => { const el = document.getElementById("${id}"); el.value = ${JSON.stringify(v)}; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    await pa.send("Page.navigate", { url: `http://localhost:${PORT}/admin` });
+    await pa.waitFor(pa.screen("login"), 10000, "login screen");
+    check("admin: login screen first, app hidden, noindex meta", !(await pa.ev(pa.screen("app"))) && await pa.ev(`!!document.querySelector('meta[name=robots][content*=noindex]')`));
+    await setVal("pw", "wrong"); await pa.ev(`document.getElementById("loginForm").requestSubmit()`);
+    await pa.waitFor(`document.getElementById("loginErr").textContent.length > 0`, 10000, "login error");
+    check("admin: wrong password -> message, still on the login screen", await pa.ev(pa.screen("login")));
+    await setVal("pw", process.env.RESEARCHER_PASSWORD); await pa.ev(`document.getElementById("loginForm").requestSubmit()`);
+    await pa.waitFor(pa.screen("app"), 10000, "app");
+    await pa.waitFor(`document.querySelectorAll("#ptable tr.row").length > 0`, 10000, "participant rows");
+    let ids = await pids();
+    check("admin: participants listed, test sessions hidden by default", ["UIA-P1", "UIA-X1", "UIA-A1", "UIA-I1"].every((x) => ids.includes(x)) && !ids.includes("UIA-T1"));
+    check("admin: left menu has the four entries, participants active", await pa.ev(`[...document.querySelectorAll("nav.side a")].map((a) => a.textContent.trim()).join("|")`) === "참가자|발급|셀 현황|감사 로그");
+    const badge = (pid) => pa.ev(`(${rowOf(pid)}).querySelector(".badge").textContent`);
+    check("admin: status badges (진행 중 / 잠김 / 미접속)", (await badge("UIA-A1")) === "진행 중" && (await badge("UIA-P1")) === "잠김" && (await badge("UIA-I1")) === "미접속");
+    await pa.ev(`(() => { const c = document.getElementById("fTest"); c.checked = true; c.dispatchEvent(new Event("change")); })()`);
+    check("admin: test toggle shows the test session", (await pids()).includes("UIA-T1"));
+    await pa.ev(`(() => { const c = document.getElementById("fTest"); c.checked = false; c.dispatchEvent(new Event("change")); })()`);
+    check("admin: condition columns hidden by default, toggle shows them", !(await pa.ev(`!!document.querySelector('#ptable th[data-key=stance]')`))
+      && (await pa.ev(`(() => { const c = document.getElementById("fCond"); c.checked = true; c.dispatchEvent(new Event("change")); return !!document.querySelector('#ptable th[data-key=stance]'); })()`)));
+    await pa.ev(`document.querySelector('#quick button[data-q=locked]').click()`);
+    ids = await pids();
+    check("admin: quick filter 잠김", ids.includes("UIA-P1") && ids.includes("UIA-X1") && !ids.includes("UIA-A1") && !ids.includes("UIA-I1"));
+    await pa.ev(`document.querySelector('#quick button[data-q=locked]').click()`);
+    await pa.ev(`document.querySelector('#ptable th[data-key=participant_id]').click()`);
+    const asc = (await pids()).filter((x) => x.startsWith("UIA-"));
+    await pa.ev(`document.querySelector('#ptable th[data-key=participant_id]').click()`);
+    const desc = (await pids()).filter((x) => x.startsWith("UIA-"));
+    check("admin: sortable header toggles the order", asc.length >= 4 && JSON.stringify(asc) === JSON.stringify([...desc].reverse()) && JSON.stringify(asc) === JSON.stringify([...asc].sort()));
+    // detail panel: post-exposure lock cannot be resumed
+    await pa.ev(`(${rowOf("UIA-X1")}).click()`);
+    await pa.waitFor(`document.getElementById("panel").classList.contains("open") && !!document.getElementById("pResume")`, 10000, "panel");
+    check("admin: panel of a post-exposure lock: resume disabled with the reason shown",
+      await pa.ev(`document.getElementById("pResume").disabled && /노출/.test(document.getElementById("pResume").title) && /노출/.test(document.querySelector("#panel .why").textContent)`));
+    check("admin: panel timeline shows the feedback reveal and the lock", await pa.ev(`/피드백 공개/.test(document.querySelector("#panel .timeline").textContent) && /잠김/.test(document.querySelector("#panel .timeline").textContent)`));
+    check("admin: condition change disabled for it too", await pa.ev(`document.getElementById("pCond").disabled`));
+    // pre-exposure lock: resume with confirm + reason
+    await pa.ev(`(${rowOf("UIA-P1")}).click()`);
+    await pa.waitFor(`document.querySelector("#panel header strong")?.textContent === "UIA-P1"`, 10000, "panel of UIA-P1");
+    check("admin: resume enabled for the pre-exposure lock", await pa.ev(`!document.getElementById("pResume").disabled`));
+    await pa.ev(`window.__clip = []; navigator.clipboard.writeText = (t) => { window.__clip.push(t); return Promise.resolve(); }`);
+    await pa.click("pPay");
+    await pa.waitFor(`document.getElementById("pCopied").textContent.length > 0`, 5000, "copied note");
+    check("admin: payment link copied with the participant id", (await pa.ev(`window.__clip[0]`)) === paymentFormLink("UIA-P1"));
+    await pa.click("pResume");
+    check("admin: resume opens a confirm dialog with a reason field", await pa.ev(`document.getElementById("dlg").open && !document.getElementById("dlgReasonRow").classList.contains("hidden")`));
+    await pa.ev(`document.getElementById("dlgForm").requestSubmit()`);
+    check("admin: empty reason refused, dialog stays open", await pa.ev(`document.getElementById("dlg").open && document.getElementById("dlgErr").textContent.length > 0`));
+    await setVal("dlgReason", "UI 테스트: 마이크 문제");
+    await pa.ev(`document.getElementById("dlgForm").requestSubmit()`);
+    await pa.waitFor(`!document.getElementById("dlg").open`, 15000, "dialog closed");
+    await pa.waitFor(`document.querySelector("#panel header .badge")?.textContent === "진행 중"`, 15000, "panel shows in progress");
+    const [pr] = await sql`SELECT status FROM sessions WHERE id = ${P1.s.id}`;
+    check("admin: resumed through the UI (DB + panel + audit)", pr.status === "in_progress" && (await sql`SELECT count(*)::int AS n FROM audit_log WHERE session_id = ${P1.s.id} AND action = 'resumed' AND detail ->> 'reason' = 'UI 테스트: 마이크 문제'`)[0].n === 1);
+    await pa.ev(`document.getElementById("pClose").click()`);
+    check("admin: panel closes", !(await pa.ev(`document.getElementById("panel").classList.contains("open")`)));
+    // issue (test links: no slot, T1- numbers)
+    await pa.ev(`location.hash = "#issue"`);
+    await pa.waitFor(pa.screen("v-issue"), 5000, "issue view");
+    await setVal("iN", "2"); await setVal("iBatch", "UIAT");
+    await pa.ev(`(() => { const c = document.getElementById("iTest"); c.checked = true; c.dispatchEvent(new Event("change")); })()`);
+    await pa.ev(`document.getElementById("issueForm").requestSubmit()`);
+    await pa.waitFor(`document.querySelectorAll("#itable tbody tr").length === 2`, 15000, "issued rows");
+    const issuedRows = await pa.ev(`[...document.querySelectorAll("#itable tbody tr")].map((tr) => [...tr.children].map((td) => td.textContent))`);
+    for (const r of await sql`SELECT id FROM sessions WHERE batch_id = 'UIAT'`) H.created.push(r.id);
+    check("admin: issue form -> result table with T1- ids and /s/ links", issuedRows.every(([id, link]) => /^T1-\d{3}$/.test(id) && /\/s\/[\w-]{20,}$/.test(link)));
+    const csvText = await pa.ev(`fetch(document.getElementById("csvDl").href).then((r) => r.text())`);
+    check("admin: CSV download matches the table", csvText.split(/\r?\n/)[0] === "participant_id,link" && issuedRows.every(([id, link]) => csvText.includes(`${id},${link}`)));
+    await pa.click("linksCopy");
+    check("admin: bulk copy of all links", (await pa.ev(`window.__clip.at(-1)`)).split("\n").length === 2);
+    // cells
+    await pa.ev(`location.hash = "#cells"`);
+    await pa.waitFor(`document.querySelectorAll("#ctable tbody tr").length === 4`, 10000, "cell table");
+    const [{ n: inProg }] = await sql`SELECT count(*)::int AS n FROM sessions WHERE NOT is_test AND status IN ('consented','in_progress')`;
+    const shown = await pa.ev(`[...document.querySelectorAll("#ctable tbody tr:last-child td:last-child .l")].map((e) => e.textContent)`);
+    check("admin: cell table total in-progress equals the database", shown[0] === `진행 중 ${inProg}`, `${shown[0]} vs ${inProg}`);
+    check("admin: remaining line present, emergency section folded", await pa.ev(`/목표까지 남은 인원/.test(document.getElementById("ctotals").textContent) && !document.getElementById("emergency").open`));
+    await pa.ev(`document.getElementById("emergency").open = true`);
+    await pa.waitFor(`document.querySelectorAll("#utable tbody tr").length > 0`, 10000, "emergency tables");
+    // audit
+    await pa.ev(`location.hash = "#audit"`);
+    await pa.waitFor(`document.querySelectorAll("#atable tbody tr").length > 0`, 10000, "audit rows");
+    await setVal("aPid", "UIA-P1");
+    await pa.waitFor(`[...document.querySelectorAll("#atable tbody tr")].every((tr) => tr.children[3].textContent === "UIA-P1") && document.querySelectorAll("#atable tbody tr").length >= 2`, 10000, "filtered audit");
+    check("admin: audit view filters by participant, newest first, shows the reason", await pa.ev(`document.querySelector("#atable tbody tr td:nth-child(3)").textContent === "resumed" && /UI 테스트/.test(document.querySelector("#atable tbody tr").textContent)`));
+    pa.close();
+    await sql`DELETE FROM admin_login_failures WHERE ts >= ${adminStart} AND ip = 'unknown'`;
+    if (args["admin-only"]) throw new Error("admin-only");
+  }
 
   // ---------- A: unsupported browser leaves the link untouched ----------
   const a = await H.issue("UI-A");
@@ -622,8 +731,7 @@ try {
     pd.close();
   }
 } catch (e) {
-  console.log(`FAIL  ${e.message}`);
-  check("test run completed without an error", false, e.message);
+  if (e.message !== "admin-only") { console.log(`FAIL  ${e.message}`); check("test run completed without an error", false, e.message); }
 } finally {
   if (consoleIssues.length) { console.log("\nbrowser console issues:"); for (const m of [...new Set(consoleIssues)].slice(0, 15)) console.log("  - " + m); }
   chrome.kill();

@@ -68,6 +68,17 @@ researcher's spreadsheet.
 - One resume after consent; the second locks the session. One re-answer chance per session.
 - Every issue / assignment / return / lock is in `audit_log`. Settings live in `lib/config.js`.
 
+## /admin (operations screen)
+`/admin`, password `RESEARCHER_PASSWORD` (5 wrong tries per IP in 10 minutes lock the login). No personal data: participant ids,
+token states, conditions, progress. Four views: participants (filters, detail panel with the timeline, expiry extension, resume,
+condition change, payment-form link), issue (same code as `issue-tokens`: `lib/issue.js`; result table + CSV), cells (valid
+completions / target, in progress, returned slots before/after exposure, refill queue; emergency slot adjustments), audit log.
+- Resume works for locked / abandoned sessions that have **not** met the feedback: a new slot is assigned the normal way, the
+  pre-survey answers stay, re-answer chance and resume count start over. Locked after the feedback: no resume.
+- Condition change: only active sessions with no answer on file and no exposure. Slot delete: only never-assigned slots.
+- Every change needs a reason and is written to `audit_log` (actor `admin`). Test sessions (T1-) are hidden by default.
+- The API-test dev view uses the same login cookie.
+
 ## Scripts (read `DATABASE_URL` from `.env`)
     npm run db:init                                   # apply lib/schema.sql (idempotent)
     npm run db:reset -- --host <neon endpoint id>     # DROP everything + re-apply (archive first!)
@@ -77,8 +88,9 @@ researcher's spreadsheet.
     npm run sweep                                     # expire / abandon now (also done lazily)
     npm run test:assign -- --host <dev endpoint id>   # concurrent assignment + return + claim test
     npm run test:flow -- --host <dev endpoint id>     # end-to-end participant API test (several LLM calls)
+    npm run test:admin -- --host <dev endpoint id>    # /admin API: login limit, issue + CSV, cell numbers, resume, condition, slots
     npm run test:survey -- --host <dev endpoint id>   # survey definition, ordering, validation, OE1, valid judgement (no LLM)
-    npm run test:ui -- --host <dev endpoint id> [--full] [--audio]   # headless Chrome: flow + every survey block + voice playback
+    npm run test:ui -- --host <dev endpoint id> [--full] [--audio] [--admin-only]   # headless Chrome: flow + every survey block + voice playback + /admin
     npm run voice-eval [-- --models a,b] [--main <model>]            # 4.5 timing + 4.6 listening samples (calls the real TTS)
     npm run test:assign-http -- --host <dev endpoint id> --url https://<preview> [--audio] [--voice]
     npm run purge-audio [-- --dry-run]                # destroy audio of transcript-verified sessions

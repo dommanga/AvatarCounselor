@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>운영</title>
+  <style>
+    :root {
+      --text: #1f2328; --muted: #6b7280; --line: #e5e7eb; --bg: #ffffff; --hover: #f6f7f9; --accent: #3b6cb7; --accent-bg: #eaf0fa;
+      --blue-bg: #e8f0fb; --blue-fg: #1d4f91; --green-bg: #e6f4ea; --green-fg: #1e6b34; --red-bg: #fdecec; --red-fg: #a12626; --gray-bg: #eef0f2; --gray-fg: #4b5563;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Pretendard", "Apple SD Gothic Neo", sans-serif; }
+    .hidden { display: none !important; }
+    .muted { color: var(--muted); }
+    .num, td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    button, select, input, textarea { font: inherit; color: inherit; }
+    button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer; }
+    button:hover:not(:disabled) { background: var(--hover); }
+    button:disabled { color: #a3a8b0; cursor: not-allowed; }
+    a.button { display: inline-block; padding: 4px 10px; border: 1px solid var(--line); border-radius: 4px; color: inherit; text-decoration: none; }
+    a.button:hover { background: var(--hover); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover:not(:disabled) { background: #315a9b; }
+    button.link { border: 0; background: none; padding: 0; color: var(--accent); }
+    button.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+    input[type=text], input[type=number], input[type=password], input[type=datetime-local], select, textarea { padding: 4px 8px; border: 1px solid #d3d7de; border-radius: 4px; background: #fff; }
+    textarea { width: 100%; resize: vertical; }
+    label.inline { display: inline-flex; align-items: center; gap: 4px; }
+
+    /* login */
+    #login { max-width: 280px; margin: 20vh auto 0; }
+    #login form { display: flex; flex-direction: column; gap: 8px; }
+    .err { color: var(--red-fg); min-height: 20px; }
+
+    /* layout */
+    #app { display: flex; min-height: 100vh; }
+    nav.side { width: 148px; flex: none; border-right: 1px solid var(--line); padding: 16px 0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+    nav.side a { display: block; padding: 6px 16px; color: var(--muted); text-decoration: none; border-left: 2px solid transparent; }
+    nav.side a:hover { background: var(--hover); }
+    nav.side a.active { color: var(--text); font-weight: 600; border-left-color: var(--accent); background: var(--hover); }
+    nav.side .spacer { flex: 1; }
+    nav.side button.link { padding: 6px 16px; text-align: left; color: var(--muted); }
+    main { flex: 1; min-width: 0; padding: 16px 20px 48px; }
+    h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+    h3 { font-size: 14px; margin: 20px 0 8px; font-weight: 600; }
+
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+    .toolbar .group { display: inline-flex; gap: 4px; }
+    .legend { display: inline-flex; gap: 6px; margin-left: auto; align-items: center; color: var(--muted); font-size: 12px; }
+
+    /* tables */
+    .tablewrap { overflow: auto; border-top: 1px solid var(--line); max-height: calc(100vh - 150px); }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { height: 36px; padding: 0 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    th { position: sticky; top: 0; background: #fff; color: var(--muted); font-weight: 500; font-size: 12px; cursor: pointer; user-select: none; z-index: 1; box-shadow: 0 1px 0 var(--line); }
+    th.nosort { cursor: default; }
+    th.sorted { color: var(--text); }
+    tbody tr.row { cursor: pointer; }
+    tbody tr.row:hover { background: var(--hover); }
+    tbody tr.row.sel { background: var(--accent-bg); }
+    td.wrap { white-space: normal; }
+    .empty { padding: 20px 10px; color: var(--muted); }
+    code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+
+    /* badges: pale background + dark text, small */
+    .badge { display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 12px; line-height: 20px; }
+    .b-blue { background: var(--blue-bg); color: var(--blue-fg); } .b-green { background: var(--green-bg); color: var(--green-fg); }
+    .b-red { background: var(--red-bg); color: var(--red-fg); } .b-gray { background: var(--gray-bg); color: var(--gray-fg); }
+    .flags .badge { margin-right: 4px; }
+
+    /* detail panel */
+    #panel { position: fixed; top: 0; right: 0; bottom: 0; width: 440px; background: #fff; border-left: 1px solid var(--line); overflow-y: auto; padding: 16px 18px 40px; transform: translateX(100%); transition: transform .12s ease-out; z-index: 5; }
+    #panel.open { transform: none; }
+    #panel header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    #panel header strong { font-size: 15px; }
+    #panel header button { margin-left: auto; }
+    dl.kv { display: grid; grid-template-columns: 96px 1fr; gap: 2px 10px; margin: 0 0 12px; }
+    dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+    .why { color: var(--muted); font-size: 12px; margin: 2px 0; }
+    ol.timeline { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+    ol.timeline li { display: grid; grid-template-columns: 92px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+    ol.timeline .t { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 1px; }
+    ol.timeline li.audit .l { color: var(--accent); }
+    ol.timeline .d { color: var(--muted); font-size: 12px; }
+
+    /* cells */
+    table.cells td { height: auto; padding: 8px 12px; vertical-align: top; white-space: normal; }
+    table.cells th { cursor: default; }
+    table.cells .l1 { font-weight: 600; font-variant-numeric: tabular-nums; }
+    table.cells .l { font-variant-numeric: tabular-nums; }
+    details { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 8px; }
+    details summary { cursor: pointer; color: var(--muted); }
+    .form-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; margin: 8px 0 12px; }
+    .form-row label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+
+    /* dialog */
+    dialog { border: 1px solid #cfd4dc; border-radius: 6px; padding: 16px 18px; width: 380px; max-width: 92vw; }
+    dialog::backdrop { background: rgba(31, 35, 40, .25); }
+    dialog h3 { margin: 0 0 6px; }
+    dialog p { margin: 0 0 10px; color: var(--muted); }
+    dialog .field { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+    dialog .btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+    #dlgErr { color: var(--red-fg); min-height: 18px; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div id="login" class="hidden">
+    <form id="loginForm">
+      <label for="pw">비밀번호</label>
+      <input type="password" id="pw" autocomplete="current-password" required />
+      <div class="err" id="loginErr"></div>
+      <button class="primary" type="submit">로그인</button>
+    </form>
+  </div>
+
+  <div id="app" class="hidden">
+    <nav class="side">
+      <a href="#participants" data-view="participants">참가자</a>
+      <a href="#issue" data-view="issue">발급</a>
+      <a href="#cells" data-view="cells">셀 현황</a>
+      <a href="#audit" data-view="audit">감사 로그</a>
+      <span class="spacer"></span>
+      <button class="link" id="logout">로그아웃</button>
+    </nav>
+    <main>
+      <section id="v-participants" class="hidden">
+        <div class="toolbar">
+          <select id="fBatch" aria-label="batch"></select>
+          <select id="fStatus" aria-label="상태"></select>
+          <span class="group" id="quick">
+            <button data-q="unopened">발급 후 미접속</button><button data-q="active">진행 중</button><button data-q="locked">잠김</button><button data-q="done">완료</button>
+          </span>
+          <label class="inline"><input type="checkbox" id="fTest" />테스트 세션</label>
+          <label class="inline"><input type="checkbox" id="fCond" />조건 열</label>
+          <button id="copyIds">ID 복사</button><span class="muted" id="copied"></span>
+          <span class="legend" id="legend"></span>
+        </div>
+        <div class="muted" id="count" style="margin-bottom:4px"></div>
+        <div class="tablewrap"><table id="ptable"></table></div>
+      </section>
+
+      <section id="v-issue" class="hidden">
+        <h2>발급</h2>
+        <form id="issueForm" class="form-row">
+          <label>개수<input type="number" id="iN" min="1" max="200" value="5" style="width:80px" required /></label>
+          <label>batch<input type="text" id="iBatch" placeholder="W1" style="width:90px" required /></label>
+          <label>만료 (KST)<input type="datetime-local" id="iExpires" required /></label>
+          <label class="inline" style="flex-direction:row;align-items:center;margin-bottom:4px"><input type="checkbox" id="iTest" />테스트</label>
+          <label class="testonly hidden">stance<select id="iStance"></select></label>
+          <label class="testonly hidden">modality<select id="iModality"></select></label>
+          <button class="primary" type="submit">발급</button>
+        </form>
+        <div class="err" id="issueErr"></div>
+        <div id="issueResult" class="hidden">
+          <div class="toolbar"><a id="csvDl" class="button" download>CSV 다운로드</a><button id="linksCopy">링크 일괄 복사</button><span class="muted" id="issueNote"></span></div>
+          <div class="tablewrap"><table id="itable"></table></div>
+        </div>
+      </section>
+
+      <section id="v-cells" class="hidden">
+        <h2>셀 현황</h2>
+        <div class="tablewrap" style="max-height:none"><table class="cells" id="ctable"></table></div>
+        <div id="ctotals" style="margin-top:10px"></div>
+        <details id="emergency">
+          <summary>비상 조정</summary>
+          <h3>재충전 대기</h3>
+          <div class="tablewrap" style="max-height:none"><table id="qtable"></table></div>
+          <h3>슬롯 추가</h3>
+          <form id="slotAddForm" class="form-row">
+            <label>stance<select id="sStance"></select></label><label>modality<select id="sModality"></select></label>
+            <button type="submit">추가</button>
+          </form>
+          <h3>미배정 슬롯 (앞쪽 30개)</h3>
+          <div class="tablewrap" style="max-height:none"><table id="utable"></table></div>
+        </details>
+      </section>
+
+      <section id="v-audit" class="hidden">
+        <h2>감사 로그</h2>
+        <div class="toolbar">
+          <select id="aActor" aria-label="actor"></select><select id="aAction" aria-label="action"></select>
+          <input type="text" id="aPid" placeholder="participant_id" style="width:130px" />
+        </div>
+        <div class="tablewrap"><table id="atable"></table></div>
+      </section>
+    </main>
+
+    <aside id="panel" aria-label="참가자 상세"></aside>
+  </div>
+
+  <dialog id="dlg"><form method="dialog" id="dlgForm">
+    <h3 id="dlgTitle"></h3><p id="dlgText"></p><div id="dlgFields"></div>
+    <div class="field" id="dlgReasonRow"><label for="dlgReason">사유</label><textarea id="dlgReason" rows="2" maxlength="500"></textarea></div>
+    <div id="dlgErr"></div>
+    <div class="btns"><button type="button" id="dlgCancel">취소</button><button type="submit" class="primary" id="dlgOk">확인</button></div>
+  </form></dialog>
+
+  <script type="module" src="/src/admin.js"></script>
+</body>
+</html>

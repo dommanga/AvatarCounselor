@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   resume_count      int NOT NULL DEFAULT 0,
   retry_used        boolean NOT NULL DEFAULT false,  -- the one re-answer chance (empty answer or resume)
   retry_granted_at  timestamptz,
+  attempt_offset    int NOT NULL DEFAULT 0, -- raised when an admin resumes a session, so new attempts never reuse a number
   active_client_key text,                   -- the one browser tab allowed to drive this session
   client_seen_at    timestamptz,
   client_released   boolean NOT NULL DEFAULT false,
@@ -78,15 +79,17 @@ CREATE INDEX IF NOT EXISTS session_clients_session_idx ON session_clients (sessi
 CREATE TABLE IF NOT EXISTS slot_assignments (
   id            bigserial PRIMARY KEY,
   slot_seq      int NOT NULL REFERENCES slots(seq),
-  session_id    uuid NOT NULL UNIQUE REFERENCES sessions(id),
+  session_id    uuid NOT NULL REFERENCES sessions(id),   -- a returned session can be assigned again (admin resume)
   source        text NOT NULL CHECK (source IN ('sequence', 'refill')),
   refill_of     bigint REFERENCES slot_assignments(id),
   assigned_at   timestamptz NOT NULL DEFAULT now(),
   returned_at   timestamptz,
   return_reason text CHECK (return_reason IN ('abandoned', 'locked', 'expired', 'invalid', 'admin')),
-  exposed       boolean,                    -- had feedback_shown before the return
+  exposed       boolean,                    -- had feedback_shown / audio_started before the return
+  dismissed_at  timestamptz,                -- taken out of the refill queue by hand (admin; reason in audit_log)
   CHECK ((source = 'refill') = (refill_of IS NOT NULL))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS slot_assignments_active_key ON slot_assignments (session_id) WHERE returned_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS slot_assignments_sequence_key ON slot_assignments (slot_seq) WHERE source = 'sequence';
 CREATE UNIQUE INDEX IF NOT EXISTS slot_assignments_refill_key ON slot_assignments (refill_of) WHERE refill_of IS NOT NULL;
 
@@ -217,6 +220,23 @@ CREATE TABLE IF NOT EXISTS responses (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, phase, item_id)
 );
+
+-- Target number of valid completions per cell (default 30 where there is no row); set in /admin.
+CREATE TABLE IF NOT EXISTS cell_targets (
+  stance     text NOT NULL CHECK (stance IN ('reversing', 'minimizing', 'direct')),
+  modality   text NOT NULL CHECK (modality IN ('text', 'voice')),
+  target     int NOT NULL CHECK (target >= 0),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (stance, modality)
+);
+
+-- Failed /admin logins, for the rate limit (5 per IP per 10 minutes).
+CREATE TABLE IF NOT EXISTS admin_login_failures (
+  id bigserial PRIMARY KEY,
+  ts timestamptz NOT NULL DEFAULT now(),
+  ip text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS admin_login_failures_idx ON admin_login_failures (ip, ts);
 
 -- Every issue / open / consent / assignment / return / lock, by the system, scripts or (Phase 5) admin.
 CREATE TABLE IF NOT EXISTS audit_log (

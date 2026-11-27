@@ -31,7 +31,9 @@ export function weekEndKST(from = new Date()) {
 }
 
 export const meaningfulLength = (t) => (t || "").replace(/\s+/g, "").length;
-export const currentAttempt = (s) => (s.retry_used ? 2 : 1);
+// Answer attempts: 1, or 2 after the re-answer chance. attempt_offset moves the numbering up when an admin resumes
+// a session (the new attempts must not reuse a number whose segments / audio are already stored).
+export const currentAttempt = (s) => (s.attempt_offset ?? 0) + (s.retry_used ? 2 : 1);
 
 // ---------- sweeps ----------
 // Each entry is one statement (data-modifying CTE), so a sweep runs over HTTP as a batch or on a
@@ -155,11 +157,11 @@ export async function consent(sessionId, choices) {
   });
 }
 
-async function pickSlot(c, sessionId) {
+export async function pickSlot(c, sessionId) {
   let source, refillOf = null, seq;
   const { rows: [ret] } = await c.query(`
     SELECT a.id, a.slot_seq FROM slot_assignments a
-    WHERE a.returned_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM slot_assignments b WHERE b.refill_of = a.id)
+    WHERE a.returned_at IS NOT NULL AND a.dismissed_at IS NULL AND NOT EXISTS (SELECT 1 FROM slot_assignments b WHERE b.refill_of = a.id)
     ORDER BY a.returned_at, a.id LIMIT 1 FOR UPDATE OF a`);
   if (ret) {
     source = "refill"; refillOf = ret.id; seq = ret.slot_seq;

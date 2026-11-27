@@ -483,7 +483,7 @@ async function answer(req, res, s) {
       question_id, attempt, transcript: failed.transcript, truncated: failed.answer_truncated, short: failed.answer_short,
       injected: failed.injected, client_transcript: failed.client_transcript,
     });
-    if (rowId) startGeneration(s, rowId, question_id, failed.transcript);
+    if (rowId) startGeneration(s, rowId, question_id, failed.transcript, failed.feedback ? failed : null); // the text is kept; only the audio is made again
     return res.status(200).json({ state: "pending" });
   }
 
