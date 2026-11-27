@@ -23,7 +23,7 @@ import { waitUntil } from "@vercel/functions";
 import { db, isUniqueViolation } from "../../lib/db.js";
 import { requireParticipant } from "../../lib/auth.js";
 import { assess, generateFeedback, MODEL } from "../../lib/llm.js";
-import { CLIENT_EVENT_TYPES, QUESTION_EVENT_TYPES, MAX_EVENT_DATA_CHARS, QUESTION_STAGE_RE, stageAfter } from "../../lib/stages.js";
+import { CLIENT_EVENT_TYPES, QUESTION_EVENT_TYPES, REVEAL_EVENT_TYPES, MAX_EVENT_DATA_CHARS, QUESTION_STAGE_RE, stageAfter } from "../../lib/stages.js";
 import { SURVEY, PHASES, findBlock, blockHasConditional, CONDITION_SOURCE_IDS, validateBlock, evaluateChecks } from "../../lib/survey.js";
 import * as C from "../../lib/config.js";
 import { blobPrefix } from "../../lib/config.js";
@@ -117,8 +117,8 @@ async function payload(s) {
     timing: {
       think_ms: C.THINK_TIME_MS,
       answer_max_ms: C.ANSWER_MAX_MS,
-      feedback_min_wait_ms: C.FEEDBACK_MIN_WAIT_MS,
-      text_min_dwell_ms_per_char: C.TEXT_MIN_DWELL_MS_PER_CHAR,
+      feedback_min_wait_ms: C.feedbackMinWaitMs(),
+      loading_timeout_ms: C.loadingTimeoutMs(),
       audio_chunk_ms: C.AUDIO_CHUNK_MS,
     },
     ...(s.is_test && { stance: s.stance }),
@@ -244,11 +244,25 @@ async function event(req, res, s) {
   if (type === "survey_post_submitted") return complete(res, s, insert);
 
   const stage = stageAfter(type, question_id);
-  await sql.transaction([
+  const statements = [
     insert,
     sql`UPDATE sessions SET current_stage = coalesce(${stage}::text, current_stage) WHERE id = ${s.id}`,
     touchStatement(sql, s.id),
-  ]);
+  ];
+  if (REVEAL_EVENT_TYPES.includes(type)) { // the feedback reaches the participant: when, relative to the answer and to readiness
+    const whole = (x) => (Number.isFinite(x) ? Math.round(x) : null);
+    statements.push(sql`
+      INSERT INTO feedback_timing (session_id, question_id, answer_id, modality, submitted_at, ready_at, revealed_at,
+                                   ready_after_ms, reveal_after_ms, min_wait_ms, loading_ms)
+      SELECT ${s.id}, ${question_id}, a.id, ${type === "audio_started" ? "voice" : "text"}, a.created_at, a.finished_at, e.server_ts,
+             (extract(epoch from a.finished_at - a.created_at) * 1000)::int,
+             (extract(epoch from e.server_ts - a.created_at) * 1000)::int, ${whole(data?.min_wait_ms)}::int, ${whole(data?.loading_ms)}::int
+      FROM answers a JOIN events e ON e.id = ${id}
+      WHERE a.session_id = ${s.id} AND a.question_id = ${question_id} AND a.status = 'done'
+      ORDER BY a.id DESC LIMIT 1
+      ON CONFLICT (session_id, question_id) DO NOTHING`); // the first reveal counts
+  }
+  await sql.transaction(statements);
   return res.status(200).json({ ok: true, stage: stage ?? s.current_stage });
 }
 
@@ -324,6 +338,7 @@ const msBetween = (a, b) => new Date(b).getTime() - new Date(a).getTime();
 // it as dev_text for the dev panel).
 const feedbackPayload = (s, a) => ({
   state: "done",
+  since_submit_ms: a.since_submit_ms, // server clock: how long ago the answer was confirmed
   generation_ms: msBetween(a.created_at, a.finished_at), // real generation latency (the page may hold it back longer)
   ...(s.modality === "voice"
     ? { modality: "voice", audio_seconds: Number(a.audio_seconds), ...(s.is_test && { dev_text: a.feedback }) }
@@ -498,14 +513,15 @@ async function feedbackRoute(req, res, s) {
   const question_id = req.query.question_id;
   if (!QUESTIONS[question_id]) return res.status(400).json({ error: "unknown question_id" });
   const [row] = await db()`
-    SELECT a.*, fa.audio_seconds FROM answers a LEFT JOIN feedback_audio fa ON fa.answer_id = a.id
+    SELECT a.*, fa.audio_seconds, (extract(epoch from clock_timestamp() - a.created_at) * 1000)::int AS since_submit_ms
+    FROM answers a LEFT JOIN feedback_audio fa ON fa.answer_id = a.id
     WHERE a.session_id = ${s.id} AND a.question_id = ${question_id} AND a.status IN ('pending', 'done', 'error')
     ORDER BY a.id DESC LIMIT 1`;
   if (!row) return res.status(200).json({ state: "none" });
   if (row.status === "done") return res.status(200).json(feedbackPayload(s, row));
   if (row.status === "error") return res.status(200).json({ state: "error" }); // details stay in answers.error
   if (isStale(row)) await restartStale(s, row);
-  return res.status(200).json({ state: "pending" });
+  return res.status(200).json({ state: "pending", since_submit_ms: row.since_submit_ms });
 }
 
 // The spoken feedback of a voice session. Only the tab holding the session's claim gets it (the guard), and it

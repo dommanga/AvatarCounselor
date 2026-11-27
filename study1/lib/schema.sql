@@ -157,6 +157,25 @@ CREATE TABLE IF NOT EXISTS feedback_audio (
   created_at     timestamptz NOT NULL DEFAULT now()
 );
 
+-- When the feedback reached the participant, per question (the first reveal only; a reload shows it again).
+-- submitted_at = the server confirmed the answer; ready_at = text ready / audio stored; revealed_at = the server
+-- time of the reveal event (text: feedback_shown, voice: audio_started). loading_ms is what the page measured on
+-- its loading screen before revealing; min_wait_ms the FEEDBACK_MIN_WAIT_MS the page was told.
+CREATE TABLE IF NOT EXISTS feedback_timing (
+  session_id      uuid NOT NULL REFERENCES sessions(id),
+  question_id     text NOT NULL,
+  answer_id       bigint NOT NULL REFERENCES answers(id),
+  modality        text NOT NULL CHECK (modality IN ('text', 'voice')),
+  submitted_at    timestamptz NOT NULL,
+  ready_at        timestamptz,
+  revealed_at     timestamptz NOT NULL,
+  ready_after_ms  int,                      -- ready_at - submitted_at
+  reveal_after_ms int NOT NULL,             -- revealed_at - submitted_at
+  min_wait_ms     int,
+  loading_ms      int,
+  PRIMARY KEY (session_id, question_id)
+);
+
 -- Finalized STT segments saved while the participant is still answering.
 CREATE TABLE IF NOT EXISTS answer_segments (
   session_id  uuid NOT NULL REFERENCES sessions(id),

@@ -28,8 +28,12 @@ researcher's spreadsheet.
   The question text the LLM receives is `QUESTIONS` (src/questions.js); the hint shown under it (`COPY.questionHints`)
   is screen-only and test-flow checks that it never reaches an LLM request. Survey items:
   `survey_items.json`. Consent text: placeholder in `COPY.consentBody`.
-- Timing values are in `lib/config.js` (`THINK_TIME_MS`, `ANSWER_MAX_MS`, `FEEDBACK_MIN_WAIT_MS`,
-  `TEXT_MIN_DWELL_MS_PER_CHAR`, `AUDIO_CHUNK_MS`) and are copied into each session's `config` snapshot.
+- Timing values are in `lib/config.js` (`THINK_TIME_MS`, `ANSWER_MAX_MS`, `FEEDBACK_MIN_WAIT_MS`, `LOADING_TIMEOUT_MS`,
+  `AUDIO_CHUNK_MS`) and are copied into each session's `config` snapshot.
+- The feedback is revealed at `max(ready, answer submitted + FEEDBACK_MIN_WAIT_MS)` (the answer counts from the server's
+  confirmation; 0 = as soon as it is ready). `feedback_timing` records per question: submitted / ready / revealed times,
+  the time from submit to reveal, how long the page held the loading screen, and the min wait it was told.
+  A loading screen longer than `LOADING_TIMEOUT_MS` shows the "ask the researcher" message and logs `client_timeout`.
 - Survey items: `survey_items.json` (version in `sessions.survey_version`). Blocks run in a fixed order; items inside a
   block are shown in a per-session random order drawn at consent (`sessions.survey_order`) — only within their
   `group` (SMI: like-to-hear / want-to-discover; FPQ: usefulness / affect), `"fixed": true` items (AT1, AT2) keep their

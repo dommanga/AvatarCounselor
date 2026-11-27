@@ -47,6 +47,7 @@ export function initParticipantView(root) {
   const screens = ["p-nosession", "p-consent", "p-blocked", "p-device", "p-notice", "p-survey", "p-scenario", "p-qguide", "p-question", "p-loading", "p-feedback", "p-voice", "p-debrief", "p-end"].map($);
   const show = (id) => {
     if (id !== "p-voice") voice?.dispose(); // leaving the voice screen stops the audio
+    if (id !== "p-loading") clearTimeout(loadTimer); // the loading time-out only runs while that screen is up
     screens.forEach((s) => s.classList.toggle("hidden", s.id !== id));
     window.scrollTo(0, 0);
   };
@@ -64,7 +65,7 @@ export function initParticipantView(root) {
   // question screen
   let thinkTimer = null, answerTimer = null, recorder = null, answering = false, finishing = false, pendingSubmit = null;
   // feedback screen
-  let pollToken = 0, feedbackMark = null;
+  let pollToken = 0, feedbackMark = null, loadTimer = null;
 
   const qMessage = $("p-qMessage"), qError = $("p-qError"), submitRetry = $("p-submitRetry");
 
@@ -458,13 +459,24 @@ export function initParticipantView(root) {
     $("p-loadRetry").classList.add("hidden");
     $("p-loading").querySelector(".spinner").classList.remove("hidden");
     updateDevPanel();
-    if (!seen) client.log("feedback_loading_shown", qid); // the minimum wait is counted from here
-    pollFeedback(qid, performance.now(), seen ? 0 : session.timing.feedback_min_wait_ms, seen);
+    if (!seen) client.log("feedback_loading_shown", qid);
+    const t0 = performance.now();
+    // A loading screen that lasts too long ends in a message. (The server keeps its own rules: tts_error lock, orphan restart.)
+    clearTimeout(loadTimer);
+    if (session.timing.loading_timeout_ms > 0) loadTimer = setTimeout(() => loadingTimedOut(qid, t0), session.timing.loading_timeout_ms);
+    pollFeedback(qid, t0, seen ? 0 : session.timing.feedback_min_wait_ms);
+  }
+
+  function loadingTimedOut(qid, t0) {
+    pollToken++; // stop polling
+    client.log("client_timeout", qid, { data: { loading_ms: Math.round(performance.now() - t0) } });
+    showBlocked("locked_error"); // "진행 중 문제가 생겼습니다. 연구자에게 문의해 주세요."
   }
 
   // The server generates the feedback after the answer was confirmed; this only waits for it.
-  async function pollFeedback(qid, t0, minWait, seen) {
+  async function pollFeedback(qid, t0, minWait) {
     const mine = ++pollToken;
+    let submittedAt = null; // when the server confirmed the answer, on this page's clock (rebuilt from the server's since_submit_ms)
     for (;;) {
       let f;
       try {
@@ -476,10 +488,12 @@ export function initParticipantView(root) {
         continue;
       }
       if (mine !== pollToken || turn !== qid) return;
+      if (submittedAt === null && Number.isFinite(f.since_submit_ms)) submittedAt = performance.now() - f.since_submit_ms;
       if (f.state === "done") {
-        await sleep(Math.max(0, minWait - (performance.now() - t0)));
+        // revealed at max(ready, answer submitted + minWait): ready is now; the minimum counts from the answer, not from this screen
+        await sleep(Math.max(0, (submittedAt ?? t0) + minWait - performance.now()));
         if (mine !== pollToken) return;
-        return showFeedback(qid, f, { seen });
+        return showFeedback(qid, f, { loading_ms: Math.round(performance.now() - t0), min_wait_ms: minWait });
       }
       if (f.state === "error" || f.state === "none") {
         $("p-loading").querySelector(".spinner").classList.add("hidden");
@@ -505,7 +519,7 @@ export function initParticipantView(root) {
   });
 
   // Voice condition: the text never reaches this page; the audio is fetched, played and logged by voice-feedback.js.
-  function showVoice(qid, f) {
+  function showVoice(qid, f, reveal) {
     stage = "feedback";
     voice ??= createVoiceFeedback({
       $, client, getTracker: () => tracker,
@@ -520,21 +534,18 @@ export function initParticipantView(root) {
     show("p-voice");
     feedbackMark = tracker?.snapshot() ?? { hidden: 0, blur: 0 };
     updateDevPanel();
-    voice.start(qid, { devText: f.dev_text, devMode });
+    voice.start(qid, { devText: f.dev_text, devMode, reveal });
   }
 
-  function showFeedback(qid, f, { seen }) {
-    if (f.modality === "voice") return showVoice(qid, f);
+  // reveal: { loading_ms, min_wait_ms } goes with the reveal event (feedback_shown / audio_started)
+  function showFeedback(qid, f, reveal) {
+    if (f.modality === "voice") return showVoice(qid, f, reveal);
     stage = "feedback";
     show("p-feedback");
     $("p-feedbackText").textContent = f.feedback; // the whole text at once; the participant sees ONLY the feedback
-    client.log("feedback_shown", qid);
+    client.log("feedback_shown", qid, { data: reveal });
     renderDevInfo(f);
     feedbackMark = tracker?.snapshot() ?? { hidden: 0, blur: 0 };
-    const btn = $("p-toSurvey");
-    const dwell = seen ? 0 : f.feedback.length * session.timing.text_min_dwell_ms_per_char; // 0 unless Phase 4 sets it
-    btn.disabled = dwell > 0;
-    if (dwell > 0) setTimeout(() => { btn.disabled = false; }, dwell);
     updateDevPanel();
   }
 

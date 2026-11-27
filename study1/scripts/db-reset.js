@@ -11,7 +11,7 @@ const { values } = parseArgs({ options: { host: { type: "string" } } });
 requireEndpoint(values.host);
 
 const TABLES = [
-  "audit_log", "audio_chunks", "answer_segments", "responses", "feedback_audio", "answers", "events", "slot_assignments",
+  "audit_log", "audio_chunks", "answer_segments", "responses", "feedback_timing", "feedback_audio", "answers", "events", "slot_assignments",
   "session_clients", "sessions", "slots", "slot_meta",
   "notes", "block_sequence", // pilot-era
 ];

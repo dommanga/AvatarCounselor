@@ -71,7 +71,8 @@ try {
   const c2 = await A.consent({ withdraw_data: "use", notify: "yes" });
   await sql`UPDATE sessions SET modality = 'text' WHERE id = ${s.id}`; // the main flow below is the text condition (voice: section 10c)
   check("consent -> device test first", c2.screen === "active" && c2.resume_to.to === "device_test" && !("stance" in c2));
-  check("payload carries timing + survey order", c2.timing?.think_ms === 40000 && c2.timing?.answer_max_ms === 120000 && c2.survey_order?.pre?.pre_ise?.length === 5);
+  check("payload carries timing + survey order", c2.timing?.think_ms === 40000 && c2.timing?.answer_max_ms === 120000 && c2.survey_order?.pre?.pre_ise?.length === 5
+    && c2.timing?.loading_timeout_ms === 90000 && c2.timing?.feedback_min_wait_ms === 0 && !("text_min_dwell_ms_per_char" in c2.timing));
   const [row] = await sql`SELECT * FROM sessions WHERE id = ${s.id}`;
   check("consented with a cell + snapshot", row.status === "consented" && row.stance && row.modality && row.config?.prompts?.stage1_sha256);
   check("snapshot records temperatures + timing", row.config.llm.stage1_temperature === 0 && row.config.llm.stage2_temperature === 0.3
@@ -151,7 +152,16 @@ try {
   check("feedback arrives", fb.state === "done" && typeof fb.feedback === "string" && fb.feedback.length > 20 && !("stance" in fb),
     `generation ${fb.generation_ms} ms`);
   check("feedback is stable on re-read", (await A.feedback()).feedback === fb.feedback);
-  await A.event("feedback_shown", "q2");
+  check("the feedback answer tells how long ago the answer was confirmed (server clock)", Number.isInteger(fb.since_submit_ms) && fb.since_submit_ms >= fb.generation_ms);
+  await A.event("feedback_shown", "q2", { loading_ms: 1234, min_wait_ms: 0 });
+  await A.event("feedback_shown", "q2", { loading_ms: 9999, min_wait_ms: 0 }); // a second reveal (a reload) does not overwrite the first
+  const [ft] = await sql`SELECT * FROM feedback_timing WHERE session_id = ${s.id}`;
+  const [fans] = await sql`SELECT created_at, finished_at FROM answers WHERE session_id = ${s.id} AND status = 'done'`;
+  check("text: the reveal is recorded — submitted / ready / revealed times, submit-to-reveal, loading time, min wait",
+    ft?.modality === "text" && ft.loading_ms === 1234 && ft.min_wait_ms === 0 && new Date(ft.submitted_at).getTime() === new Date(fans.created_at).getTime()
+    && new Date(ft.ready_at).getTime() === new Date(fans.finished_at).getTime() && ft.ready_after_ms > 0 && ft.reveal_after_ms >= ft.ready_after_ms,
+    `ready after ${ft?.ready_after_ms} ms, revealed after ${ft?.reveal_after_ms} ms`);
+  check("... one row per question: only the first reveal counts", (await sql`SELECT count(*)::int AS n FROM feedback_timing WHERE session_id = ${s.id}`)[0].n === 1);
   check("reload on the feedback -> same feedback, seen", (await A.claim()).resume_to.seen === true);
   await A.event("tab_hidden", null, { stage: "q2_feedback" }); await A.event("tab_visible", null, { stage: "q2_feedback" });
   await A.event("next_clicked", "q2", { hidden_ms: 1234, blur_ms: 2000 });
@@ -313,7 +323,10 @@ try {
     check("voice: another window of the session gets nothing (409), neither does a wrong token (401), nor a text session (404)",
       (await tab(v.s).feedbackAudio()).code === 409 && (await tab({ token: "x".repeat(43) }).feedbackAudio()).code === 401 && (await ts.T.feedbackAudio()).code === 404);
 
-    await V.event("audio_started", "q2", { duration_s: Number(fa.audio_seconds) });
+    await V.event("audio_started", "q2", { duration_s: Number(fa.audio_seconds), loading_ms: 800, min_wait_ms: 0 });
+    const [vt] = await sql`SELECT * FROM feedback_timing WHERE session_id = ${v.s.id}`;
+    check("voice: the reveal (audio_started) is recorded the same way, ready = audio stored", vt?.modality === "voice" && vt.loading_ms === 800
+      && new Date(vt.ready_at).getTime() === new Date((await sql`SELECT finished_at FROM answers WHERE session_id = ${v.s.id} AND status = 'done'`)[0].finished_at).getTime() && vt.reveal_after_ms >= vt.ready_after_ms);
     check("voice: audio_started is the feedback stage", (await sql`SELECT current_stage FROM sessions WHERE id = ${v.s.id}`)[0].current_stage === "q2_feedback");
     await V.event("audio_progress", "q2", { position_s: 4.1, duration_s: Number(fa.audio_seconds), play: 0 });
     const ttsN = sentToTTS.length, llmN = sentToLLM.length;
@@ -383,7 +396,14 @@ try {
   await sweep(d.s.id);
   const [dp] = await sql`SELECT status, destroy_pending FROM sessions WHERE id = ${d.s.id}`;
   check("destroy + abandoned -> destroy_pending", dp.status === "abandoned" && dp.destroy_pending === true);
-  const purged = await purgeWithdrawn();
+  // a second abandoned session that chose 'use': it must stay. The purge is limited to the sessions this test created —
+  // the dev database also holds other people's (rehearsal) sessions, which a test must never purge.
+  const u = await started("TF-010b", {});
+  for (const b of SURVEY.pre) await u.T.survey("pre", b.block, fill(b));
+  await sql`UPDATE sessions SET last_activity_at = now() - interval '3 hours' WHERE id = ${u.s.id}`;
+  await sweep(u.s.id);
+  check("an empty scope purges nothing", (await purgeWithdrawn({ dryRun: true, only: [] })).length === 0);
+  const purged = await purgeWithdrawn({ only: [d.s.id, u.s.id] });
   const mine = purged.find((p) => p.participant_id === "TF-010");
   check("purge-withdrawn found it", !!mine && mine.deleted.responses > 0 && mine.deleted.events > 0);
   const left = {};
@@ -393,7 +413,8 @@ try {
   const [kept] = await sql`SELECT s.status, s.stance, s.modality, s.data_purged_at, a.slot_seq FROM sessions s JOIN slot_assignments a ON a.session_id = s.id WHERE s.id = ${d.s.id}`;
   check("participant data deleted", Object.values(left).every((n) => n === 0), JSON.stringify(left));
   check("status, condition, slot assignment kept", kept.status === "abandoned" && kept.stance && kept.modality && kept.slot_seq && kept.data_purged_at);
-  check("use-choice sessions untouched", !purged.some((p) => p.participant_id !== "TF-010"));
+  const [ukept] = await sql`SELECT s.destroy_pending, s.data_purged_at, (SELECT count(*)::int FROM responses r WHERE r.session_id = s.id) AS responses FROM sessions s WHERE s.id = ${u.s.id}`;
+  check("a session that chose 'use' is not purged, nor flagged", purged.map((p) => p.participant_id).join() === "TF-010" && ukept.destroy_pending === false && ukept.data_purged_at === null && ukept.responses > 0);
 
   // ---------- 12. audio upload -> verified -> purge (needs Blob credentials) ----------
   if (!AUDIO_UPLOAD_ENABLED || !(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN)) {
@@ -410,7 +431,7 @@ try {
       const before = await get(chunk.pathname, { access: "private", useCache: false });
       check("blob is private and readable server-side", before?.statusCode === 200);
       await sql`UPDATE sessions SET audio_verified_at = now() WHERE id = ${v.s.id}`;
-      const pa = await purgeVerifiedAudio();
+      const pa = await purgeVerifiedAudio({ only: [v.s.id] });
       const after = await get(chunk.pathname, { access: "private", useCache: false });
       const [vs] = await sql`SELECT s.audio_purged_at, c.purged_at FROM sessions s JOIN audio_chunks c ON c.session_id = s.id WHERE s.id = ${v.s.id}`;
       check("purge-audio deletes the blob, keeps the metadata", pa.some((p) => p.participant_id === "TF-011") && after === null && vs.audio_purged_at && vs.purged_at);

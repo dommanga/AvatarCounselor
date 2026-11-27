@@ -28,7 +28,7 @@ export function configSnapshot(stance, modality) {
       think_time_ms: C.THINK_TIME_MS,
       answer_max_ms: C.ANSWER_MAX_MS,
       feedback_min_wait_ms: C.FEEDBACK_MIN_WAIT_MS,
-      text_min_dwell_ms_per_char: C.TEXT_MIN_DWELL_MS_PER_CHAR,
+      loading_timeout_ms: C.LOADING_TIMEOUT_MS,
       audio_chunk_ms: C.AUDIO_CHUNK_MS,
       oe_min_chars: C.OE_MIN_CHARS,
       audio_upload_enabled: C.AUDIO_UPLOAD_ENABLED,

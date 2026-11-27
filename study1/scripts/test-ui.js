@@ -28,7 +28,7 @@ const { SURVEY, PHASES } = await import("../lib/survey.js");
 const { conditionalText, rangeOf, anchorsOf, optionsOf, otherLabelOf } = await import("../src/survey-shared.js");
 const { COPY } = await import("../src/copy.js");
 const { QUESTIONS } = await import("../src/questions.js");
-const { OE_MIN_CHARS } = await import("../lib/config.js");
+const { OE_MIN_CHARS, TEST_OVERRIDES } = await import("../lib/config.js");
 const { missingCopyKeys } = await import("./check-copy.js");
 
 const H = createHarness();
@@ -244,6 +244,41 @@ async function runSurvey(p, phase, stored, until, { overrides = {}, values = {},
   }
 }
 
+// Opens a prepared session (consented through the API, at the scenario stage) in a new page and plays through scenario ->
+// answer instructions -> question -> a short answer -> the self-rating screen. -> the page
+async function openAndAnswer(session, extraScripts = []) {
+  const pg = await newPage();
+  await pg.send("Page.addScriptToEvaluateOnNewDocument", { source: STUB });
+  for (const source of extraScripts) await pg.send("Page.addScriptToEvaluateOnNewDocument", { source });
+  await pg.send("Page.navigate", { url: `http://localhost:${PORT}/s/${session.token}` });
+  await pg.waitFor(pg.screen("p-scenario"), 20000, "scenario after the resume");
+  await pg.click("p-scenarioNext");
+  await pg.waitFor(pg.screen("p-qguide"), 5000, "answer instructions");
+  await pg.click("p-qguideStart");
+  await pg.waitFor(pg.screen("p-question"), 5000, "question screen");
+  await pg.click("p-startBtn");
+  await pg.waitFor(`!document.getElementById("p-answering").classList.contains("hidden")`, 10000, "answering panel");
+  await sleep(4500);
+  await pg.click("p-doneBtn");
+  await pg.waitFor(`${pg.screen("p-survey")} && document.getElementById("p-surveyProgress").textContent === ${JSON.stringify(COPY.surveyProgress.mid)}`, 30000, "self-rating");
+  return pg;
+}
+// a consented session in the text condition, moved up to the scenario stage and handed over to a new page
+async function textSessionAtScenario(pid) {
+  const x = await H.started(pid, { modality: "text" });
+  for (const t of ["device_test_done", "survey_pre_submitted", "notice_confirmed", "scenario_shown"]) await x.T.event(t);
+  await x.T.release();
+  return x;
+}
+async function waitRow(table, sessionId) {
+  for (let i = 0; i < 30; i++) {
+    const [r] = await sql.query(`SELECT * FROM ${table} WHERE session_id = $1`, [sessionId]);
+    if (r) return r;
+    await sleep(200);
+  }
+  return null;
+}
+
 const storedOrder = async (id) => (await sql`SELECT survey_order FROM sessions WHERE id = ${id}`)[0].survey_order;
 
 async function toQuestion(p, token, sessionId) {
@@ -402,6 +437,9 @@ try {
   const coachRefs = (id) => p.ev(`({ marks: [...document.querySelectorAll("#${id} .who, #${id} h2")].map((e) => e.textContent), icons: document.querySelectorAll("#participantView img, #participantView svg, #participantView canvas").length })`);
   const tc = await coachRefs("p-feedback");
   check("text feedback screen: the coach is named once (the label above the text), no icon or image", tc.marks.length === 1 && tc.marks[0] === COPY.feedbackTitle && tc.icons === 0, tc.marks.join(" | "));
+  const ftB = await waitRow("feedback_timing", b.id);
+  check("text: the reveal is recorded (submit-to-reveal, ready time, loading time)", ftB?.modality === "text" && ftB.loading_ms >= 0 && ftB.reveal_after_ms >= ftB.ready_after_ms && ftB.min_wait_ms === 0,
+    `ready after ${ftB?.ready_after_ms} ms, revealed after ${ftB?.reveal_after_ms} ms, loading screen ${ftB?.loading_ms} ms`);
   await sleep(500);
   await p.click("p-toSurvey");
 
@@ -468,6 +506,48 @@ try {
   check("stored wording matches what the page showed", oeC.shown_text.includes("처음에는 4점, 피드백을 받은 후에는 9점"));
   pc.close();
 
+  // ---------- E: FEEDBACK_MIN_WAIT_MS counts from the answer, not from the loading screen (value set for this test only) ----------
+  {
+    const MIN = 20000;
+    TEST_OVERRIDES.feedback_min_wait_ms = MIN;
+    try {
+      const e = await textSessionAtScenario("UI-E");
+      const pe = await openAndAnswer(e.s);
+      await runSurvey(pe, "mid", await storedOrder(e.s.id), pe.screen("p-loading"), { overrides: { SA_pre: 5 } });
+      check("min wait: the feedback is ready long before, and the page still holds it on the loading screen", await pe.ev(pe.screen("p-loading")));
+      await pe.waitFor(pe.screen("p-feedback"), 60000, "feedback after the minimum wait");
+      const ft = await waitRow("feedback_timing", e.s.id);
+      check("min wait: revealed at the answer + FEEDBACK_MIN_WAIT_MS (not earlier, and soon after)", ft && ft.reveal_after_ms >= MIN && ft.reveal_after_ms <= MIN + 4500, `revealed after ${ft?.reveal_after_ms} ms (minimum ${MIN})`);
+      check("... the delay is the wait, not the generation: ready much earlier; loading time and min wait recorded", ft.ready_after_ms < MIN - 5000 && ft.min_wait_ms === MIN && ft.loading_ms > 8000,
+        `ready after ${ft?.ready_after_ms} ms, loading screen ${ft?.loading_ms} ms`);
+      pe.close();
+    } finally { delete TEST_OVERRIDES.feedback_min_wait_ms; }
+  }
+
+  // ---------- F: the loading screen gives up after LOADING_TIMEOUT_MS (values set for this test only) ----------
+  {
+    TEST_OVERRIDES.feedback_min_wait_ms = 40000; // keeps the loading screen up
+    TEST_OVERRIDES.loading_timeout_ms = 4000;
+    try {
+      const f = await textSessionAtScenario("UI-F");
+      const pf = await openAndAnswer(f.s);
+      await runSurvey(pf, "mid", await storedOrder(f.s.id), pf.screen("p-loading"), { overrides: { SA_pre: 5 } });
+      const t0 = Date.now();
+      await pf.waitFor(pf.screen("p-blocked"), 15000, "the time-out message");
+      const waited = Date.now() - t0;
+      const msg = await pf.ev(`({ title: document.getElementById("p-blockedTitle").textContent, text: document.getElementById("p-blockedText").textContent })`);
+      check("loading time-out: the page says to ask the researcher", msg.title === COPY.blocked.locked_error[0] && msg.text === COPY.blocked.locked_error[1] && msg.text.includes("연구자에게 문의"), msg.text);
+      check("... after about LOADING_TIMEOUT_MS on the loading screen (4 s here)", waited <= 5500, `${waited} ms more after the loading screen came up`);
+      let ct = [];
+      for (let i = 0; i < 25 && !ct.length; i++) { ct = await sql`SELECT data FROM events WHERE session_id = ${f.s.id} AND type = 'client_timeout'`; if (!ct.length) await sleep(200); }
+      check("... client_timeout is logged with the time spent loading", ct.length === 1 && ct[0].data.loading_ms >= 3900 && ct[0].data.loading_ms <= 6000, ct[0] && `${ct[0].data.loading_ms} ms`);
+      check("... the session itself is not locked (the server keeps its own rules)", ["consented", "in_progress"].includes((await sql`SELECT status FROM sessions WHERE id = ${f.s.id}`)[0].status));
+      await sleep(2500);
+      check("... and nothing is revealed afterwards (polling stopped)", !(await pf.ev(pf.screen("p-feedback"))) && (await pf.ev(pf.screen("p-blocked"))));
+      pf.close();
+    } finally { delete TEST_OVERRIDES.feedback_min_wait_ms; delete TEST_OVERRIDES.loading_timeout_ms; }
+  }
+
   // ---------- D: voice condition ----------
   if (!haveBlob || !process.env.ELEVENLABS_API_KEY) {
     console.log("SKIP  voice condition (needs ELEVENLABS_API_KEY and Blob credentials)");
@@ -476,20 +556,7 @@ try {
     const d = await H.started("UI-D", { modality: "voice" });
     for (const t of ["device_test_done", "survey_pre_submitted", "notice_confirmed", "scenario_shown"]) await d.T.event(t);
     await d.T.release();
-    const pd = await newPage();
-    await pd.send("Page.addScriptToEvaluateOnNewDocument", { source: STUB });
-    await pd.send("Page.addScriptToEvaluateOnNewDocument", { source: AUDIO_STUB });
-    await pd.send("Page.navigate", { url: `http://localhost:${PORT}/s/${d.s.token}` });
-    await pd.waitFor(pd.screen("p-scenario"), 20000, "scenario after the resume");
-    await pd.click("p-scenarioNext");
-    await pd.waitFor(pd.screen("p-qguide"), 5000, "answer instructions");
-    await pd.click("p-qguideStart");
-    await pd.waitFor(pd.screen("p-question"), 5000, "question screen");
-    await pd.click("p-startBtn");
-    await pd.waitFor(`!document.getElementById("p-answering").classList.contains("hidden")`, 10000, "answering panel");
-    await sleep(4500);
-    await pd.click("p-doneBtn");
-    await pd.waitFor(`${pd.screen("p-survey")} && document.getElementById("p-surveyProgress").textContent === ${JSON.stringify(COPY.surveyProgress.mid)}`, 30000, "self-rating");
+    const pd = await openAndAnswer(d.s, [AUDIO_STUB]);
     await runSurvey(pd, "mid", await storedOrder(d.s.id), `${pd.screen("p-loading")} || ${pd.screen("p-voice")}`, { overrides: { SA_pre: 5 } });
     await pd.waitFor(pd.screen("p-voice"), 120000, "voice screen (Stage 1 + 2 + TTS)");
 
@@ -501,6 +568,7 @@ try {
       title: document.querySelector("#p-voice h2").textContent, replay: document.getElementById("p-voiceReplay").disabled, next: document.getElementById("p-voiceNext").disabled })`);
     check("voice: only the neutral line is shown, no <audio> element or controls in the page", dom.title === COPY.voiceTitle && dom.media === 0);
     const vc = await pd.ev(`({ marks: [...document.querySelectorAll("#p-voice .who, #p-voice h2")].map((e) => e.textContent), icons: document.querySelectorAll("#participantView img, #participantView svg, #participantView canvas").length })`);
+    if (COPY.voiceTitle !== COPY.feedbackTitle) console.log(`NOTE  the voice screen's coach line ("${COPY.voiceTitle}") differs from the text screen's label ("${COPY.feedbackTitle}")`);
     check("voice feedback screen: the coach is named once (the line), no icon or image — as many references as the text screen", vc.marks.length === 1 && vc.marks[0] === COPY.voiceTitle && vc.icons === 0 && vc.marks.length === tc.marks.length);
     check("voice: the feedback text is nowhere in the DOM or the visible text", chunks.length >= 2 && chunks.every((c) => !dom.html.includes(c) && !dom.text.includes(c)), `${chunks.length} passages checked`);
     check("voice: autoplay refused -> [피드백 듣기]; replay and next are still disabled", dom.replay && dom.next);
@@ -548,6 +616,9 @@ try {
       listenings.length >= 2 && listenings.every((l) => l.every((x, i) => i === 0 || x >= l[i - 1])) && listenings[0].length >= 1 && listenings[0].at(-1) < 20,
       listenings.map((l) => `${l.length} points, up to ${l.at(-1)} s`).join(" | "));
     check("voice: no feedback_shown (audio_started is the voice condition's feedback_shown)", of("feedback_shown").length === 0);
+    const ftD = await waitRow("feedback_timing", d.s.id);
+    check("voice: the reveal (audio_started) is recorded the same way as the text one", ftD?.modality === "voice" && ftD.loading_ms >= 0 && ftD.reveal_after_ms >= ftD.ready_after_ms && ftD.min_wait_ms === 0,
+      `ready after ${ftD?.ready_after_ms} ms, revealed after ${ftD?.reveal_after_ms} ms`);
     pd.close();
   }
 } catch (e) {
@@ -561,7 +632,7 @@ try {
     try {
       await sql`UPDATE sessions SET audio_verified_at = now() WHERE id = ANY(${H.created}::uuid[])`;
       const { purgeVerifiedAudio } = await import("../lib/purge.js");
-      const pa = await purgeVerifiedAudio();
+      const pa = await purgeVerifiedAudio({ only: H.created }); // only what this test made
       console.log(`purged test audio: ${pa.map((x) => `${x.participant_id}=${x.chunks}`).join(" ") || "none"}`);
     } catch (e) { console.log("audio cleanup failed:", e.message); }
   }

@@ -15,11 +15,13 @@ async function deleteBlobs(pathnames) {
 }
 
 // -> [{ participant_id, chunks, bytes }]
-export async function purgeVerifiedAudio({ dryRun = false } = {}) {
+// only: restrict to these session ids (tests pass the sessions they created, so they cannot touch anyone else's data)
+export async function purgeVerifiedAudio({ dryRun = false, only = null } = {}) {
   const sql = db();
   const sessions = await sql`
     SELECT id, participant_id FROM sessions
-    WHERE audio_verified_at IS NOT NULL AND audio_purged_at IS NULL ORDER BY participant_id`;
+    WHERE audio_verified_at IS NOT NULL AND audio_purged_at IS NULL AND (${only}::uuid[] IS NULL OR id = ANY(${only}::uuid[]))
+    ORDER BY participant_id`;
   const out = [];
   for (const s of sessions) {
     const chunks = await sql`
@@ -39,14 +41,15 @@ export async function purgeVerifiedAudio({ dryRun = false } = {}) {
   return out;
 }
 
-const DATA_TABLES = ["responses", "feedback_audio", "answers", "answer_segments", "events", "session_clients", "audio_chunks"];
+const DATA_TABLES = ["responses", "feedback_timing", "feedback_audio", "answers", "answer_segments", "events", "session_clients", "audio_chunks"];
 
 // -> [{ participant_id, status, deleted: { table: rows } }]
-export async function purgeWithdrawn({ dryRun = false } = {}) {
+export async function purgeWithdrawn({ dryRun = false, only = null } = {}) {
   const sql = db();
   const sessions = await sql`
     SELECT id, participant_id, status FROM sessions
-    WHERE destroy_pending AND data_purged_at IS NULL ORDER BY participant_id`;
+    WHERE destroy_pending AND data_purged_at IS NULL AND (${only}::uuid[] IS NULL OR id = ANY(${only}::uuid[]))
+    ORDER BY participant_id`;
   const out = [];
   for (const s of sessions) {
     const deleted = {};

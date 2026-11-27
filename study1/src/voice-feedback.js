@@ -13,7 +13,7 @@ const secs = (x) => Math.round(x * 100) / 100;
 export function createVoiceFeedback({ $, client, getTracker, onNext }) {
   const show = (id, on) => $(id).classList.toggle("hidden", !on);
   let audio = null, objectUrl = null, qid = null;
-  let startedLogged = false, ended = false, replays = 0, progressTimer = null, mark = null, token = 0;
+  let startedLogged = false, ended = false, replays = 0, progressTimer = null, mark = null, token = 0, reveal = {};
 
   const snapshot = () => getTracker()?.snapshot() ?? { hidden: 0, blur: 0 };
   const position = () => (audio ? secs(audio.currentTime) : 0);
@@ -33,7 +33,7 @@ export function createVoiceFeedback({ $, client, getTracker, onNext }) {
     mark = snapshot();
     if (!startedLogged) {
       startedLogged = true;
-      client.log("audio_started", qid, { data: { duration_s: secs(audio.duration) } });
+      client.log("audio_started", qid, { data: { duration_s: secs(audio.duration), ...reveal } }); // the reveal: how long the loading screen held it
     }
     if (!progressTimer) {
       progressTimer = setInterval(() => {
@@ -73,10 +73,10 @@ export function createVoiceFeedback({ $, client, getTracker, onNext }) {
   }
 
   // question: the question id; devText: shown in the dev panel only (test sessions)
-  async function start(question, { devText = null, devMode = false } = {}) {
+  async function start(question, { devText = null, devMode = false, reveal: revealData = {} } = {}) {
     dispose();
     const mine = token;
-    qid = question; startedLogged = false; ended = false; replays = 0; mark = null;
+    qid = question; startedLogged = false; ended = false; replays = 0; mark = null; reveal = revealData;
     show("p-voiceWave", false); show("p-voicePlay", false); show("p-voiceRetry", false);
     $("p-voiceErr").textContent = "";
     $("p-voiceReplay").disabled = true;

@@ -100,7 +100,7 @@ export function createHarness() {
     if (files.length && (process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN)) {
       try { const { del } = await import("@vercel/blob"); await del(files.map((f) => f.pathname)); } catch (e) { console.log("blob cleanup failed:", e.message); }
     }
-    for (const t of ["audit_log", "events", "session_clients", "feedback_audio", "answers", "answer_segments", "audio_chunks", "responses"]) {
+    for (const t of ["audit_log", "events", "session_clients", "feedback_timing", "feedback_audio", "answers", "answer_segments", "audio_chunks", "responses"]) {
       await sql.query(`DELETE FROM ${t} WHERE session_id = ANY($1::uuid[])`, [created]);
     }
     const assigns = await sql`SELECT id FROM slot_assignments WHERE session_id = ANY(${created}::uuid[]) ORDER BY id DESC`;

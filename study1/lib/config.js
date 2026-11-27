@@ -15,8 +15,11 @@ export const ANSWER_PENDING_STALE_MS = 120_000; // a 'pending' feedback row olde
 // Answer timing (sent to the page; snapshotted per session).
 export const THINK_TIME_MS = 40_000;          // thinking time before recording starts automatically
 export const ANSWER_MAX_MS = 120_000;         // the answer is submitted automatically at this length
-export const FEEDBACK_MIN_WAIT_MS = 0;        // loading screen stays at least this long (Phase 4 sets it)
-export const TEXT_MIN_DWELL_MS_PER_CHAR = 0;  // text feedback: next button waits chars x this (Phase 4 sets it)
+// The feedback is revealed at max(ready, answer submitted + FEEDBACK_MIN_WAIT_MS): the wait counts from the moment
+// the server confirmed the answer, not from the start of the loading screen. 0 = reveal as soon as it is ready.
+// (How long it was actually held back, and the ready / reveal times, are recorded per session: feedback_timing.)
+export const FEEDBACK_MIN_WAIT_MS = 0;
+export const LOADING_TIMEOUT_MS = 90_000;     // loading screen longer than this: the page tells the participant to ask the researcher
 export const AUDIO_CHUNK_MS = 5_000;          // MediaRecorder timeslice
 
 export const OE_MIN_CHARS = 5;                // open-ended survey answers: minimum characters (trimmed)
@@ -37,6 +40,11 @@ export const TTS = {
   requestTimeoutMs: 15_000,   // x 3 attempts + Stage 1/2 must fit the function's 60 s (vercel.json); a longer hang is picked up by the stale-row restart
   textRulesVersion: "tts-text-v1",
 };
+
+// Tests may override a few timing values in the running process; the app itself never sets this.
+export const TEST_OVERRIDES = {};
+export const feedbackMinWaitMs = () => TEST_OVERRIDES.feedback_min_wait_ms ?? FEEDBACK_MIN_WAIT_MS;
+export const loadingTimeoutMs = () => TEST_OVERRIDES.loading_timeout_ms ?? LOADING_TIMEOUT_MS;
 
 // Blob stores aren't branched like the database: the first path segment separates environments.
 export const blobPrefix = () => process.env.BLOB_PREFIX || process.env.VERCEL_ENV || "local";
