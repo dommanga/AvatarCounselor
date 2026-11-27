@@ -18,6 +18,8 @@
     "test:assign": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file=.env.test scripts/test-assign.js",
     "test:admin": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file=.env.test scripts/test-admin.js",
     "test:safety": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file-if-exists=.env.test scripts/test-safety.js",
+    "test:unit": "node scripts/test-unit.js",
+    "test:data": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file=.env.test scripts/test-data.js",
     "test:flow": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file=.env.test scripts/test-flow.js",
     "purge-audio": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/purge-audio.js",
     "purge-withdrawn": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/purge-withdrawn.js",
@@ -26,6 +28,7 @@
     "test:survey": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file=.env.test scripts/test-survey.js",
     "test:ui": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file=.env.test scripts/test-ui.js",
     "voice-eval": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/voice-eval.js",
+    "export": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/export.js",
     "check:copy": "node scripts/check-copy.js"
   }
 }

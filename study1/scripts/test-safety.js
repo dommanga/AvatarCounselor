@@ -67,7 +67,7 @@ check("execute on main needs --prod, then a person at the terminal", refused(run
   && refused(run("purge-withdrawn.js", ["--execute", planFile({ db_endpoint: "ep-main-fake-000001" }), "--prod"], MAIN), /person at the terminal/));
 const api = await import("../lib/purge.js");
 check("lib/purge.js offers no purge-everything function (plan + execute-plan only)",
-  JSON.stringify(Object.keys(api).sort()) === JSON.stringify(["checkPlan", "executePlan", "planVerifiedAudio", "planWithdrawn"]));
+  JSON.stringify(Object.keys(api).sort()) === JSON.stringify(["PLAN_TTL_MS", "checkPlan", "executePlan", "planAudio", "planWithdrawn"]));
 fs.rmSync(tmp, { recursive: true, force: true });
 
 // ---------- B. execute handles exactly the plan (test branch only) ----------

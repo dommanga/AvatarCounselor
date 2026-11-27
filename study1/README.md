@@ -78,6 +78,21 @@ completions / target, in progress, returned slots before/after exposure, refill 
 - Condition change: only active sessions with no answer on file and no exposure. Slot delete: only never-assigned slots.
 - Every change needs a reason and is written to `audit_log` (actor `admin`). Test sessions (T1-) are hidden by default.
 - The API-test dev view uses the same login cookie.
+- **음성 확인**: sessions with audio on file and no verdict. Play the joined chunks (served only to a logged-in admin), see the final
+  transcript, the confirmed segments with times and the `stt_restart` count; save 없음 / 경미 / 심각 + note (`sessions.stt_quality`).
+  The verdict is not linked to purging.
+- **파기**: audio, or data of 'destroy'-choice sessions that ended early. The researcher picks the scope (all / one batch / chosen
+  sessions), [대상 미리보기] stores a plan (valid 30 minutes), the number of its sessions is typed in, and only that plan's sessions are
+  processed (`lib/purge.js`: plan / checkPlan / executePlan). Plan and result go to `audit_log`. Claude Code never calls these routes.
+- **내보내기**: one zip from `lib/export.js`, shared with `npm run export [-- --out file] [--include-incomplete] [--include-test]`:
+  sessions.csv, responses_long.csv, responses_wide.csv (raw scores, no reverse coding), answers.csv, events.csv, feedback_timing.csv,
+  feedback_audio.csv (metadata only), codebook.csv, survey_items.json, manifest.json (`export_schema`, filter, survey versions, commit
+  SHAs, rows per file). Default: completed, non-test sessions. CSVs are UTF-8 with BOM. Column names are pinned: change one and raise
+  `EXPORT_SCHEMA` (`npm run test:unit` fails otherwise). Transcripts may contain proper nouns the participant said.
+- **External API** (for a later Apps Script): `POST /api/external/issue {n, batch_id, expires_at?}` and `POST /api/external/status
+  {participant_ids}`; header `X-Admin-Secret` = `ADMIN_API_SECRET` (separate from the login password; unset = API off). Requests with
+  personal-looking fields (phone, name, email, ...) are refused; 30 calls/min, 5 wrong secrets per IP per 10 min; audit actor `api`.
+  No purge, resume or condition routes exist there.
 
 ## Scripts (read `DATABASE_URL` from `.env`)
     npm run db:init                                   # apply lib/schema.sql (idempotent)
@@ -93,8 +108,11 @@ completions / target, in progress, returned slots before/after exposure, refill 
     npm run test:ui [-- --full] [--audio] [--admin-only]   # headless Chrome: flow + every survey block + voice playback + /admin
     npm run voice-eval [-- --models a,b] [--main <model>]            # 4.5 timing + 4.6 listening samples (calls the real TTS)
     npm run test:assign-http -- --url https://<preview> [--audio] [--voice]
+    npm run test:unit                                 # offline: zip, export column pinning, personal-field check, external API gate
+    npm run test:data                                 # voice check, purge, export, external API (test branch)
+    npm run export [-- --include-incomplete --include-test]   # zip of the data (read-only)
     npm run test:safety                               # guards: tests refuse off the test branch, purge only from a plan
-    npm run purge-audio -- --plan                     # list the transcript-verified sessions whose audio would go (writes purge-plans/)
+    npm run purge-audio -- --plan                     # list the sessions whose audio would go ([--batch W1] [--include-test]; writes purge-plans/)
     npm run purge-withdrawn -- --plan                 # list the 'destroy'-choice sessions that ended early whose data would go
     npm run purge-… -- --execute <plan file> --host <endpoint>   # the researcher only; processes exactly that plan
 Destructive scripts refuse to run unless `--host` names the endpoint `DATABASE_URL` points at. On the main (production)
@@ -114,7 +132,7 @@ connection to include the Development environment (OIDC), or a `BLOB_READ_WRITE_
 ## Setup
 1. Vercel project → Storage → **Neon Postgres** (sets `DATABASE_URL`). Locally, `.env` points at the
    Neon `dev` branch; all development and rehearsals run there.
-2. Env vars: `OPENAI_API_KEY`, `RESEARCHER_PASSWORD`, `STUDY1_BASE_URL` (link base for issue-tokens).
+2. Env vars: `OPENAI_API_KEY`, `RESEARCHER_PASSWORD`, `ADMIN_API_SECRET` (external API; leave unset to keep it off), `STUDY1_BASE_URL` (link base for issue-tokens and the external API).
    Audio chunks (off by default): `AUDIO_UPLOAD_ENABLED=true`, a private Vercel Blob store
    (`BLOB_READ_WRITE_TOKEN`), optional `BLOB_PREFIX` to separate environments.
 3. `npm i`, `npm run db:init`, `npm run gen-slots`.

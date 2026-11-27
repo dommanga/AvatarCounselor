@@ -12,7 +12,7 @@ const { values } = parseArgs({ options: { host: { type: "string" }, prod: { type
 
 const TABLES = [
   "audit_log", "audio_chunks", "answer_segments", "responses", "feedback_timing", "feedback_audio", "answers", "events", "slot_assignments",
-  "session_clients", "sessions", "slots", "slot_meta", "cell_targets", "admin_login_failures",
+  "session_clients", "sessions", "slots", "slot_meta", "cell_targets", "admin_login_failures", "purge_plans",
   "notes", "block_sequence", // pilot-era
 ];
 const sql = db();

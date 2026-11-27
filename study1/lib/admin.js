@@ -47,8 +47,8 @@ export async function listParticipants() {
   await sweep(null); // expiry / abandonment are decided lazily: make the table current
   return db().query(`
     SELECT s.id, s.participant_id, s.batch_id, s.is_test, s.status, s.current_stage, s.issued_at, s.expires_at, s.opened_at, s.consented_at,
-           s.last_activity_at, s.completed_at, s.valid, s.resume_count, s.retry_used, s.lock_reason, s.destroy_pending, s.data_purged_at,
-           s.stance, s.modality,
+           s.last_activity_at, s.completed_at, s.valid, s.resume_count, s.retry_used, s.lock_reason, s.destroy_pending, s.data_purged_at, s.audio_purged_at,
+           s.stance, s.modality, s.stt_quality,
            COALESCE((SELECT bool_or(a.answer_short) FROM answers a WHERE a.session_id = s.id), false) AS answer_short,
            COALESCE((SELECT bool_or(a.answer_truncated) FROM answers a WHERE a.session_id = s.id), false) AS answer_truncated,
            ${EXPOSED} AS exposed
@@ -61,7 +61,7 @@ export async function participantDetail(id) {
   const [s] = await sql.query(`
     SELECT s.id, s.participant_id, s.batch_id, s.is_test, s.status, s.current_stage, s.issued_at, s.expires_at, s.opened_at, s.consented_at,
            s.last_activity_at, s.completed_at, s.ended_at, s.debriefed_at, s.valid, s.resume_count, s.retry_used, s.attempt_offset, s.lock_reason,
-           s.destroy_pending, s.data_purged_at, s.stance, s.modality, s.consent_withdraw_data, s.survey_version,
+           s.destroy_pending, s.data_purged_at, s.audio_purged_at, s.stt_quality, s.stt_note, s.stt_judged_at, s.stance, s.modality, s.consent_withdraw_data, s.survey_version,
            s.config -> 'app' ->> 'commit' AS commit, ${EXPOSED} AS exposed, ${HAS_ANSWER} AS has_answer
     FROM sessions s WHERE s.id = $1`, [id]);
   if (!s) throw httpError(404, "세션을 찾을 수 없습니다.");

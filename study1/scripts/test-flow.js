@@ -7,7 +7,7 @@
 import crypto from "crypto";
 import { SURVEY, orderBlock } from "../lib/survey.js";
 import { sweep } from "../lib/lifecycle.js";
-import { planWithdrawn, planVerifiedAudio, executePlan } from "../lib/purge.js";
+import { planWithdrawn, planAudio, executePlan } from "../lib/purge.js";
 import { AUDIO_UPLOAD_ENABLED, TTS } from "../lib/config.js";
 import { configSnapshot } from "../lib/snapshot.js";
 import { normalizeForTts, mp3DurationSeconds } from "../lib/tts.js";
@@ -429,8 +429,7 @@ try {
       const { get } = await import("@vercel/blob");
       const before = await get(chunk.pathname, { access: "private", useCache: false });
       check("blob is private and readable server-side", before?.statusCode === 200);
-      await sql`UPDATE sessions SET audio_verified_at = now() WHERE id = ${v.s.id}`;
-      const pa = (await executePlan(await planVerifiedAudio({ only: [v.s.id] }))).done;
+      const pa = (await executePlan(await planAudio({ only: [v.s.id] }))).done;
       const after = await get(chunk.pathname, { access: "private", useCache: false });
       const [vs] = await sql`SELECT s.audio_purged_at, c.purged_at FROM sessions s JOIN audio_chunks c ON c.session_id = s.id WHERE s.id = ${v.s.id}`;
       check("purge-audio deletes the blob, keeps the metadata", pa.some((p) => p.participant_id === "TF-011") && after === null && vs.audio_purged_at && vs.purged_at);

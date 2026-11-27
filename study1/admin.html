@@ -121,6 +121,9 @@
       <a href="#participants" data-view="participants">참가자</a>
       <a href="#issue" data-view="issue">발급</a>
       <a href="#cells" data-view="cells">셀 현황</a>
+      <a href="#stt" data-view="stt">음성 확인</a>
+      <a href="#purge" data-view="purge">파기</a>
+      <a href="#export" data-view="export">내보내기</a>
       <a href="#audit" data-view="audit">감사 로그</a>
       <span class="spacer"></span>
       <button class="link" id="logout">로그아웃</button>
@@ -176,6 +179,55 @@
           <h3>미배정 슬롯 (앞쪽 30개)</h3>
           <div class="tablewrap" style="max-height:none"><table id="utable"></table></div>
         </details>
+      </section>
+
+      <section id="v-stt" class="hidden">
+        <div class="toolbar">
+          <h2 style="margin:0">음성 확인</h2>
+          <label class="inline"><input type="checkbox" id="sttTest" />테스트 세션</label>
+          <label class="inline"><input type="checkbox" id="sttJudged" />판정한 세션 포함</label>
+        </div>
+        <div class="muted" id="sttCount" style="margin-bottom:4px"></div>
+        <div class="tablewrap"><table id="sttTable"></table></div>
+      </section>
+
+      <section id="v-purge" class="hidden">
+        <h2>파기</h2>
+        <div class="toolbar">
+          <select id="pKind" aria-label="종류"><option value="audio">원음 파기</option><option value="withdrawn">중단자 데이터 파기</option></select>
+          <label class="inline"><input type="checkbox" id="pTest" />테스트 세션 포함</label>
+          <span class="group" id="pScope">
+            <label class="inline"><input type="radio" name="pScope" value="all" checked />전체</label>
+            <label class="inline"><input type="radio" name="pScope" value="batch" />batch</label>
+            <select id="pBatch" aria-label="batch"></select>
+            <label class="inline"><input type="radio" name="pScope" value="sessions" />선택한 세션</label>
+          </span>
+          <button class="primary" id="pPreview">대상 미리보기</button>
+        </div>
+        <div class="err" id="pErr"></div>
+        <div id="pPlan" class="hidden">
+          <div class="toolbar"><strong id="pPlanTitle"></strong><span class="muted" id="pPlanExp"></span></div>
+          <div class="tablewrap" style="max-height:260px"><table id="pPlanTable"></table></div>
+          <form id="pExecForm" class="form-row">
+            <label>대상 수를 입력하세요<input type="text" id="pCount" inputmode="numeric" autocomplete="off" style="width:110px" /></label>
+            <button type="submit" id="pExec" class="primary" disabled>파기 실행</button>
+            <span class="muted">파기한 자료는 복구할 수 없습니다</span>
+          </form>
+        </div>
+        <div id="pResult" class="hidden"></div>
+        <h3>현재 대상 후보</h3>
+        <div class="tablewrap"><table id="pCand"></table></div>
+      </section>
+
+      <section id="v-export" class="hidden">
+        <h2>내보내기</h2>
+        <div class="toolbar">
+          <label class="inline"><input type="checkbox" id="xIncomplete" />미완료 포함</label>
+          <label class="inline"><input type="checkbox" id="xTest" />테스트 포함</label>
+          <button class="primary" id="xGo">내보내기 (zip)</button><span class="muted" id="xNote"></span>
+        </div>
+        <div class="err" id="xErr"></div>
+        <p class="muted">기본은 테스트를 뺀 완료 세션입니다. 답변 transcript에는 참가자가 말한 고유명사가 있을 수 있습니다.</p>
       </section>
 
       <section id="v-audit" class="hidden">

@@ -26,6 +26,7 @@ const { createHarness, sleep } = await import("./test-lib.js");
 const { default: handler } = await import("../api/session/[action].js");
 const adminHandler = (await import("../api/admin/[action].js")).default;
 const researcherHandler = (await import("../api/researcher/[action].js")).default;
+const externalHandler = (await import("../api/external/[action].js")).default;
 const { SURVEY, PHASES } = await import("../lib/survey.js");
 const { conditionalText, rangeOf, anchorsOf, optionsOf, otherLabelOf } = await import("../src/survey-shared.js");
 const { COPY } = await import("../src/copy.js");
@@ -47,7 +48,7 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), "study1-chrome-"));
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css" };
 const server = http.createServer(async (rq, rs) => {
   const url = new URL(rq.url, "http://localhost");
-  const route = url.pathname.startsWith("/api/session/") ? handler : url.pathname.startsWith("/api/admin/") ? adminHandler : url.pathname.startsWith("/api/researcher/") ? researcherHandler : null;
+  const route = url.pathname.startsWith("/api/session/") ? handler : url.pathname.startsWith("/api/admin/") ? adminHandler : url.pathname.startsWith("/api/researcher/") ? researcherHandler : url.pathname.startsWith("/api/external/") ? externalHandler : null;
   if (route) {
     const chunks = [];
     for await (const c of rq) chunks.push(c);
@@ -738,9 +739,8 @@ try {
   server.close();
   if (args.audio) {
     try {
-      await sql`UPDATE sessions SET audio_verified_at = now() WHERE id = ANY(${H.created}::uuid[])`;
-      const { planVerifiedAudio, executePlan } = await import("../lib/purge.js");
-      const pa = (await executePlan(await planVerifiedAudio({ only: H.created }))).done; // only what this test made
+      const { planAudio, executePlan } = await import("../lib/purge.js");
+      const pa = (await executePlan(await planAudio({ only: H.created }))).done; // only what this test made
       console.log(`purged test audio: ${pa.map((x) => `${x.participant_id}=${x.chunks}`).join(" ") || "none"}`);
     } catch (e) { console.log("audio cleanup failed:", e.message); }
   }

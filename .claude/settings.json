@@ -10,7 +10,9 @@
       "Bash(*gen-slots*)",
       "Bash(*--execute*)",
       "Bash(*--prod*)",
-      "Bash(*executePlan*)"
+      "Bash(*executePlan*)",
+      "Bash(*api/admin/purge*)",
+      "Bash(*admin/purge_execute*)"
     ]
   }
 }

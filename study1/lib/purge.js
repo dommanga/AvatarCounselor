@@ -2,8 +2,8 @@
 //   1. plan*  : read-only. Lists the sessions that qualify now (session id, participant_id, rows / chunks to delete).
 //   2. executePlan(plan): processes exactly the sessions of that plan. A session whose state changed since the plan
 //      (flags, row counts) is skipped and reported. There is no code path that purges "everything that qualifies".
-//  - audio plan: consent form — audio is destroyed once its transcript has been checked (sessions.audio_verified_at).
-//    Blobs go; audio_chunks rows stay as the record (purged_at).
+//  - audio plan: the researcher chooses the scope (all / one batch / chosen sessions) and the time; nothing about the
+//    voice check (stt_quality) is a condition. Blobs go; audio_chunks rows stay as the record (purged_at).
 //  - withdrawn plan: participants who chose 'destroy' and ended without completing (destroy_pending).
 //    Their responses, answers, segments, events, tab records and audio go; the session row with its
 //    status and condition plus slot_assignments stay, since the assignment bookkeeping needs them.
@@ -20,7 +20,6 @@ async function deleteBlobs(pathnames) {
 const endpointOfEnv = () => new URL(process.env.DATABASE_URL).hostname.split(".")[0].replace(/-pooler$/, "");
 const DATA_TABLES = ["responses", "feedback_timing", "feedback_audio", "answers", "answer_segments", "events", "session_clients", "audio_chunks"];
 
-// only: restrict the plan to these session ids (tests pass the sessions they created)
 async function audioState(sql, id) {
   const chunks = await sql`SELECT pathname, bytes FROM audio_chunks WHERE session_id = ${id} AND purged_at IS NULL`;
   return { chunks, count: chunks.length, bytes: chunks.reduce((n, c) => n + c.bytes, 0) };
@@ -30,35 +29,46 @@ async function rowCounts(sql, id) {
   for (const t of DATA_TABLES) rows[t] = (await sql.query(`SELECT count(*)::int AS n FROM ${t} WHERE session_id = $1`, [id]))[0].n;
   return rows;
 }
-const newPlan = (kind, sessions) => ({ kind, db_endpoint: endpointOfEnv(), created_at: new Date().toISOString(), sessions });
+// Scope of a plan: only = these session ids (tests, /admin 'selected'); batch = one batch; includeTest = test sessions too
+// (without `only`, test sessions are left out). ttlMs: /admin plans expire (30 minutes), command-line plans do not.
+export const PLAN_TTL_MS = 30 * 60_000;
+const newPlan = (kind, sessions, { only = null, batch = null, includeTest = false } = {}, ttlMs = null) => ({
+  kind, db_endpoint: endpointOfEnv(), created_at: new Date().toISOString(),
+  ...(ttlMs && { expires_at: new Date(Date.now() + ttlMs).toISOString() }),
+  scope: { mode: only ? "sessions" : batch ? "batch" : "all", batch, include_test: includeTest, ...(only && { ids: only }) }, sessions,
+});
+const scopeSql = (sql, { only, batch, includeTest }) => sql`(${only}::uuid[] IS NULL OR id = ANY(${only}::uuid[]))
+  AND (${batch}::text IS NULL OR batch_id = ${batch}) AND (${includeTest}::boolean OR ${only}::uuid[] IS NOT NULL OR NOT is_test)`;
 
-export async function planVerifiedAudio({ only = null } = {}) {
+export async function planAudio({ only = null, batch = null, includeTest = false, ttlMs = null } = {}) {
   const sql = db();
   const sessions = await sql`
-    SELECT id, participant_id, issued_at FROM sessions
-    WHERE audio_verified_at IS NOT NULL AND audio_purged_at IS NULL AND (${only}::uuid[] IS NULL OR id = ANY(${only}::uuid[]))
+    SELECT id, participant_id, issued_at FROM sessions s
+    WHERE EXISTS (SELECT 1 FROM audio_chunks c WHERE c.session_id = s.id AND c.purged_at IS NULL)
+      AND ${scopeSql(sql, { only, batch, includeTest })}
     ORDER BY participant_id`;
   const out = [];
   for (const s of sessions) {
     const a = await audioState(sql, s.id);
     out.push({ id: s.id, participant_id: s.participant_id, issued_at: s.issued_at, chunks: a.count, bytes: a.bytes });
   }
-  return newPlan("audio", out);
+  return newPlan("audio", out, { only, batch, includeTest }, ttlMs);
 }
 
-export async function planWithdrawn({ only = null } = {}) {
+export async function planWithdrawn({ only = null, batch = null, includeTest = false, ttlMs = null } = {}) {
   const sql = db();
   const sessions = await sql`
     SELECT id, participant_id, status, issued_at FROM sessions
-    WHERE destroy_pending AND data_purged_at IS NULL AND (${only}::uuid[] IS NULL OR id = ANY(${only}::uuid[]))
+    WHERE destroy_pending AND data_purged_at IS NULL AND ${scopeSql(sql, { only, batch, includeTest })}
     ORDER BY participant_id`;
   const out = [];
   for (const s of sessions) out.push({ id: s.id, participant_id: s.participant_id, status: s.status, issued_at: s.issued_at, deleted: await rowCounts(sql, s.id) });
-  return newPlan("withdrawn", out);
+  return newPlan("withdrawn", out, { only, batch, includeTest }, ttlMs);
 }
 
 export function checkPlan(plan) {
   if (!plan || !["audio", "withdrawn"].includes(plan.kind) || !Array.isArray(plan.sessions) || !plan.db_endpoint || !plan.created_at) throw new Error("not a purge plan");
+  if (plan.expires_at && new Date(plan.expires_at) < new Date()) throw new Error("plan expired: make a new one");
   if (plan.db_endpoint !== endpointOfEnv()) throw new Error(`plan was made for ${plan.db_endpoint}, DATABASE_URL points at ${endpointOfEnv()}`);
   return plan;
 }
@@ -69,11 +79,11 @@ export async function executePlan(plan) {
   const sql = db();
   const done = [], skipped = [];
   for (const p of plan.sessions) {
-    const [s] = await sql`SELECT participant_id, status, destroy_pending, data_purged_at, audio_verified_at, audio_purged_at FROM sessions WHERE id = ${p.id}`;
+    const [s] = await sql`SELECT participant_id, status, destroy_pending, data_purged_at FROM sessions WHERE id = ${p.id}`;
     if (!s || s.participant_id !== p.participant_id) { skipped.push({ participant_id: p.participant_id, reason: "session not found" }); continue; }
     if (plan.kind === "audio") {
       const a = await audioState(sql, p.id);
-      if (!s.audio_verified_at || s.audio_purged_at) { skipped.push({ participant_id: p.participant_id, reason: "no longer verified / already purged" }); continue; }
+      if (!a.count) { skipped.push({ participant_id: p.participant_id, reason: "no audio left (already purged)" }); continue; }
       if (a.count !== p.chunks || a.bytes !== p.bytes) { skipped.push({ participant_id: p.participant_id, reason: `audio changed since the plan (${p.chunks} -> ${a.count} chunks)` }); continue; }
       await deleteBlobs(a.chunks.map((c) => c.pathname));
       await sql.transaction([

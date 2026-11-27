@@ -55,8 +55,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   debriefed_at      timestamptz,            -- debriefing confirmed (after completion)
   destroy_pending   boolean NOT NULL DEFAULT false, -- chose 'destroy' and ended without completing; scripts/purge-withdrawn.js
   data_purged_at    timestamptz,
-  audio_verified_at timestamptz,            -- transcripts checked against the audio; audio may now be destroyed
-  audio_purged_at   timestamptz,            -- scripts/purge-audio.js deleted the audio blobs
+  audio_verified_at timestamptz,            -- unused since Phase 5b (purging is scoped by the researcher, not by verification)
+  audio_purged_at   timestamptz,            -- the audio blobs were destroyed (purge plan executed)
+  stt_quality       text CHECK (stt_quality IN ('none', 'minor', 'severe')), -- /admin voice check: misrecognition of the speech-to-text transcript
+  stt_note          text,
+  stt_judged_at     timestamptz,
   config            jsonb,                  -- settings snapshot at consent (model, temperatures, prompt hashes, ...)
   survey_version    text,
   updated_at        timestamptz NOT NULL DEFAULT now()
@@ -249,3 +252,19 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail     jsonb
 );
 CREATE INDEX IF NOT EXISTS audit_log_session_idx ON audit_log (session_id, id);
+
+-- Existing databases: columns added after the first release of a table (CREATE IF NOT EXISTS does not add them).
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS stt_quality text CHECK (stt_quality IN ('none', 'minor', 'severe'));
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS stt_note text;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS stt_judged_at timestamptz;
+
+-- Purge plans made in /admin: the plan lives here, so the execute call can only name a plan, never a list of sessions.
+CREATE TABLE IF NOT EXISTS purge_plans (
+  id          uuid PRIMARY KEY,
+  kind        text NOT NULL CHECK (kind IN ('audio', 'withdrawn')),
+  plan        jsonb NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  expires_at  timestamptz NOT NULL,
+  executed_at timestamptz,
+  result      jsonb
+);
