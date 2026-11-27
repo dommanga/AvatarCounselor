@@ -14,6 +14,7 @@ import { normalizeForTts, mp3DurationSeconds } from "../lib/tts.js";
 import { QUESTIONS } from "../src/questions.js";
 import { COPY } from "../src/copy.js";
 import { requireTestDb } from "./cli.js";
+import { sameContent } from "../lib/same.js";
 import { createHarness, fill, sleep } from "./test-lib.js";
 
 requireTestDb();
@@ -34,7 +35,7 @@ globalThis.fetch = async (url, init) => {
 };
 
 // jsonb stores object keys in its own order: compare objects by content
-const sameObject = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+const sameObject = sameContent;
 
 const H = createHarness();
 const { sql, check, issue, tab, started } = H;
@@ -286,7 +287,7 @@ try {
   const snapV = configSnapshot("direct", "voice");
   check("snapshot of a voice session carries voice, model (not yet confirmed) and settings; text sessions none",
     snapV.tts.voice_id === TTS.voiceId && snapV.tts.model_id === TTS.modelId && snapV.tts.model_confirmed === false
-    && JSON.stringify(snapV.tts.voice_settings) === JSON.stringify(TTS.voiceSettings) && snapV.tts.provider === "elevenlabs" && configSnapshot("direct", "text").tts === null);
+    && sameContent(snapV.tts.voice_settings, TTS.voiceSettings) && snapV.tts.provider === "elevenlabs" && configSnapshot("direct", "text").tts === null);
   if (!process.env.ELEVENLABS_API_KEY || !(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN)) {
     console.log("SKIP  voice flow (needs ELEVENLABS_API_KEY and Blob credentials)");
   } else {

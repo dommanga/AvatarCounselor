@@ -505,7 +505,7 @@ async function openStt(id) {
 }
 
 // ===== purge =====
-const purgeState = { cand: [], plan: null, picked: new Set() };
+const purgeState = { cand: [], kind: "audio", plan: null, picked: new Set() };
 const KIND_LABEL = { audio: "원음 파기", withdrawn: "중단자 데이터 파기" };
 const candDetail = (kind, r) => (kind === "audio" ? `조각 ${r.chunks} · ${kb(r.bytes)}` : `${Object.entries(r.deleted).filter(([, n]) => n).map(([t, n]) => `${t} ${n}`).join(" · ") || "행 없음"}`);
 const scopeMode = () => document.querySelector('input[name="pScope"]:checked').value;
@@ -513,7 +513,8 @@ const scopeMode = () => document.querySelector('input[name="pScope"]:checked').v
 async function loadPurgeCandidates() {
   const kind = $("pKind").value;
   const d = await api("GET", `purge_candidates?kind=${kind}&test=${$("pTest").checked ? "1" : "0"}`);
-  purgeState.cand = d.sessions;
+  if (kind !== $("pKind").value) return; // the kind was switched while this was loading: a newer load is on its way
+  purgeState.cand = d.sessions; purgeState.kind = d.kind;
   purgeState.picked = new Set([...purgeState.picked].filter((id) => d.sessions.some((s) => s.id === id)));
   const batches = [...new Set(d.sessions.map((s) => s.batch_id))].sort();
   const cur = $("pBatch").value;
@@ -521,7 +522,7 @@ async function loadPurgeCandidates() {
   renderCandidates();
 }
 function renderCandidates() {
-  const kind = $("pKind").value, mode = scopeMode(), rows = purgeState.cand;
+  const kind = purgeState.kind, mode = scopeMode(), rows = purgeState.cand; // the kind the rows were loaded for
   const inScope = (r) => mode === "all" || (mode === "batch" && r.batch_id === $("pBatch").value) || (mode === "sessions" && purgeState.picked.has(r.id));
   $("pCand").innerHTML = `<thead><tr>${mode === "sessions" ? '<th class="nosort"></th>' : ""}<th class="nosort">참가자</th><th class="nosort">batch</th><th class="nosort">내용</th><th class="nosort">범위</th></tr></thead><tbody>${rows.length ? rows.map((r) => `
     <tr>${mode === "sessions" ? `<td><input type="checkbox" data-pick="${r.id}" ${purgeState.picked.has(r.id) ? "checked" : ""} /></td>` : ""}<td>${esc(r.participant_id)}</td><td>${esc(r.batch_id)}</td><td class="muted">${esc(candDetail(kind, r))}</td><td>${inScope(r) ? badge("대상", "blue") : ""}</td></tr>`).join("")

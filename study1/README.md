@@ -125,6 +125,11 @@ Purging has no "everything that qualifies" mode: `--plan` writes the list (sessi
 - Tests (`npm run test:*`) load `.env.test` last (`DATABASE_URL` of the `test` branch, `BLOB_PREFIX=test`) and refuse any other
   database. Register the test branch's endpoint id in `scripts/db-roles.json` (`test`), then once:
   `node --env-file=.env.test scripts/db-init.js` and `node --env-file=.env.test scripts/gen-slots.js --host <test endpoint>`.
+- Voice and audio tests (`test:flow`, `test:ui --audio`, `test:data`) need, in `.env.test` (values by the researcher):
+  `ELEVENLABS_API_KEY=…`, `AUDIO_UPLOAD_ENABLED=true`, `BLOB_PREFIX=test` (kept; the guard refuses anything else), and Blob access:
+  `BLOB_READ_WRITE_TOKEN=…` of a **separate private Blob store for tests** (`vercel blob create-store study1-test --access private`).
+  The prefix does not limit what a token can reach, so do not reuse the production store's token. (`BLOB_STORE_ID` plus a
+  `VERCEL_OIDC_TOKEN` from `vercel env pull` also works but the token expires after about 12 hours.)
 - Claude Code may only make plans and dry-runs; `.claude/settings.json` denies the destructive commands and `CLAUDE.md` says why.
 The purge scripts never run automatically. Blob access from a local machine needs the store's
 connection to include the Development environment (OIDC), or a `BLOB_READ_WRITE_TOKEN`.

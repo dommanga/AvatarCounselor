@@ -1,5 +1,5 @@
 {
   "_": "Neon endpoint ids (hostname prefix of DATABASE_URL) by role. Anything not listed here is treated as the main (production) branch.",
   "dev": "ep-frosty-hall-b70i06ci",
-  "test": null
+  "test": "ep-lively-heart-b7o3t3gr"
 }

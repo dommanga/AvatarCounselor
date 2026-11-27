@@ -10,6 +10,7 @@
 // Blob credentials: BLOB_STORE_ID + VERCEL_OIDC_TOKEN (vercel env pull), or BLOB_READ_WRITE_TOKEN.
 
 import { db } from "./db.js";
+import { sameContent } from "./same.js";
 
 async function deleteBlobs(pathnames) {
   if (!pathnames.length) return;
@@ -96,7 +97,7 @@ export async function executePlan(plan) {
     } else {
       if (!s.destroy_pending || s.data_purged_at) { skipped.push({ participant_id: p.participant_id, reason: "no longer pending / already purged" }); continue; }
       const deleted = await rowCounts(sql, p.id);
-      if (JSON.stringify(deleted) !== JSON.stringify(p.deleted) || s.status !== p.status) { skipped.push({ participant_id: p.participant_id, reason: "data or status changed since the plan" }); continue; }
+      if (!sameContent(deleted, p.deleted) || s.status !== p.status) { skipped.push({ participant_id: p.participant_id, reason: "data or status changed since the plan" }); continue; }
       const blobs = await sql`SELECT pathname FROM audio_chunks WHERE session_id = ${p.id} AND purged_at IS NULL`;
       const spoken = await sql`SELECT pathname FROM feedback_audio WHERE session_id = ${p.id}`; // the voice feedback file
       await deleteBlobs([...blobs, ...spoken].map((b) => b.pathname));

@@ -348,7 +348,7 @@ try {
     await pa.waitFor(`document.querySelectorAll("#ptable tr.row").length > 0`, 10000, "participant rows");
     let ids = await pids();
     check("admin: participants listed, test sessions hidden by default", ["UIA-P1", "UIA-X1", "UIA-A1", "UIA-I1"].every((x) => ids.includes(x)) && !ids.includes("UIA-T1"));
-    check("admin: left menu has the four entries, participants active", await pa.ev(`[...document.querySelectorAll("nav.side a")].map((a) => a.textContent.trim()).join("|")`) === "참가자|발급|셀 현황|감사 로그");
+    check("admin: left menu has the seven entries, participants active", await pa.ev(`[...document.querySelectorAll("nav.side a")].map((a) => a.textContent.trim()).join("|")`) === "참가자|발급|셀 현황|음성 확인|파기|내보내기|감사 로그");
     const badge = (pid) => pa.ev(`(${rowOf(pid)}).querySelector(".badge").textContent`);
     check("admin: status badges (진행 중 / 잠김 / 미접속)", (await badge("UIA-A1")) === "진행 중" && (await badge("UIA-P1")) === "잠김" && (await badge("UIA-I1")) === "미접속");
     await pa.ev(`(() => { const c = document.getElementById("fTest"); c.checked = true; c.dispatchEvent(new Event("change")); })()`);
@@ -421,6 +421,65 @@ try {
     await setVal("aPid", "UIA-P1");
     await pa.waitFor(`[...document.querySelectorAll("#atable tbody tr")].every((tr) => tr.children[3].textContent === "UIA-P1") && document.querySelectorAll("#atable tbody tr").length >= 2`, 10000, "filtered audit");
     check("admin: audit view filters by participant, newest first, shows the reason", await pa.ev(`document.querySelector("#atable tbody tr td:nth-child(3)").textContent === "resumed" && /UI 테스트/.test(document.querySelector("#atable tbody tr").textContent)`));
+    // voice check
+    await sql`INSERT INTO audio_chunks (session_id, question_id, attempt, seq, pathname, bytes, mime) VALUES (${P1.s.id}, 'q2', 1, 0, ${`test/${P1.s.id}/q2/a1/0.webm`}, 1234, 'audio/webm')`;
+    await sql`INSERT INTO answers (session_id, question_id, attempt, transcript, status) VALUES (${P1.s.id}, 'q2', 3, '테스트 전사 문장입니다', 'done')`;
+    await sql`INSERT INTO answer_segments (session_id, question_id, attempt, seq, text) VALUES (${P1.s.id}, 'q2', 1, 0, '구간 하나')`;
+    await pa.ev(`location.hash = "#stt"`);
+    await pa.waitFor(`[...document.querySelectorAll("#sttTable tr.row")].some((tr) => tr.textContent.includes("UIA-P1"))`, 10000, "voice check list");
+    await pa.ev(`[...document.querySelectorAll("#sttTable tr.row")].find((tr) => tr.textContent.includes("UIA-P1")).click()`);
+    await pa.waitFor(`document.querySelector("#panel header strong")?.textContent === "UIA-P1" && !!document.getElementById("sttSave")`, 10000, "voice check panel");
+    check("voice check: audio player, STT restart count and confirmed segments in the panel", await pa.ev(`!!document.querySelector('#panel audio[src*="stt_audio"]') && /STT 재시작/.test(document.getElementById("panel").textContent) && /구간 하나/.test(document.getElementById("panel").textContent)`));
+    check("voice check: the three verdict options with the temporary definitions", await pa.ev(`[...document.querySelectorAll('input[name=sttq]')].map((r) => r.value).join() === "none,minor,severe" && /의미는 유지/.test(document.getElementById("sttOpts").textContent) && /핵심 내용이 빠지거나/.test(document.getElementById("sttOpts").textContent)`));
+    await pa.click("sttSave");
+    check("voice check: saving without a verdict is refused", await pa.ev(`document.getElementById("sttMsg").textContent.length > 0`) && (await sql`SELECT stt_quality FROM sessions WHERE id = ${P1.s.id}`)[0].stt_quality === null);
+    await pa.ev(`document.querySelector('input[name=sttq][value=minor]').click()`);
+    await setVal("sttNote", "UI 테스트 메모");
+    await pa.click("sttSave");
+    await pa.waitFor(`document.getElementById("sttMsg").textContent === "저장됨"`, 10000, "verdict saved");
+    const [jq] = await sql`SELECT stt_quality, stt_note, stt_judged_at FROM sessions WHERE id = ${P1.s.id}`;
+    check("voice check: verdict saved (quality, note, time) and the audio stays", jq.stt_quality === "minor" && jq.stt_note === "UI 테스트 메모" && jq.stt_judged_at && (await sql`SELECT count(*)::int AS n FROM audio_chunks WHERE session_id = ${P1.s.id} AND purged_at IS NULL`)[0].n === 1);
+    check("voice check: judged session leaves the list", await pa.ev(`![...document.querySelectorAll("#sttTable tr.row")].some((tr) => tr.textContent.includes("UIA-P1"))`));
+    await pa.ev(`(() => { const c = document.getElementById("sttJudged"); c.checked = true; c.dispatchEvent(new Event("change")); })()`);
+    await pa.waitFor(`[...document.querySelectorAll("#sttTable tr.row")].some((tr) => tr.textContent.includes("UIA-P1") && tr.textContent.includes("경미"))`, 10000, "judged shown with the toggle");
+    // purge (data of withdrawn sessions: no Blob needed)
+    const W1 = await H.started("UIA-W1"), W2 = await H.started("UIA-W2");
+    for (const w of [W1, W2]) {
+      await sql`UPDATE sessions SET status = 'abandoned', destroy_pending = true WHERE id = ${w.s.id}`;
+      for (let i = 0; i < 2; i++) await sql`INSERT INTO events (id, session_id, type) VALUES (${crypto.randomUUID()}, ${w.s.id}, 'tab_hidden')`;
+    }
+    const w2Events = (await sql`SELECT count(*)::int AS n FROM events WHERE session_id = ${W2.s.id}`)[0].n; // including what the session recorded itself
+    await pa.ev(`location.hash = "#purge"`);
+    await pa.waitFor(pa.screen("v-purge"), 5000, "purge view");
+    await pa.ev(`(() => { const k = document.getElementById("pKind"); k.value = "withdrawn"; k.dispatchEvent(new Event("change")); })()`);
+    await pa.waitFor(`[...document.querySelectorAll("#pCand tbody tr")].some((tr) => tr.textContent.includes("UIA-W1"))`, 10000, "candidates");
+    await pa.ev(`document.querySelector('input[name=pScope][value=sessions]').click()`);
+    await pa.ev(`document.querySelector('input[data-pick="${W1.s.id}"]').click()`);
+    await pa.click("pPreview");
+    await pa.waitFor(`!document.getElementById("pPlan").classList.contains("hidden") && /1명/.test(document.getElementById("pPlanTitle").textContent)`, 10000, "preview");
+    check("purge: preview lists exactly the chosen session with its expiry", await pa.ev(`document.querySelectorAll("#pPlanTable tbody tr").length === 1 && document.querySelector("#pPlanTable").textContent.includes("UIA-W1") && /까지 유효/.test(document.getElementById("pPlanExp").textContent)`));
+    check("purge: execute stays disabled until the exact count is typed", await pa.ev(`document.getElementById("pExec").disabled`));
+    await setVal("pCount", "2");
+    check("purge: a wrong number keeps it disabled", await pa.ev(`document.getElementById("pExec").disabled`));
+    await setVal("pCount", "1");
+    check("purge: the right number enables it", await pa.ev(`!document.getElementById("pExec").disabled`));
+    await pa.ev(`document.getElementById("pExecForm").requestSubmit()`);
+    await pa.waitFor(`!document.getElementById("pResult").classList.contains("hidden") && /1명 파기/.test(document.getElementById("pResult").textContent)`, 15000, "purge result");
+    const evN = async (id) => (await sql`SELECT count(*)::int AS n FROM events WHERE session_id = ${id}`)[0].n;
+    check("purge: only the plan's session was purged (W1), not W2", (await evN(W1.s.id)) === 0 && (await evN(W2.s.id)) === w2Events
+      && (await sql`SELECT data_purged_at FROM sessions WHERE id = ${W1.s.id}`)[0].data_purged_at !== null && (await sql`SELECT data_purged_at FROM sessions WHERE id = ${W2.s.id}`)[0].data_purged_at === null,
+      `W1 events ${await evN(W1.s.id)}, W2 events ${await evN(W2.s.id)}, W1 purged ${(await sql`SELECT data_purged_at FROM sessions WHERE id = ${W1.s.id}`)[0].data_purged_at}, W2 purged ${(await sql`SELECT data_purged_at FROM sessions WHERE id = ${W2.s.id}`)[0].data_purged_at}`);
+    await pa.ev(`location.hash = "#participants"`);
+    await pa.waitFor(`[...document.querySelectorAll("#ptable tr.row")].some((tr) => tr.textContent.includes("UIA-W1") && tr.textContent.includes("자료 파기됨"))`, 10000, "purged badge");
+    check("purge: the participant table shows the purged mark with its time", true);
+    // export
+    await pa.ev(`location.hash = "#export"`);
+    await pa.waitFor(pa.screen("v-export"), 5000, "export view");
+    check("export: the proper-noun notice is on the screen", await pa.ev(`/고유명사/.test(document.getElementById("v-export").textContent)`));
+    await pa.click("xGo");
+    await pa.waitFor(`/\.zip/.test(document.getElementById("xNote").textContent) || document.getElementById("xErr").textContent.length > 0`, 30000, "export download");
+    check("export: the button downloads a zip", await pa.ev(`/study1-export-.*\.zip/.test(document.getElementById("xNote").textContent) && document.getElementById("xErr").textContent === ""`));
+    check("export: the endpoint returns a zip (PK header) as an attachment", await pa.ev(`fetch("/api/admin/export?incomplete=1&test=1").then(async (r) => { const b = new Uint8Array(await r.arrayBuffer()); return b[0] === 0x50 && b[1] === 0x4b && /attachment/.test(r.headers.get("content-disposition")); })`));
     pa.close();
     await sql`DELETE FROM admin_login_failures WHERE ts >= ${adminStart} AND ip = 'unknown'`;
     if (args["admin-only"]) throw new Error("admin-only");

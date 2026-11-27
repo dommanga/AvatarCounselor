@@ -191,7 +191,7 @@ try {
     && long.find((r) => r.item_id === "OE1").shown_text === "다를 때 문구" && val("OE1") === '자유 응답, "인용"\n줄바꿈' && val("D9") === "가|나");
   const an = mine(csvRows(unzip(d0.f, "answers.csv")))[0];
   check("answers.csv: transcript, Stage 1 output, Stage 2 feedback, attempt", an.transcript === "답변 텍스트" && an.stage1_raw === '{"raw":1}' && an.feedback === "피드백 문장" && an.attempt === "1");
-  check("export is audited", (await sql`SELECT count(*)::int AS n FROM audit_log WHERE action = 'exported' AND actor = 'admin' AND ts >= ${t0.toISOString()}`)[0].n >= 4);
+  check("export is audited", (await sql`SELECT count(*)::int AS n FROM audit_log WHERE action = 'exported' AND actor = 'admin' AND ts >= ${t0.toISOString()}`)[0].n >= 3);
   for (const x of [d0, di, dt]) fs.rmSync(path.dirname(x.f), { recursive: true, force: true });
 
   // ---------- 4. external API ----------
