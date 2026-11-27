@@ -16,12 +16,12 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-const { values: args } = parseArgs({ options: { host: { type: "string" }, full: { type: "boolean", default: false }, audio: { type: "boolean", default: false }, "admin-only": { type: "boolean", default: false } } });
+const { values: args } = parseArgs({ options: { full: { type: "boolean", default: false }, audio: { type: "boolean", default: false }, "admin-only": { type: "boolean", default: false } } });
 process.env.AUDIO_UPLOAD_ENABLED = args.audio ? "true" : "false"; // read by lib/config.js at import time
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { requireEndpoint } = await import("./cli.js");
-requireEndpoint(args.host);
+const { requireTestDb } = await import("./cli.js");
+requireTestDb();
 const { createHarness, sleep } = await import("./test-lib.js");
 const { default: handler } = await import("../api/session/[action].js");
 const adminHandler = (await import("../api/admin/[action].js")).default;
@@ -739,8 +739,8 @@ try {
   if (args.audio) {
     try {
       await sql`UPDATE sessions SET audio_verified_at = now() WHERE id = ANY(${H.created}::uuid[])`;
-      const { purgeVerifiedAudio } = await import("../lib/purge.js");
-      const pa = await purgeVerifiedAudio({ only: H.created }); // only what this test made
+      const { planVerifiedAudio, executePlan } = await import("../lib/purge.js");
+      const pa = (await executePlan(await planVerifiedAudio({ only: H.created }))).done; // only what this test made
       console.log(`purged test audio: ${pa.map((x) => `${x.participant_id}=${x.chunks}`).join(" ") || "none"}`);
     } catch (e) { console.log("audio cleanup failed:", e.message); }
   }

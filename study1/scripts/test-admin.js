@@ -1,20 +1,18 @@
 // /admin API test against the scratch database branch: login + failure limit, issue + CSV, cell numbers against the
 // database, locked-session resume (before / after the stimulus), condition change, expiry extension, slot adjustments.
 // Everything is scoped to the sessions it creates; cell targets, added slots and login failures are restored.
-//   npm run test:admin -- --host <neon endpoint id of the dev branch>
+//   npm run test:admin        (Neon test branch only: .env.test)
 
 import crypto from "crypto";
-import { parseArgs } from "node:util";
 import { SURVEY } from "../lib/survey.js";
 import { lockSession } from "../lib/lifecycle.js";
 import { toCsv, issuedCsv } from "../src/admin-csv.js";
-import { requireEndpoint } from "./cli.js";
+import { requireTestDb } from "./cli.js";
 import { createHarness, fill } from "./test-lib.js";
 import admin from "../api/admin/[action].js";
 import researcher from "../api/researcher/[action].js";
 
-const { values } = parseArgs({ options: { host: { type: "string" } } });
-requireEndpoint(values.host);
+requireTestDb();
 
 const H = createHarness();
 const { sql, check } = H;

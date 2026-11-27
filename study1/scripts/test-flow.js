@@ -1,24 +1,22 @@
 // End-to-end participant API test: calls api/session/[action].js the way the browser does, against a
 // scratch database branch. Makes several real LLM calls (Stage 1 + Stage 2 each). Deletes what it created.
-//   npm run test:flow -- --host <neon endpoint id of the dev branch>
+//   npm run test:flow        (Neon test branch only: .env.test)
 // The audio upload / purge part runs only with Blob credentials (BLOB_STORE_ID + VERCEL_OIDC_TOKEN, e.g.
 // `vercel env pull .env.blob --environment=development` then add `--env-file=.env.blob`) and AUDIO_UPLOAD_ENABLED=true.
 
 import crypto from "crypto";
-import { parseArgs } from "node:util";
 import { SURVEY, orderBlock } from "../lib/survey.js";
 import { sweep } from "../lib/lifecycle.js";
-import { purgeWithdrawn, purgeVerifiedAudio } from "../lib/purge.js";
+import { planWithdrawn, planVerifiedAudio, executePlan } from "../lib/purge.js";
 import { AUDIO_UPLOAD_ENABLED, TTS } from "../lib/config.js";
 import { configSnapshot } from "../lib/snapshot.js";
 import { normalizeForTts, mp3DurationSeconds } from "../lib/tts.js";
 import { QUESTIONS } from "../src/questions.js";
 import { COPY } from "../src/copy.js";
-import { requireEndpoint } from "./cli.js";
+import { requireTestDb } from "./cli.js";
 import { createHarness, fill, sleep } from "./test-lib.js";
 
-const { values } = parseArgs({ options: { host: { type: "string" } } });
-requireEndpoint(values.host);
+requireTestDb();
 
 // Everything the OpenAI client sends (it is created on the first LLM call, so it picks up this wrapper), and every
 // ElevenLabs request. TTS requests can be made to fail: ttsFail = how many of the next ones, ttsFailAll = all.
@@ -397,13 +395,14 @@ try {
   const [dp] = await sql`SELECT status, destroy_pending FROM sessions WHERE id = ${d.s.id}`;
   check("destroy + abandoned -> destroy_pending", dp.status === "abandoned" && dp.destroy_pending === true);
   // a second abandoned session that chose 'use': it must stay. The purge is limited to the sessions this test created —
-  // the dev database also holds other people's (rehearsal) sessions, which a test must never purge.
+  // the plan is built only from them and execute handles nothing else.
   const u = await started("TF-010b", {});
   for (const b of SURVEY.pre) await u.T.survey("pre", b.block, fill(b));
   await sql`UPDATE sessions SET last_activity_at = now() - interval '3 hours' WHERE id = ${u.s.id}`;
   await sweep(u.s.id);
-  check("an empty scope purges nothing", (await purgeWithdrawn({ dryRun: true, only: [] })).length === 0);
-  const purged = await purgeWithdrawn({ only: [d.s.id, u.s.id] });
+  check("an empty scope plans nothing", (await planWithdrawn({ only: [] })).sessions.length === 0);
+  const plan = await planWithdrawn({ only: [d.s.id, u.s.id] });
+  const purged = (await executePlan(plan)).done;
   const mine = purged.find((p) => p.participant_id === "TF-010");
   check("purge-withdrawn found it", !!mine && mine.deleted.responses > 0 && mine.deleted.events > 0);
   const left = {};
@@ -431,7 +430,7 @@ try {
       const before = await get(chunk.pathname, { access: "private", useCache: false });
       check("blob is private and readable server-side", before?.statusCode === 200);
       await sql`UPDATE sessions SET audio_verified_at = now() WHERE id = ${v.s.id}`;
-      const pa = await purgeVerifiedAudio({ only: [v.s.id] });
+      const pa = (await executePlan(await planVerifiedAudio({ only: [v.s.id] }))).done;
       const after = await get(chunk.pathname, { access: "private", useCache: false });
       const [vs] = await sql`SELECT s.audio_purged_at, c.purged_at FROM sessions s JOIN audio_chunks c ON c.session_id = s.id WHERE s.id = ${v.s.id}`;
       check("purge-audio deletes the blob, keeps the metadata", pa.some((p) => p.participant_id === "TF-011") && after === null && vs.audio_purged_at && vs.purged_at);

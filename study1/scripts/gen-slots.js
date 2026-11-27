@@ -1,17 +1,19 @@
 // Generates the condition slot sequence once: SLOT_BLOCKS blocks, each a seeded permutation of the
 // 6 stance x modality cells. Refuses if a sequence already exists. Prints and stores the seed.
-//   npm run gen-slots [-- --seed <hex>]
+//   npm run gen-slots -- --host <neon endpoint id> [--seed <hex>]     (dev / test branch)
+//   npm run gen-slots -- --prod [--seed <hex>]                        (main branch: the slot count is typed in at the terminal)
 
 import crypto from "crypto";
 import { parseArgs } from "node:util";
 import { db } from "../lib/db.js";
 import { generateSlots, ALGORITHM, CELLS } from "../lib/slots.js";
 import { SLOT_BLOCKS, SLOT_BLOCK_SIZE } from "../lib/config.js";
-import { dbEndpoint, fail } from "./cli.js";
+import { dbEndpoint, fail, guardDestructive } from "./cli.js";
 
-const { values } = parseArgs({ options: { seed: { type: "string" } } });
+const { values } = parseArgs({ options: { seed: { type: "string" }, host: { type: "string" }, prod: { type: "boolean", default: false } } });
 if (CELLS.length !== SLOT_BLOCK_SIZE) fail(`cells (${CELLS.length}) != SLOT_BLOCK_SIZE (${SLOT_BLOCK_SIZE})`);
 
+await guardDestructive({ host: values.host, prod: values.prod, what: "slots to be generated", count: SLOT_BLOCKS * SLOT_BLOCK_SIZE });
 const sql = db();
 const [{ n }] = await sql`SELECT count(*)::int AS n FROM slots`;
 if (n > 0) fail(`slots already exist (${n}) on ${dbEndpoint()} — left unchanged`);

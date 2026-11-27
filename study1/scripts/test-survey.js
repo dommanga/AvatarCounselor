@@ -1,17 +1,15 @@
 // Survey tests: survey_items.json against the specified definition, per-session ordering (stored,
 // reused, groups, fixed attention checks), raw-score storage, validation, the OE1 wording and the
 // valid judgement. No LLM calls. Needs the scratch database branch:
-//   npm run test:survey -- --host <neon endpoint id of the dev branch>
+//   npm run test:survey        (Neon test branch only: .env.test)
 
-import { parseArgs } from "node:util";
 import { SURVEY, PHASES, orderBlock } from "../lib/survey.js";
 import { OE_MIN_CHARS } from "../lib/config.js";
 import { rangeOf, anchorsOf } from "../src/survey-shared.js";
-import { requireEndpoint } from "./cli.js";
+import { requireTestDb } from "./cli.js";
 import { createHarness, fill } from "./test-lib.js";
 
-const { values: args } = parseArgs({ options: { host: { type: "string" } } });
-requireEndpoint(args.host);
+requireTestDb();
 const H = createHarness();
 const { sql, check } = H;
 

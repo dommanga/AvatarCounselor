@@ -1,16 +1,14 @@
 // Assignment / return / claim test against a scratch database branch. Creates TA-xxx sessions,
 // checks the invariants, then deletes everything it created (slots stay as generated).
-//   npm run test:assign -- --host <neon endpoint id of the dev branch>
+//   npm run test:assign        (Neon test branch only: .env.test)
 // Needs the slot sequence (npm run gen-slots) and at least 40 unassigned sequence slots.
 
 import crypto from "crypto";
-import { parseArgs } from "node:util";
 import { db } from "../lib/db.js";
 import { consent, claim, sweep, grantRetry } from "../lib/lifecycle.js";
-import { requireEndpoint, fail } from "./cli.js";
+import { requireTestDb, fail } from "./cli.js";
 
-const { values } = parseArgs({ options: { host: { type: "string" } } });
-requireEndpoint(values.host);
+requireTestDb();
 
 const sql = db();
 const CHOICES = { withdraw_data: "use", notify: "no" };

@@ -1,6 +1,6 @@
 // Concurrent consent test against a deployment (e.g. a Preview) over HTTP. The deployment and the local
 // DATABASE_URL must use the same database branch: sessions are created here, consented there.
-//   node --env-file=.env scripts/test-assign-http.js --host <dev endpoint id> --url https://<deployment> [--audio] [--voice]
+//   npm run test:assign-http -- --url https://<deployment> [--audio] [--voice]      (test branch; the deployment must use it too)
 //   --voice  also runs one voice-condition session on the deployment: injected answer -> Stage 1+2 -> ElevenLabs ->
 //            private Blob -> the audio is fetched through the function (the generation continues after the response, so
 //            this only works where waitUntil does). Calls the real TTS once; the stored file is deleted afterwards when
@@ -12,12 +12,12 @@ import crypto from "crypto";
 import { parseArgs } from "node:util";
 import { db } from "../lib/db.js";
 import { newParticipantToken } from "../lib/auth.js";
-import { requireEndpoint, fail } from "./cli.js";
+import { requireTestDb, fail } from "./cli.js";
 
 const { values } = parseArgs({
-  options: { host: { type: "string" }, url: { type: "string" }, n: { type: "string", default: "30" }, audio: { type: "boolean", default: false }, voice: { type: "boolean", default: false } },
+  options: { url: { type: "string" }, n: { type: "string", default: "30" }, audio: { type: "boolean", default: false }, voice: { type: "boolean", default: false } },
 });
-requireEndpoint(values.host);
+requireTestDb();
 if (!/^https?:\/\//.test(values.url || "")) fail("--url https://<deployment> required");
 const base = values.url.replace(/\/+$/, "");
 const N = Number(values.n);

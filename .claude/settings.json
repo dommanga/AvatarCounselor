@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(*purge-withdrawn*--execute*)",
+      "Bash(*purge-audio*--execute*)",
+      "Bash(*purge-withdrawn.js*--execute*)",
+      "Bash(*purge-audio.js*--execute*)",
+      "Bash(*db:reset*)",
+      "Bash(*db-reset*)",
+      "Bash(*gen-slots*)",
+      "Bash(*--execute*)",
+      "Bash(*--prod*)",
+      "Bash(*executePlan*)"
+    ]
+  }
+}

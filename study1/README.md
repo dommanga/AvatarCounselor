@@ -81,21 +81,33 @@ completions / target, in progress, returned slots before/after exposure, refill 
 
 ## Scripts (read `DATABASE_URL` from `.env`)
     npm run db:init                                   # apply lib/schema.sql (idempotent)
-    npm run db:reset -- --host <neon endpoint id>     # DROP everything + re-apply (archive first!)
-    npm run gen-slots [-- --seed <hex>]               # once per database; prints + stores the seed
+    npm run db:reset -- --host <neon endpoint id>     # DROP everything + re-apply (archive first!); main branch: --prod + typed count
+    npm run gen-slots -- --host <endpoint> [--seed <hex>]   # once per database; prints + stores the seed; main: --prod + typed count
     npm run issue-tokens -- --n 5 --batch W1          # CSV participant_id,link to stdout (only copy of the tokens)
     npm run issue-tokens -- --n 1 --batch W1 --test --stance direct --modality text
     npm run sweep                                     # expire / abandon now (also done lazily)
-    npm run test:assign -- --host <dev endpoint id>   # concurrent assignment + return + claim test
-    npm run test:flow -- --host <dev endpoint id>     # end-to-end participant API test (several LLM calls)
-    npm run test:admin -- --host <dev endpoint id>    # /admin API: login limit, issue + CSV, cell numbers, resume, condition, slots
-    npm run test:survey -- --host <dev endpoint id>   # survey definition, ordering, validation, OE1, valid judgement (no LLM)
-    npm run test:ui -- --host <dev endpoint id> [--full] [--audio] [--admin-only]   # headless Chrome: flow + every survey block + voice playback + /admin
+    npm run test:assign   # concurrent assignment + return + claim test
+    npm run test:flow     # end-to-end participant API test (several LLM calls)
+    npm run test:admin    # /admin API: login limit, issue + CSV, cell numbers, resume, condition, slots
+    npm run test:survey   # survey definition, ordering, validation, OE1, valid judgement (no LLM)
+    npm run test:ui [-- --full] [--audio] [--admin-only]   # headless Chrome: flow + every survey block + voice playback + /admin
     npm run voice-eval [-- --models a,b] [--main <model>]            # 4.5 timing + 4.6 listening samples (calls the real TTS)
-    npm run test:assign-http -- --host <dev endpoint id> --url https://<preview> [--audio] [--voice]
-    npm run purge-audio [-- --dry-run]                # destroy audio of transcript-verified sessions
-    npm run purge-withdrawn [-- --dry-run]            # destroy data of 'destroy'-choice sessions that ended early
-Destructive scripts refuse to run unless `--host` names the endpoint `DATABASE_URL` points at.
+    npm run test:assign-http -- --url https://<preview> [--audio] [--voice]
+    npm run test:safety                               # guards: tests refuse off the test branch, purge only from a plan
+    npm run purge-audio -- --plan                     # list the transcript-verified sessions whose audio would go (writes purge-plans/)
+    npm run purge-withdrawn -- --plan                 # list the 'destroy'-choice sessions that ended early whose data would go
+    npm run purge-… -- --execute <plan file> --host <endpoint>   # the researcher only; processes exactly that plan
+Destructive scripts refuse to run unless `--host` names the endpoint `DATABASE_URL` points at. On the main (production)
+branch (any endpoint not listed in `scripts/db-roles.json`) they need `--prod` and the count typed in at a terminal.
+Purging has no "everything that qualifies" mode: `--plan` writes the list (session id, participant_id, rows to delete),
+`--execute <file>` handles only those sessions and skips (and reports) any whose data changed since.
+
+### Neon branches
+- `main`: production. `dev`: the researcher's rehearsals only. `test`: automated tests only.
+- Tests (`npm run test:*`) load `.env.test` last (`DATABASE_URL` of the `test` branch, `BLOB_PREFIX=test`) and refuse any other
+  database. Register the test branch's endpoint id in `scripts/db-roles.json` (`test`), then once:
+  `node --env-file=.env.test scripts/db-init.js` and `node --env-file=.env.test scripts/gen-slots.js --host <test endpoint>`.
+- Claude Code may only make plans and dry-runs; `.claude/settings.json` denies the destructive commands and `CLAUDE.md` says why.
 The purge scripts never run automatically. Blob access from a local machine needs the store's
 connection to include the Development environment (OIDC), or a `BLOB_READ_WRITE_TOKEN`.
 

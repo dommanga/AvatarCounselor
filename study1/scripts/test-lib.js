@@ -6,10 +6,12 @@ import { db } from "../lib/db.js";
 import { newParticipantToken } from "../lib/auth.js";
 import { OTHER_LABEL, optionsOf, otherLabelOf, rangeOf } from "../src/survey-shared.js";
 import handler from "../api/session/[action].js";
+import { requireTestDb } from "./cli.js";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function createHarness() {
+  requireTestDb(); // the test branch only; never the dev branch with the researcher's rehearsals
   const sql = db();
   const created = [];
   let passed = 0, failed = 0;

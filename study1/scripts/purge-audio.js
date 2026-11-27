@@ -1,15 +1,11 @@
 // Destroys the audio blobs of sessions whose transcripts have been checked (sessions.audio_verified_at),
 // as the consent form requires. audio_chunks rows stay (purged_at set); each session is logged in audit_log.
-//   npm run purge-audio [-- --dry-run]
+// Two steps, never automatic:
+//   npm run purge-audio -- --plan [--out file]           lists the sessions and chunks that would go, writes purge-plans/audio-*.json
+//   npm run purge-audio -- --dry-run                     prints the same list without writing a file
+//   npm run purge-audio -- --execute <plan file> --host <endpoint>   [--prod on the main branch]
 // Needs Blob credentials: `vercel env pull .env.blob --environment=preview` (or production) and run with
-//   node --env-file=.env --env-file=.env.blob scripts/purge-audio.js
+//   node --env-file=.env --env-file=.env.blob scripts/purge-audio.js --plan ...
 
-import { parseArgs } from "node:util";
-import { purgeVerifiedAudio } from "../lib/purge.js";
-import { dbEndpoint } from "./cli.js";
-
-const { values } = parseArgs({ options: { "dry-run": { type: "boolean", default: false } } });
-const rows = await purgeVerifiedAudio({ dryRun: values["dry-run"] });
-console.log(`db: ${dbEndpoint()}${values["dry-run"] ? " (dry run — nothing deleted)" : ""}`);
-if (!rows.length) console.log("no verified sessions with audio left to purge");
-for (const r of rows) console.log(`  ${r.participant_id}: ${r.chunks} chunk(s), ${r.bytes} bytes`);
+import { runPurgeCli } from "./purge-cli.js";
+await runPurgeCli("audio");
